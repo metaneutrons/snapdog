@@ -14,6 +14,10 @@ pub fn resolve_zone(index: usize, raw: RawZoneConfig, audio: &AudioConfig) -> Re
     let n = index;
     let _ = audio; // Reserved for future sample format in stream name
 
+    let airplay_name = raw
+        .airplay_name
+        .unwrap_or_else(|| format!("SnapDog {}", raw.name));
+
     Ok(ZoneConfig {
         index,
         name: raw.name,
@@ -21,6 +25,7 @@ pub fn resolve_zone(index: usize, raw: RawZoneConfig, audio: &AudioConfig) -> Re
         sink: raw.sink.unwrap_or_else(|| format!("/snapsinks/zone{n}")),
         stream_name: format!("Zone{n}"),
         tcp_source_port: TCP_SOURCE_BASE_PORT + n as u16,
+        airplay_name,
         knx: resolve_zone_knx(n, raw.knx),
     })
 }

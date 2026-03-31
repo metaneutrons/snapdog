@@ -174,6 +174,7 @@ pub struct RawZoneConfig {
     #[serde(default = "default_zone_icon")]
     pub icon: String,
     pub sink: Option<String>,
+    pub airplay_name: Option<String>,
     #[serde(default)]
     pub knx: RawZoneKnxConfig,
 }
@@ -256,6 +257,7 @@ pub struct ZoneConfig {
     pub sink: String,
     pub stream_name: String,
     pub tcp_source_port: u16,
+    pub airplay_name: String,
     pub knx: ZoneKnxAddresses,
 }
 
