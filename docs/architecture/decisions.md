@@ -160,3 +160,50 @@ MQTT broker, KNX simulator, and Navidrome — but no Redis, Grafana, or OTEL Col
 - Simulated Snapcast clients with fixed MAC addresses for realistic testing
 - Mosquitto for MQTT, knxd for KNX simulation, Navidrome for Subsonic API
 - No observability stack needed — `tracing` logs to console/file
+
+---
+
+## ADR-011: ZonePlayer — Per-Zone Audio Pipeline with Command Channel
+
+**Decision:** Each zone runs an independent ZonePlayer task that owns its audio pipeline,
+AirPlay receiver, and Snapcast TCP source connection.
+
+**Architecture:**
+```
+ZonePlayer (one per zone, runs as tokio task)
+├── Command Channel: Play(Source), Stop, Pause, Resume, Next, Previous
+├── State: Idle | Playing(Source) | AirPlayActive
+├── AirPlay Receiver (own libshairplay instance, own mDNS name)
+├── Decode Task (abortable): Radio/Subsonic/URL → PCM
+├── PCM Channel: Decode or AirPlay → TCP Writer
+├── TCP Writer: PCM → Snapcast Source (connection stays open)
+└── Volume: controlled via Snapcast Group (never PCM amplitude)
+```
+
+**Source types:**
+- Radio: endless live stream, no pause, next/previous cycles through stations
+- Subsonic Playlist: sequential tracks, pause supported, next/previous tracks
+- Subsonic Track: single track, pause supported
+- URL: arbitrary HTTP stream
+- AirPlay: PCM from libshairplay callback, externally controlled
+
+**Preemption rules:**
+- AirPlay preempts everything — stops current decode, takes over PCM channel
+- When AirPlay ends, zone returns to Idle
+- Play(new source) stops current source, starts new one
+- Zones are fully independent — same radio station on two zones = two decode tasks
+
+**AirPlay naming convention:**
+- Default: `{airplay.name} {zone.name}` → e.g. "SnapDog Ground Floor"
+- Override: `zone.airplay_name` in config
+
+**Volume architecture:**
+- Zone volume = Snapcast Group volume (digital mixing in client, full dynamic range)
+- Client volume = Snapcast Client volume (per-speaker within a zone)
+- PCM stream is always full-scale — never attenuated in the pipeline
+
+**Rationale:**
+- Independent tasks per zone = no shared mutable state between zones
+- Command channel = clean async interface from API/MQTT/KNX
+- AirPlay per zone = user sees one AirPlay target per room on their iPhone
+- Snapcast volume = no audio quality loss from PCM amplitude scaling
