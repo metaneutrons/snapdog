@@ -5,7 +5,7 @@ mod airplay;
 pub mod api;
 pub mod audio;
 pub mod config;
-mod knx;
+pub mod knx;
 pub mod mqtt;
 mod process;
 pub mod snapcast;
