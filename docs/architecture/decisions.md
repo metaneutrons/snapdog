@@ -292,3 +292,78 @@ consistent state updates, and future-proof (e.g. volume fade effects).
 **Extensibility:**
 - The PCM channel between decoder and TCP writer serves as the insertion point for
   future audio processing (EQ, crossfade, normalization). No architectural changes needed.
+
+---
+
+## ADR-012: Unified Cover Art via API Proxy
+
+**Decision:** All cover art is served through a single API endpoint per zone.
+No external URLs are exposed to clients.
+
+**Endpoint:**
+```
+GET /api/v1/zones/{id}/cover → image bytes with correct Content-Type
+                             → 204 No Content if no cover available
+```
+
+**Cover cache (in-memory, not persisted):**
+```rust
+struct CoverEntry {
+    bytes: Vec<u8>,
+    mime: String,   // From source, not guessed
+}
+// HashMap<zone_index, CoverEntry>
+```
+
+**MIME-Type sourcing:**
+- Subsonic: `Content-Type` header from `getCoverArt` HTTP response
+- Radio: `Content-Type` header from cover URL fetch
+- AirPlay: Magic bytes fallback (FF D8 FF → image/jpeg, 89 50 4E 47 → image/png)
+- Unknown: `image/octet-stream` (browser handles it)
+
+**Supports all formats:** JPEG, PNG, WebP, AVIF, SVG — whatever the source delivers.
+No conversion, just proxying.
+
+**Why not expose external URLs directly:**
+- AirPlay has no URL, only bytes
+- Subsonic URLs contain auth tokens
+- CORS issues with external URLs
+- Inconsistent behavior per source
+
+**Cache lifecycle:**
+- Source change → ZonePlayer fetches/receives new cover → replaces cache entry
+- Zone stops → cache entry cleared
+- Not persisted to state.json (transient, 50-500KB per image)
+
+---
+
+## ADR-013: Extended TrackInfo and SourceType
+
+**Decision:** TrackInfo extended with genre, track number, and source type.
+Cover art removed from TrackInfo (served via ADR-012 instead).
+
+```rust
+pub enum SourceType {
+    Radio,
+    SubsonicPlaylist,
+    SubsonicTrack,
+    Url,
+    AirPlay,
+    Idle,
+}
+
+pub struct TrackInfo {
+    pub title: String,
+    pub artist: String,
+    pub album: String,
+    pub genre: Option<String>,
+    pub track_number: Option<u32>,
+    pub duration_ms: i64,
+    pub position_ms: i64,
+    pub source: SourceType,
+}
+```
+
+**Rationale:** `source` tells the WebUI what controls to show (seek for Subsonic,
+next station for Radio, nothing for AirPlay). Cover art is decoupled because it's
+binary data with its own caching and serving strategy (ADR-012).
