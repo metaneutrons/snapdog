@@ -1,0 +1,74 @@
+# SnapDog Development Configuration
+# Used with: cargo run -- --config snapdog.dev.toml
+# Requires:  docker compose -f docker-compose.dev.yml up -d
+
+[system]
+log_level = "debug"
+
+[audio]
+sample_rate = 48000
+bit_depth = 16
+channels = 2
+codec = "flac"
+
+[http]
+port = 5555
+
+[snapcast]
+address = "localhost"                  # Docker-exposed port
+jsonrpc_port = 1780
+streaming_port = 1704
+managed = false                        # Don't start snapserver — it's a container
+
+[airplay]
+name = "SnapDog-Dev"
+
+[subsonic]
+url = "http://localhost:4533"
+username = "admin"
+password = "admin"
+
+[mqtt]
+broker = "localhost:1883"
+username = ""
+password = ""
+base_topic = "snapdog/"
+
+[knx]
+enabled = true
+connection = "tunnel"
+gateway = "localhost:3671"
+
+[[zone]]
+name = "Ground Floor"
+icon = "🏠"
+
+[[zone]]
+name = "1st Floor"
+icon = "🏠"
+
+[[client]]
+name = "Living Room"
+mac = "02:42:ac:11:00:10"
+zone = "Ground Floor"
+icon = "🛋️"
+
+[[client]]
+name = "Kitchen"
+mac = "02:42:ac:11:00:11"
+zone = "Ground Floor"
+icon = "🍽️"
+
+[[client]]
+name = "Bedroom"
+mac = "02:42:ac:11:00:12"
+zone = "1st Floor"
+icon = "🛏️"
+
+[[radio]]
+name = "Deutschlandfunk"
+url = "https://st01.sslstream.dlf.de/dlf/01/high/aac/stream.aac"
+
+[[radio]]
+name = "DLF Kultur"
+url = "https://st02.sslstream.dlf.de/dlf/02/high/aac/stream.aac"
