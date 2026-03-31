@@ -21,11 +21,11 @@ pub fn load(path: &Path) -> Result<AppConfig> {
         .with_context(|| format!("Failed to read {}", path.display()))?;
     let raw: RawConfig =
         toml::from_str(&content).with_context(|| format!("Failed to parse {}", path.display()))?;
-    resolve(raw)
+    load_raw(raw)
 }
 
 /// Resolve raw TOML config into fully populated AppConfig with conventions applied.
-fn resolve(raw: RawConfig) -> Result<AppConfig> {
+pub fn load_raw(raw: RawConfig) -> Result<AppConfig> {
     anyhow::ensure!(
         !raw.zone.is_empty(),
         "At least one [[zone]] must be configured"
@@ -87,7 +87,7 @@ mod tests {
     #[test]
     fn parses_minimal_config() {
         let raw: RawConfig = toml::from_str(minimal_toml()).unwrap();
-        let config = resolve(raw).unwrap();
+        let config = load_raw(raw).unwrap();
         assert_eq!(config.zones.len(), 1);
         assert_eq!(config.clients.len(), 1);
     }
@@ -95,7 +95,7 @@ mod tests {
     #[test]
     fn zone_conventions_applied() {
         let raw: RawConfig = toml::from_str(minimal_toml()).unwrap();
-        let config = resolve(raw).unwrap();
+        let config = load_raw(raw).unwrap();
         let zone = &config.zones[0];
         assert_eq!(zone.index, 1);
         assert_eq!(zone.sink, "/snapsinks/zone1");
@@ -106,7 +106,7 @@ mod tests {
     #[test]
     fn knx_zone_conventions_applied() {
         let raw: RawConfig = toml::from_str(minimal_toml()).unwrap();
-        let config = resolve(raw).unwrap();
+        let config = load_raw(raw).unwrap();
         let knx = &config.zones[0].knx;
         assert_eq!(knx.play, "1/1/1");
         assert_eq!(knx.pause, "1/1/2");
@@ -119,7 +119,7 @@ mod tests {
     #[test]
     fn knx_client_conventions_applied() {
         let raw: RawConfig = toml::from_str(minimal_toml()).unwrap();
-        let config = resolve(raw).unwrap();
+        let config = load_raw(raw).unwrap();
         let knx = &config.clients[0].knx;
         assert_eq!(knx.volume, "3/1/1");
         assert_eq!(knx.volume_status, "3/1/2");
@@ -130,7 +130,7 @@ mod tests {
     #[test]
     fn client_zone_resolved_by_name() {
         let raw: RawConfig = toml::from_str(minimal_toml()).unwrap();
-        let config = resolve(raw).unwrap();
+        let config = load_raw(raw).unwrap();
         assert_eq!(config.clients[0].zone_index, 1);
     }
 
@@ -145,7 +145,7 @@ mod tests {
         "#,
         )
         .unwrap();
-        assert!(resolve(raw).is_err());
+        assert!(load_raw(raw).is_err());
     }
 
     #[test]
@@ -162,7 +162,7 @@ mod tests {
         "#,
         )
         .unwrap();
-        assert!(resolve(raw).is_err());
+        assert!(load_raw(raw).is_err());
     }
 
     #[test]
@@ -180,7 +180,7 @@ mod tests {
         "#,
         )
         .unwrap();
-        let config = resolve(raw).unwrap();
+        let config = load_raw(raw).unwrap();
         assert_eq!(config.zones[0].sink, "/custom/path");
     }
 
@@ -200,7 +200,7 @@ mod tests {
         "#,
         )
         .unwrap();
-        let config = resolve(raw).unwrap();
+        let config = load_raw(raw).unwrap();
         assert_eq!(config.zones[1].index, 2);
         assert_eq!(config.zones[1].sink, "/snapsinks/zone2");
         assert_eq!(config.zones[1].tcp_source_port, 4954);

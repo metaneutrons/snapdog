@@ -37,29 +37,16 @@ async fn main() -> Result<()> {
         zones = config.zones.len(),
         clients = config.clients.len(),
         radios = config.radios.len(),
-        "SnapDog loaded configuration from {config_path}"
+        "Configuration loaded from {config_path}"
     );
 
-    for zone in &config.zones {
-        tracing::info!(
-            index = zone.index,
-            name = %zone.name,
-            sink = %zone.sink,
-            stream = %zone.stream_name,
-            port = zone.tcp_source_port,
-            "Zone configured"
-        );
-    }
+    // Start snapserver (or skip if managed=false)
+    let mut snapserver = process::SnapserverHandle::start(&config).await?;
 
-    for client in &config.clients {
-        tracing::info!(
-            index = client.index,
-            name = %client.name,
-            mac = %client.mac,
-            zone = client.zone_index,
-            "Client configured"
-        );
-    }
+    // Graceful shutdown on Ctrl+C
+    tokio::signal::ctrl_c().await?;
+    tracing::info!("Shutting down");
+    snapserver.stop().await?;
 
     Ok(())
 }
