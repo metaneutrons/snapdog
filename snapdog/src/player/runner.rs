@@ -123,11 +123,12 @@ async fn run(
                             let (icy_tx, mut icy_rx) = tokio::sync::mpsc::channel::<audio::icy::IcyMetadata>(4);
                             let icy_store = store.clone();
                             let icy_zone = zone_index;
+                            let icy_notify = notify.clone();
                             tokio::spawn(async move {
                                 while let Some(meta) = icy_rx.recv().await {
                                     if let Some(title) = meta.title {
                                         tracing::info!(zone = icy_zone, title = %title, "ICY title update");
-                                        update_zone_state(&icy_store, icy_zone, |z| {
+                                        update_and_notify(&icy_store, icy_zone, &icy_notify, |z| {
                                             if let Some(ref mut track) = z.track {
                                                 track.title = title.clone();
                                             }
@@ -141,7 +142,7 @@ async fn run(
                                 }
                             }));
                             source = ActiveSource::Radio { index: idx };
-                            update_zone_state(&store, zone_index, |z| {
+                            update_and_notify(&store, zone_index, &notify, |z| {
                                 z.playback = PlaybackState::Playing;
                                 z.source = SourceType::Radio;
                                 z.radio_index = Some(idx);
@@ -193,7 +194,7 @@ async fn run(
                                             track_index: track_idx,
                                             track_count,
                                         };
-                                        update_zone_state(&store, zone_index, |z| {
+                                        update_and_notify(&store, zone_index, &notify, |z| {
                                             z.playback = PlaybackState::Playing;
                                             z.source = SourceType::SubsonicPlaylist;
                                             z.playlist_index = Some(track_idx);
@@ -223,7 +224,7 @@ async fn run(
                                 }
                             }));
                             source = ActiveSource::SubsonicTrack { track_id };
-                            update_zone_state(&store, zone_index, |z| {
+                            update_and_notify(&store, zone_index, &notify, |z| {
                                 z.playback = PlaybackState::Playing;
                                 z.source = SourceType::SubsonicTrack;
                             }).await;
@@ -242,7 +243,7 @@ async fn run(
                             }
                         }));
                         source = ActiveSource::Url { url };
-                        update_zone_state(&store, zone_index, |z| {
+                        update_and_notify(&store, zone_index, &notify, |z| {
                             z.playback = PlaybackState::Playing;
                             z.source = SourceType::Url;
                         }).await;
@@ -261,7 +262,7 @@ async fn run(
                                         if let Some(track) = playlist.entry.get(track_idx) {
                                             start_subsonic_track_decode(sub, track, &config, &mut current_decode, &mut decode_rx).await;
                                             source = ActiveSource::SubsonicPlaylist { playlist_id: pid, track_index: track_idx, track_count };
-                                            update_zone_state(&store, zone_index, |z| {
+                                            update_and_notify(&store, zone_index, &notify, |z| {
                                                 z.playlist_track_index = Some(track_idx);
                                                 z.track = Some(subsonic_track_info(track));
                                             }).await;
@@ -294,7 +295,7 @@ async fn run(
                                             }
                                         }));
                                         source = ActiveSource::Radio { index: radio_idx };
-                                        update_zone_state(&store, zone_index, |z| {
+                                        update_and_notify(&store, zone_index, &notify, |z| {
                                             z.playback = PlaybackState::Playing;
                                             z.source = SourceType::Radio;
                                         }).await;
@@ -310,7 +311,7 @@ async fn run(
                     ZoneCommand::Pause => {
                         stop_decode(&mut current_decode, &mut decode_rx).await;
                         // Keep source info so Play can resume
-                        update_zone_state(&store, zone_index, |z| {
+                        update_and_notify(&store, zone_index, &notify, |z| {
                             z.playback = PlaybackState::Paused;
                         }).await;
                         tracing::info!(zone = zone_index, "Paused");
@@ -328,11 +329,11 @@ async fn run(
                     }
 
                     ZoneCommand::Next => {
-                        handle_next(&mut source, &config, &subsonic, &store, zone_index, &mut current_decode, &mut decode_rx).await;
+                        handle_next(&mut source, &config, &subsonic, &store, zone_index, &mut current_decode, &mut decode_rx, &notify).await;
                     }
 
                     ZoneCommand::Previous => {
-                        handle_previous(&mut source, &config, &subsonic, &store, zone_index, &mut current_decode, &mut decode_rx).await;
+                        handle_previous(&mut source, &config, &subsonic, &store, zone_index, &mut current_decode, &mut decode_rx, &notify).await;
                     }
 
                     // Playlist navigation
@@ -349,32 +350,32 @@ async fn run(
 
                     // Settings
                     ZoneCommand::SetVolume(v) => {
-                        update_zone_state(&store, zone_index, |z| z.volume = v.clamp(0, 100)).await;
+                        update_and_notify(&store, zone_index, &notify, |z| z.volume = v.clamp(0, 100)).await;
                         // TODO: snapcast.set_group_volume()
                     }
                     ZoneCommand::SetMute(m) => {
-                        update_zone_state(&store, zone_index, |z| z.muted = m).await;
+                        update_and_notify(&store, zone_index, &notify, |z| z.muted = m).await;
                     }
                     ZoneCommand::ToggleMute => {
-                        update_zone_state(&store, zone_index, |z| z.muted = !z.muted).await;
+                        update_and_notify(&store, zone_index, &notify, |z| z.muted = !z.muted).await;
                     }
                     ZoneCommand::SetShuffle(v) => {
-                        update_zone_state(&store, zone_index, |z| z.shuffle = v).await;
+                        update_and_notify(&store, zone_index, &notify, |z| z.shuffle = v).await;
                     }
                     ZoneCommand::ToggleShuffle => {
-                        update_zone_state(&store, zone_index, |z| z.shuffle = !z.shuffle).await;
+                        update_and_notify(&store, zone_index, &notify, |z| z.shuffle = !z.shuffle).await;
                     }
                     ZoneCommand::SetRepeat(v) => {
-                        update_zone_state(&store, zone_index, |z| z.repeat = v).await;
+                        update_and_notify(&store, zone_index, &notify, |z| z.repeat = v).await;
                     }
                     ZoneCommand::ToggleRepeat => {
-                        update_zone_state(&store, zone_index, |z| z.repeat = !z.repeat).await;
+                        update_and_notify(&store, zone_index, &notify, |z| z.repeat = !z.repeat).await;
                     }
                     ZoneCommand::SetTrackRepeat(v) => {
-                        update_zone_state(&store, zone_index, |z| z.track_repeat = v).await;
+                        update_and_notify(&store, zone_index, &notify, |z| z.track_repeat = v).await;
                     }
                     ZoneCommand::ToggleTrackRepeat => {
-                        update_zone_state(&store, zone_index, |z| z.track_repeat = !z.track_repeat).await;
+                        update_and_notify(&store, zone_index, &notify, |z| z.track_repeat = !z.track_repeat).await;
                     }
                 }
             }
@@ -398,7 +399,7 @@ async fn run(
                         tracing::debug!(zone = zone_index, "Decode task ended");
                         current_decode = None;
                         decode_rx = None;
-                        handle_track_complete(&mut source, &config, &subsonic, &store, zone_index, &mut current_decode, &mut decode_rx).await;
+                        handle_track_complete(&mut source, &config, &subsonic, &store, zone_index, &mut current_decode, &mut decode_rx, &notify).await;
                     }
                 }
             }
@@ -409,7 +410,7 @@ async fn run(
                 if !matches!(source, ActiveSource::AirPlay) {
                     stop_decode(&mut current_decode, &mut decode_rx).await;
                     source = ActiveSource::AirPlay;
-                    update_zone_state(&store, zone_index, |z| {
+                    update_and_notify(&store, zone_index, &notify, |z| {
                         z.playback = PlaybackState::Playing;
                         z.source = SourceType::AirPlay;
                     }).await;
@@ -427,7 +428,7 @@ async fn run(
                 use crate::airplay::AirplayEvent;
                 match event {
                     AirplayEvent::Metadata { title, artist, album } => {
-                        update_zone_state(&store, zone_index, |z| {
+                        update_and_notify(&store, zone_index, &notify, |z| {
                             z.track = Some(TrackInfo {
                                 title, artist, album,
                                 album_artist: None, genre: None, year: None,
@@ -443,7 +444,7 @@ async fn run(
                         tracing::debug!(zone = zone_index, "AirPlay cover art cached");
                     }
                     AirplayEvent::Progress { position_ms, duration_ms } => {
-                        update_zone_state(&store, zone_index, |z| {
+                        update_and_notify(&store, zone_index, &notify, |z| {
                             if let Some(ref mut track) = z.track {
                                 track.position_ms = position_ms as i64;
                                 track.duration_ms = duration_ms as i64;
@@ -451,7 +452,7 @@ async fn run(
                         }).await;
                     }
                     AirplayEvent::Volume { percent } => {
-                        update_zone_state(&store, zone_index, |z| {
+                        update_and_notify(&store, zone_index, &notify, |z| {
                             z.volume = percent;
                         }).await;
                         // TODO: forward to snapcast group volume
@@ -459,7 +460,7 @@ async fn run(
                     AirplayEvent::SessionEnded => {
                         source = ActiveSource::Idle;
                         covers.write().await.clear(zone_index);
-                        update_zone_state(&store, zone_index, |z| {
+                        update_and_notify(&store, zone_index, &notify, |z| {
                             z.playback = PlaybackState::Stopped;
                             z.source = SourceType::Idle;
                             z.track = None;
@@ -482,17 +483,6 @@ async fn stop_decode(
         handle.abort();
     }
     *rx = None;
-}
-
-async fn update_zone_state(
-    store: &state::SharedState,
-    zone_index: usize,
-    f: impl FnOnce(&mut state::ZoneState),
-) {
-    let mut s = store.write().await;
-    if let Some(zone) = s.zones.get_mut(&zone_index) {
-        f(zone);
-    }
 }
 
 /// Update zone state and broadcast a notification.
@@ -553,6 +543,7 @@ fn subsonic_track_info(track: &crate::subsonic::Track) -> TrackInfo {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_next(
     source: &mut ActiveSource,
     config: &AppConfig,
@@ -561,6 +552,7 @@ async fn handle_next(
     zone_index: usize,
     current_decode: &mut Option<JoinHandle<()>>,
     decode_rx: &mut Option<mpsc::Receiver<Vec<u8>>>,
+    notify: &NotifySender,
 ) {
     match source.clone() {
         ActiveSource::Radio { index } => {
@@ -577,7 +569,7 @@ async fn handle_next(
                     }
                 }));
                 *source = ActiveSource::Radio { index: next };
-                update_zone_state(store, zone_index, |z| {
+                update_and_notify(store, zone_index, notify, |z| {
                     z.radio_index = Some(next);
                     z.track = Some(TrackInfo {
                         title: radio.name.clone(),
@@ -618,6 +610,7 @@ async fn handle_next(
                     zone_index,
                     current_decode,
                     decode_rx,
+                    notify,
                 )
                 .await;
             } else {
@@ -639,12 +632,13 @@ async fn handle_next(
                         zone_index,
                         current_decode,
                         decode_rx,
+                        notify,
                     )
                     .await;
                 } else {
                     stop_decode(current_decode, decode_rx).await;
                     *source = ActiveSource::Idle;
-                    update_zone_state(store, zone_index, |z| {
+                    update_and_notify(store, zone_index, notify, |z| {
                         z.playback = PlaybackState::Stopped;
                         z.source = SourceType::Idle;
                     })
@@ -656,6 +650,7 @@ async fn handle_next(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_previous(
     source: &mut ActiveSource,
     config: &AppConfig,
@@ -664,6 +659,7 @@ async fn handle_previous(
     zone_index: usize,
     current_decode: &mut Option<JoinHandle<()>>,
     decode_rx: &mut Option<mpsc::Receiver<Vec<u8>>>,
+    notify: &NotifySender,
 ) {
     match source.clone() {
         ActiveSource::Radio { index } => {
@@ -685,7 +681,7 @@ async fn handle_previous(
                     }
                 }));
                 *source = ActiveSource::Radio { index: prev };
-                update_zone_state(store, zone_index, |z| {
+                update_and_notify(store, zone_index, notify, |z| {
                     z.radio_index = Some(prev);
                     z.track = Some(TrackInfo {
                         title: radio.name.clone(),
@@ -725,6 +721,7 @@ async fn handle_previous(
                     zone_index,
                     current_decode,
                     decode_rx,
+                    notify,
                 )
                 .await;
             }
@@ -733,6 +730,7 @@ async fn handle_previous(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_track_complete(
     source: &mut ActiveSource,
     config: &AppConfig,
@@ -741,6 +739,7 @@ async fn handle_track_complete(
     zone_index: usize,
     current_decode: &mut Option<JoinHandle<()>>,
     decode_rx: &mut Option<mpsc::Receiver<Vec<u8>>>,
+    notify: &NotifySender,
 ) {
     let track_repeat = store
         .read()
@@ -774,6 +773,7 @@ async fn handle_track_complete(
                     zone_index,
                     current_decode,
                     decode_rx,
+                    notify,
                 )
                 .await;
             } else if shuffle {
@@ -789,6 +789,7 @@ async fn handle_track_complete(
                     zone_index,
                     current_decode,
                     decode_rx,
+                    notify,
                 )
                 .await;
             } else {
@@ -801,6 +802,7 @@ async fn handle_track_complete(
                     zone_index,
                     current_decode,
                     decode_rx,
+                    notify,
                 )
                 .await;
             }
@@ -825,7 +827,7 @@ async fn handle_track_complete(
         ActiveSource::AirPlay => {
             // AirPlay ended — go idle
             *source = ActiveSource::Idle;
-            update_zone_state(store, zone_index, |z| {
+            update_and_notify(store, zone_index, notify, |z| {
                 z.playback = PlaybackState::Stopped;
                 z.source = SourceType::Idle;
                 z.track = None;
@@ -836,7 +838,7 @@ async fn handle_track_complete(
         _ => {
             // URL or single track ended — go idle
             *source = ActiveSource::Idle;
-            update_zone_state(store, zone_index, |z| {
+            update_and_notify(store, zone_index, notify, |z| {
                 z.playback = PlaybackState::Stopped;
                 z.source = SourceType::Idle;
             })
@@ -857,6 +859,7 @@ async fn advance_playlist_track(
     zone_index: usize,
     current_decode: &mut Option<JoinHandle<()>>,
     decode_rx: &mut Option<mpsc::Receiver<Vec<u8>>>,
+    notify: &NotifySender,
 ) {
     stop_decode(current_decode, decode_rx).await;
     if let Some(sub) = subsonic {
@@ -868,7 +871,7 @@ async fn advance_playlist_track(
                     track_index,
                     track_count,
                 };
-                update_zone_state(store, zone_index, |z| {
+                update_and_notify(store, zone_index, notify, |z| {
                     z.playlist_track_index = Some(track_index);
                     z.track = Some(subsonic_track_info(track));
                 })
