@@ -35,6 +35,9 @@ snapcast-control = "0.4"
 # Audio decoding
 symphonia = { version = "0.5", features = ["aac", "mp3", "flac", "alac", "isomp4", "pcm"] }
 
+# Audio resampling
+rubato = "0.16"
+
 # MQTT
 rumqttc = "0.24"
 

@@ -6,6 +6,8 @@
 //! Fetches HTTP audio streams, decodes via symphonia to raw PCM (S16LE),
 //! and sends PCM chunks to a consumer (Snapcast TCP source).
 
+pub mod resample;
+
 use std::io::{Read, Seek};
 
 use anyhow::{Context, Result};

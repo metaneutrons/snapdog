@@ -71,6 +71,14 @@ async fn run(
     let mut current_decode: Option<JoinHandle<()>> = None;
     let mut decode_rx: Option<mpsc::Receiver<Vec<u8>>> = None;
     let mut source = ActiveSource::Idle;
+    let source_rate = config.audio.sample_rate; // Updated when source starts
+    let mut resampler = audio::resample::Resampling::new(
+        source_rate,
+        config.audio.sample_rate,
+        config.audio.channels,
+    );
+    let mut airplay_resampler =
+        audio::resample::Resampling::new(44100, config.audio.sample_rate, config.audio.channels);
 
     loop {
         tokio::select! {
@@ -321,6 +329,8 @@ async fn run(
             pcm = async { match &mut decode_rx { Some(rx) => rx.recv().await, None => std::future::pending().await } } => {
                 match pcm {
                     Some(data) => {
+                        let data = resampler.process(&data);
+                        if data.is_empty() { continue; } // Resampler buffering
                         if let Err(e) = tcp.write_all(&data).await {
                             tracing::error!(zone = zone_index, error = %e, "TCP write failed");
                             // Reconnect
@@ -351,6 +361,8 @@ async fn run(
                     }).await;
                     tracing::info!(zone = zone_index, "AirPlay preempted current source");
                 }
+                let pcm = airplay_resampler.process(&pcm);
+                if pcm.is_empty() { continue; }
                 if let Err(e) = tcp.write_all(&pcm).await {
                     tracing::error!(zone = zone_index, error = %e, "TCP write failed (AirPlay)");
                 }
