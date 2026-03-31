@@ -12,6 +12,7 @@ use serde::Serialize;
 
 use crate::api::SharedState;
 use crate::api::routes::zones::VolumeValue;
+use crate::state;
 
 #[derive(Serialize)]
 struct ClientInfo {
@@ -20,6 +21,9 @@ struct ClientInfo {
     mac: String,
     zone_index: usize,
     icon: String,
+    volume: i32,
+    muted: bool,
+    connected: bool,
 }
 
 pub fn router(state: SharedState) -> Router {
@@ -27,30 +31,23 @@ pub fn router(state: SharedState) -> Router {
         .route("/count", get(get_count))
         .route("/", get(get_all))
         .route("/{client_index}", get(get_client))
-        // Volume
         .route("/{client_index}/volume", get(get_volume).put(set_volume))
         .route("/{client_index}/mute", get(get_mute).put(set_mute))
         .route("/{client_index}/mute/toggle", post(toggle_mute))
-        // Latency
         .route("/{client_index}/latency", get(get_latency).put(set_latency))
-        // Zone assignment
         .route("/{client_index}/zone", get(get_zone).put(set_zone))
-        // Info
         .route("/{client_index}/name", get(get_name).put(set_name))
         .route("/{client_index}/icon", get(get_icon))
         .route("/{client_index}/connected", get(get_connected))
         .with_state(state)
 }
 
-fn validate_client(
-    state: &SharedState,
-    idx: usize,
-) -> Result<&crate::config::ClientConfig, StatusCode> {
-    state
-        .config
-        .clients
-        .get(idx - 1)
-        .ok_or(StatusCode::NOT_FOUND)
+async fn read_client(state: &SharedState, idx: usize) -> Option<state::ClientState> {
+    state.store.read().await.clients.get(&idx).cloned()
+}
+
+fn not_found() -> StatusCode {
+    StatusCode::NOT_FOUND
 }
 
 async fn get_count(State(state): State<SharedState>) -> Json<usize> {
@@ -58,107 +55,166 @@ async fn get_count(State(state): State<SharedState>) -> Json<usize> {
 }
 
 async fn get_all(State(state): State<SharedState>) -> Json<Vec<ClientInfo>> {
+    let store = state.store.read().await;
     Json(
         state
             .config
             .clients
             .iter()
-            .map(|c| ClientInfo {
-                index: c.index,
-                name: c.name.clone(),
-                mac: c.mac.clone(),
-                zone_index: c.zone_index,
-                icon: c.icon.clone(),
+            .map(|c| {
+                let cs = store.clients.get(&c.index);
+                ClientInfo {
+                    index: c.index,
+                    name: c.name.clone(),
+                    mac: c.mac.clone(),
+                    zone_index: cs.map_or(c.zone_index, |s| s.zone_index),
+                    icon: c.icon.clone(),
+                    volume: cs.map_or(50, |s| s.volume),
+                    muted: cs.is_some_and(|s| s.muted),
+                    connected: cs.is_some_and(|s| s.connected),
+                }
             })
             .collect(),
     )
 }
 
 async fn get_client(State(state): State<SharedState>, Path(idx): Path<usize>) -> impl IntoResponse {
-    validate_client(&state, idx).map(|c| {
-        Json(ClientInfo {
-            index: c.index,
-            name: c.name.clone(),
-            mac: c.mac.clone(),
-            zone_index: c.zone_index,
-            icon: c.icon.clone(),
-        })
-    })
+    let store = state.store.read().await;
+    let cfg = state.config.clients.get(idx - 1).ok_or(not_found())?;
+    let cs = store.clients.get(&idx);
+    Ok::<_, StatusCode>(Json(ClientInfo {
+        index: cfg.index,
+        name: cfg.name.clone(),
+        mac: cfg.mac.clone(),
+        zone_index: cs.map_or(cfg.zone_index, |s| s.zone_index),
+        icon: cfg.icon.clone(),
+        volume: cs.map_or(50, |s| s.volume),
+        muted: cs.is_some_and(|s| s.muted),
+        connected: cs.is_some_and(|s| s.connected),
+    }))
 }
 
-// Volume
-async fn get_volume(State(_state): State<SharedState>, Path(_idx): Path<usize>) -> Json<i32> {
-    Json(50)
+async fn get_volume(State(state): State<SharedState>, Path(idx): Path<usize>) -> impl IntoResponse {
+    read_client(&state, idx)
+        .await
+        .map(|c| Json(c.volume))
+        .ok_or(not_found())
 }
+
 async fn set_volume(
-    State(_state): State<SharedState>,
-    Path(_idx): Path<usize>,
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
     Json(value): Json<VolumeValue>,
 ) -> impl IntoResponse {
-    let current = 50; // TODO: read from state
-    match value.resolve(current) {
-        Ok(v) => {
-            tracing::info!(volume = v, "Set client volume");
-            StatusCode::NO_CONTENT
-        }
-        Err(_) => StatusCode::BAD_REQUEST,
-    }
+    let mut store = state.store.write().await;
+    let client = store.clients.get_mut(&idx).ok_or(not_found())?;
+    let volume = value
+        .resolve(client.volume)
+        .map_err(|_| StatusCode::BAD_REQUEST)?;
+    client.volume = volume;
+    tracing::info!(client = idx, volume, "Client volume set");
+    Ok::<_, StatusCode>(Json(volume))
 }
-async fn get_mute(State(_state): State<SharedState>, Path(_idx): Path<usize>) -> Json<bool> {
-    Json(false)
+
+async fn get_mute(State(state): State<SharedState>, Path(idx): Path<usize>) -> impl IntoResponse {
+    read_client(&state, idx)
+        .await
+        .map(|c| Json(c.muted))
+        .ok_or(not_found())
 }
+
 async fn set_mute(
-    State(_state): State<SharedState>,
-    Path(_idx): Path<usize>,
-    Json(_v): Json<bool>,
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
+    Json(v): Json<bool>,
 ) -> impl IntoResponse {
-    StatusCode::NO_CONTENT
+    let mut store = state.store.write().await;
+    let client = store.clients.get_mut(&idx).ok_or(not_found())?;
+    client.muted = v;
+    Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
 }
+
 async fn toggle_mute(
-    State(_state): State<SharedState>,
-    Path(_idx): Path<usize>,
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
 ) -> impl IntoResponse {
-    StatusCode::NO_CONTENT
+    let mut store = state.store.write().await;
+    let client = store.clients.get_mut(&idx).ok_or(not_found())?;
+    client.muted = !client.muted;
+    Ok::<_, StatusCode>(Json(client.muted))
 }
 
-// Latency
-async fn get_latency(State(_state): State<SharedState>, Path(_idx): Path<usize>) -> Json<i32> {
-    Json(0)
+async fn get_latency(
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
+) -> impl IntoResponse {
+    read_client(&state, idx)
+        .await
+        .map(|c| Json(c.latency_ms))
+        .ok_or(not_found())
 }
+
 async fn set_latency(
-    State(_state): State<SharedState>,
-    Path(_idx): Path<usize>,
-    Json(_v): Json<i32>,
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
+    Json(v): Json<i32>,
 ) -> impl IntoResponse {
-    StatusCode::NO_CONTENT
+    let mut store = state.store.write().await;
+    let client = store.clients.get_mut(&idx).ok_or(not_found())?;
+    client.latency_ms = v;
+    Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
 }
 
-// Zone
 async fn get_zone(State(state): State<SharedState>, Path(idx): Path<usize>) -> impl IntoResponse {
-    validate_client(&state, idx).map(|c| Json(c.zone_index))
-}
-async fn set_zone(
-    State(_state): State<SharedState>,
-    Path(_idx): Path<usize>,
-    Json(_v): Json<usize>,
-) -> impl IntoResponse {
-    StatusCode::NO_CONTENT
+    read_client(&state, idx)
+        .await
+        .map(|c| Json(c.zone_index))
+        .ok_or(not_found())
 }
 
-// Info
-async fn get_name(State(state): State<SharedState>, Path(idx): Path<usize>) -> impl IntoResponse {
-    validate_client(&state, idx).map(|c| Json(c.name.clone()))
-}
-async fn set_name(
-    State(_state): State<SharedState>,
-    Path(_idx): Path<usize>,
-    Json(_v): Json<String>,
+async fn set_zone(
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
+    Json(v): Json<usize>,
 ) -> impl IntoResponse {
-    StatusCode::NO_CONTENT
+    let mut store = state.store.write().await;
+    let client = store.clients.get_mut(&idx).ok_or(not_found())?;
+    client.zone_index = v;
+    tracing::info!(client = idx, zone = v, "Client zone changed");
+    Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
 }
+
+async fn get_name(State(state): State<SharedState>, Path(idx): Path<usize>) -> impl IntoResponse {
+    read_client(&state, idx)
+        .await
+        .map(|c| Json(c.name))
+        .ok_or(not_found())
+}
+
+async fn set_name(
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
+    Json(v): Json<String>,
+) -> impl IntoResponse {
+    let mut store = state.store.write().await;
+    let client = store.clients.get_mut(&idx).ok_or(not_found())?;
+    client.name = v;
+    Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
+}
+
 async fn get_icon(State(state): State<SharedState>, Path(idx): Path<usize>) -> impl IntoResponse {
-    validate_client(&state, idx).map(|c| Json(c.icon.clone()))
+    read_client(&state, idx)
+        .await
+        .map(|c| Json(c.icon))
+        .ok_or(not_found())
 }
-async fn get_connected(State(_state): State<SharedState>, Path(_idx): Path<usize>) -> Json<bool> {
-    Json(false)
+
+async fn get_connected(
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
+) -> impl IntoResponse {
+    read_client(&state, idx)
+        .await
+        .map(|c| Json(c.connected))
+        .ok_or(not_found())
 }

@@ -41,6 +41,9 @@ async fn main() -> Result<()> {
         "Configuration loaded from {config_path}"
     );
 
+    // Initialize state store
+    let store = state::init(&config, Some(&PathBuf::from("state.json")))?;
+
     // Start snapserver (or skip if managed=false)
     let mut snapserver = process::SnapserverHandle::start(&config).await?;
 
@@ -51,8 +54,9 @@ async fn main() -> Result<()> {
 
     // Start API server (runs in background)
     let api_config = config::load(&PathBuf::from(&config_path))?;
+    let api_store = store.clone();
     tokio::spawn(async move {
-        if let Err(e) = api::serve(api_config).await {
+        if let Err(e) = api::serve(api_config, api_store).await {
             tracing::error!(error = %e, "API server failed");
         }
     });
@@ -65,6 +69,22 @@ async fn main() -> Result<()> {
     if let Some(radio) = config.radios.first() {
         let zone = &config.zones[0];
         tracing::info!(radio = %radio.name, zone = %zone.name, "Starting radio playback");
+
+        // Update state
+        {
+            let mut s = store.write().await;
+            if let Some(z) = s.zones.get_mut(&zone.index) {
+                z.playback = state::PlaybackState::Playing;
+                z.track = Some(state::TrackInfo {
+                    title: radio.name.clone(),
+                    artist: "Radio".into(),
+                    album: String::new(),
+                    duration_ms: 0,
+                    position_ms: 0,
+                    cover_url: None,
+                });
+            }
+        }
 
         let mut tcp = snapcast::open_audio_source(zone.tcp_source_port).await?;
         let (tx, mut rx) = audio::pcm_channel(64);
@@ -90,6 +110,12 @@ async fn main() -> Result<()> {
     // Wait for Ctrl+C
     tokio::signal::ctrl_c().await?;
     tracing::info!("Shutting down");
+
+    // Persist state before exit
+    if let Err(e) = store.write().await.persist() {
+        tracing::warn!(error = %e, "Failed to persist state");
+    }
+
     snapserver.stop().await?;
     Ok(())
 }

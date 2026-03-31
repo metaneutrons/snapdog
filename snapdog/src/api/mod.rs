@@ -2,10 +2,6 @@
 // Copyright (C) 2025 Fabian Schmieder
 
 //! REST API and WebSocket server via axum.
-//!
-//! - REST endpoints for zones, clients, media, system
-//! - WebSocket for real-time state notifications
-//! - Health endpoint
 
 mod health;
 mod routes;
@@ -17,20 +13,20 @@ use axum::Router;
 use tokio::net::TcpListener;
 
 use crate::config::AppConfig;
+use crate::state;
 
 /// Shared application state accessible from all handlers.
 pub struct AppState {
     pub config: AppConfig,
-    // pub snapcast: tokio::sync::Mutex<Snapcast>,
-    // TODO: add state, snapcast, etc. as needed
+    pub store: state::SharedState,
 }
 
 pub type SharedState = Arc<AppState>;
 
 /// Start the HTTP server.
-pub async fn serve(config: AppConfig) -> Result<()> {
+pub async fn serve(config: AppConfig, store: state::SharedState) -> Result<()> {
     let port = config.http.port;
-    let state = Arc::new(AppState { config });
+    let state = Arc::new(AppState { config, store });
 
     let app = Router::new()
         .merge(health::router())
