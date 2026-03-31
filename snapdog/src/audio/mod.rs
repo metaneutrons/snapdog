@@ -3,5 +3,213 @@
 
 //! Audio decoding and PCM pipeline.
 //!
-//! Decodes AAC, MP3, FLAC, ALAC via symphonia into raw PCM,
-//! then routes PCM to the appropriate Snapcast TCP source.
+//! Fetches HTTP audio streams, decodes via symphonia to raw PCM (S16LE),
+//! and sends PCM chunks to a consumer (Snapcast TCP source).
+
+use std::io::{Read, Seek};
+
+use anyhow::{Context, Result};
+use symphonia::core::audio::SampleBuffer;
+use symphonia::core::codecs::DecoderOptions;
+use symphonia::core::formats::FormatOptions;
+use symphonia::core::io::{MediaSource, MediaSourceStream};
+use symphonia::core::meta::MetadataOptions;
+use symphonia::core::probe::Hint;
+use tokio::sync::mpsc;
+
+use crate::config::AudioConfig;
+
+/// PCM output: interleaved S16LE bytes.
+pub type PcmSender = mpsc::Sender<Vec<u8>>;
+pub type PcmReceiver = mpsc::Receiver<Vec<u8>>;
+
+/// Create a PCM channel pair.
+pub fn pcm_channel(buffer: usize) -> (PcmSender, PcmReceiver) {
+    mpsc::channel(buffer)
+}
+
+/// Decode an HTTP audio stream to PCM and send chunks to the provided sender.
+/// Runs until the stream ends or the sender is dropped.
+#[tracing::instrument(skip(tx, audio_config))]
+pub async fn decode_http_stream(
+    url: String,
+    tx: PcmSender,
+    audio_config: AudioConfig,
+) -> Result<()> {
+    let response = reqwest::get(&url)
+        .await
+        .with_context(|| format!("Failed to fetch {url}"))?
+        .error_for_status()
+        .with_context(|| format!("HTTP error for {url}"))?;
+
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+
+    tracing::info!(content_type = %content_type, "Stream connected");
+
+    // Collect the async byte stream into a sync reader via a pipe
+    let (mut pipe_tx, pipe_rx) = tokio::io::duplex(64 * 1024);
+
+    // Task: read HTTP chunks and write to pipe
+    let url_clone = url.clone();
+    let http_task = tokio::spawn(async move {
+        use tokio::io::AsyncWriteExt;
+        let mut stream = response.bytes_stream();
+        use futures_util::StreamExt;
+        while let Some(chunk) = stream.next().await {
+            match chunk {
+                Ok(bytes) => {
+                    if pipe_tx.write_all(&bytes).await.is_err() {
+                        break; // Decoder closed
+                    }
+                }
+                Err(e) => {
+                    tracing::error!(error = %e, url = %url_clone, "Stream read error");
+                    break;
+                }
+            }
+        }
+    });
+
+    // Decode in blocking thread (symphonia is sync + CPU-bound)
+    let decode_task = tokio::task::spawn_blocking(move || {
+        let reader = SyncReader(tokio::runtime::Handle::current(), pipe_rx);
+        decode_to_pcm(reader, &content_type, tx, &audio_config)
+    });
+
+    // Wait for either task to finish
+    tokio::select! {
+        _ = http_task => tracing::debug!("HTTP stream ended"),
+        result = decode_task => {
+            result.context("Decoder task panicked")??;
+        }
+    }
+
+    Ok(())
+}
+
+/// Synchronous symphonia decoding loop.
+fn decode_to_pcm(
+    reader: impl MediaSource + 'static,
+    content_type: &str,
+    tx: PcmSender,
+    audio_config: &AudioConfig,
+) -> Result<()> {
+    let mut hint = Hint::new();
+    match content_type {
+        t if t.contains("aac") || t.contains("mp4") => hint.with_extension("aac"),
+        t if t.contains("mpeg") || t.contains("mp3") => hint.with_extension("mp3"),
+        t if t.contains("flac") => hint.with_extension("flac"),
+        t if t.contains("ogg") => hint.with_extension("ogg"),
+        _ => &mut hint,
+    };
+
+    let mss = MediaSourceStream::new(Box::new(reader), Default::default());
+    let probed = symphonia::default::get_probe()
+        .format(
+            &hint,
+            mss,
+            &FormatOptions::default(),
+            &MetadataOptions::default(),
+        )
+        .context("Failed to probe audio format")?;
+
+    let mut format = probed.format;
+    let track = format.default_track().context("No audio track found")?;
+    let track_id = track.id;
+
+    tracing::info!(
+        codec = ?track.codec_params.codec,
+        sample_rate = track.codec_params.sample_rate,
+        channels = ?track.codec_params.channels,
+        "Decoding audio"
+    );
+
+    let mut decoder = symphonia::default::get_codecs()
+        .make(&track.codec_params, &DecoderOptions::default())
+        .context("Failed to create decoder")?;
+
+    let target_rate = audio_config.sample_rate;
+    let target_channels = audio_config.channels;
+
+    loop {
+        let packet = match format.next_packet() {
+            Ok(p) => p,
+            Err(symphonia::core::errors::Error::IoError(e))
+                if e.kind() == std::io::ErrorKind::UnexpectedEof =>
+            {
+                tracing::debug!("Stream ended (EOF)");
+                break;
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "Packet read error, skipping");
+                continue;
+            }
+        };
+
+        if packet.track_id() != track_id {
+            continue;
+        }
+
+        let decoded = match decoder.decode(&packet) {
+            Ok(d) => d,
+            Err(e) => {
+                tracing::warn!(error = %e, "Decode error, skipping packet");
+                continue;
+            }
+        };
+
+        // Convert to interleaved S16LE
+        let spec = *decoded.spec();
+        let num_frames = decoded.frames();
+        let mut sample_buf = SampleBuffer::<i16>::new(num_frames as u64, spec);
+        sample_buf.copy_interleaved_ref(decoded);
+
+        let samples = sample_buf.samples();
+        let bytes: Vec<u8> = samples.iter().flat_map(|s| s.to_le_bytes()).collect();
+
+        if tx.blocking_send(bytes).is_err() {
+            tracing::debug!("PCM consumer dropped, stopping decode");
+            break;
+        }
+    }
+
+    let _ = target_rate;
+    let _ = target_channels;
+    // TODO: resample if source rate != target rate
+
+    Ok(())
+}
+
+/// Bridge from async tokio DuplexStream to sync Read for symphonia.
+struct SyncReader(tokio::runtime::Handle, tokio::io::DuplexStream);
+
+impl Read for SyncReader {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        use tokio::io::AsyncReadExt;
+        self.0.block_on(self.1.read(buf))
+    }
+}
+
+impl Seek for SyncReader {
+    fn seek(&mut self, _pos: std::io::SeekFrom) -> std::io::Result<u64> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "not seekable",
+        ))
+    }
+}
+
+impl MediaSource for SyncReader {
+    fn is_seekable(&self) -> bool {
+        false
+    }
+
+    fn byte_len(&self) -> Option<u64> {
+        None
+    }
+}

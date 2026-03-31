@@ -28,6 +28,7 @@ symphonia = { workspace = true }
 rumqttc = { workspace = true }
 knxkit = { workspace = true }
 reqwest = { workspace = true }
+futures-util = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 

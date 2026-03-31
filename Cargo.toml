@@ -44,6 +44,9 @@ knxkit = "0.1"
 # HTTP client (Subsonic API, radio streams)
 reqwest = { version = "0.12", features = ["json", "stream"] }
 
+# Stream utilities
+futures-util = "0.3"
+
 # Error handling
 thiserror = "2"
 anyhow = "1"
