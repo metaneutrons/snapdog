@@ -75,13 +75,23 @@ async fn main() -> Result<()> {
             let mut s = store.write().await;
             if let Some(z) = s.zones.get_mut(&zone.index) {
                 z.playback = state::PlaybackState::Playing;
+                z.source = state::SourceType::Radio;
+                z.radio_index = Some(0);
                 z.track = Some(state::TrackInfo {
                     title: radio.name.clone(),
                     artist: "Radio".into(),
                     album: String::new(),
+                    album_artist: None,
+                    genre: None,
+                    year: None,
+                    track_number: None,
+                    disc_number: None,
                     duration_ms: 0,
                     position_ms: 0,
-                    cover_url: None,
+                    source: state::SourceType::Radio,
+                    bitrate_kbps: None,
+                    content_type: None,
+                    sample_rate: None,
                 });
             }
         }

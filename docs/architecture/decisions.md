@@ -353,14 +353,25 @@ pub enum SourceType {
 }
 
 pub struct TrackInfo {
+    // Metadata
     pub title: String,
     pub artist: String,
     pub album: String,
+    pub album_artist: Option<String>,
     pub genre: Option<String>,
+    pub year: Option<u32>,
     pub track_number: Option<u32>,
+    pub disc_number: Option<u32>,
+
+    // Playback
     pub duration_ms: i64,
     pub position_ms: i64,
     pub source: SourceType,
+
+    // Technical
+    pub bitrate_kbps: Option<u32>,       // 128, 320, etc.
+    pub content_type: Option<String>,    // "audio/flac", "audio/aac"
+    pub sample_rate: Option<u32>,        // 44100, 48000
 }
 ```
 

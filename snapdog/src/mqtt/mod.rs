@@ -106,9 +106,11 @@ impl MqttBridge {
                 &track.position_ms.to_string(),
             )
             .await?;
-            if let Some(cover) = &track.cover_url {
-                self.publish(&format!("{base}/track/cover"), cover).await?;
-            }
+            self.publish(
+                &format!("{base}/track/cover"),
+                &format!("/api/v1/zones/{index}/cover"),
+            )
+            .await?;
         }
         Ok(())
     }
