@@ -5,6 +5,7 @@
 
 mod health;
 mod routes;
+pub mod ws;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -23,6 +24,7 @@ pub struct AppState {
     pub store: state::SharedState,
     pub zone_commands: HashMap<usize, ZoneCommandSender>,
     pub covers: state::cover::SharedCoverCache,
+    pub notifications: tokio::sync::broadcast::Sender<ws::Notification>,
 }
 
 pub type SharedState = Arc<AppState>;
@@ -33,6 +35,7 @@ pub async fn serve(
     store: state::SharedState,
     zone_commands: HashMap<usize, ZoneCommandSender>,
     covers: state::cover::SharedCoverCache,
+    notifications: tokio::sync::broadcast::Sender<ws::Notification>,
 ) -> Result<()> {
     let port = config.http.port;
     let state = Arc::new(AppState {
@@ -40,10 +43,12 @@ pub async fn serve(
         store,
         zone_commands,
         covers,
+        notifications,
     });
 
     let app = Router::new()
         .merge(health::router())
+        .merge(ws::router(state.clone()))
         .nest("/api/v1/zones", routes::zones::router(state.clone()))
         .nest("/api/v1/clients", routes::clients::router(state.clone()))
         .nest("/api/v1/media", routes::media::router(state.clone()))
