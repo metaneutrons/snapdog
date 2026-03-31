@@ -272,6 +272,23 @@ consistent state updates, and future-proof (e.g. volume fade effects).
 - Client volume = Snapcast Client volume (per-speaker within a zone)
 - PCM stream is always full-scale — never attenuated in the pipeline
 
+**AirPlay disconnect detection:**
+- `audio_destroy` callback is called reliably on disconnect (TEARDOWN, connection drop,
+  or cleanup). This is the ZonePlayer's signal to transition from AirPlayActive → Idle.
+
+**AirPlay metadata and cover art (TODO — not yet wired):**
+- `audio_set_metadata`: DMAP-encoded metadata (title, artist, album) — must be parsed
+- `audio_set_coverart`: JPEG/PNG cover art bytes — store or serve via API
+- `audio_set_progress`: start/current/end timestamps — map to position/duration
+- `audio_remote_control_id`: DACP ID for remote control — not needed for MVP
+- Currently all four callbacks are set to `None` — must be implemented
+
+**AirPlay resampling:**
+- libshairplay delivers PCM at 44100 Hz / 16-bit (Apple standard)
+- Snapcast TCP source expects the configured sample rate (default 48000 Hz)
+- If input rate ≠ output rate, resample before writing to TCP source
+- Resampling also needed for any other source that doesn't match the target format
+
 **Extensibility:**
 - The PCM channel between decoder and TCP writer serves as the insertion point for
   future audio processing (EQ, crossfade, normalization). No architectural changes needed.
