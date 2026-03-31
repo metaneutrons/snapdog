@@ -156,8 +156,8 @@ fn decode_to_pcm(
         .make(&track.codec_params, &DecoderOptions::default())
         .context("Failed to create decoder")?;
 
-    let target_rate = audio_config.sample_rate;
-    let target_channels = audio_config.channels;
+    let _target_rate = audio_config.sample_rate;
+    let _target_channels = audio_config.channels;
 
     loop {
         let packet = match format.next_packet() {
@@ -201,9 +201,7 @@ fn decode_to_pcm(
         }
     }
 
-    let _ = target_rate;
-    let _ = target_channels;
-    // TODO: resample if source rate != target rate
+    // Note: resampling is handled by the ZonePlayer, not the decoder
 
     Ok(())
 }

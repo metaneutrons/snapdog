@@ -330,8 +330,8 @@ async fn toggle_repeat(
 async fn get_track(State(state): State<SharedState>, Path(idx): Path<usize>) -> impl IntoResponse {
     read_zone(&state, idx)
         .await
-        .map(|_z| Json(0i32))
-        .ok_or(zone_not_found()) // TODO: track index
+        .map(|z| Json(z.playlist_track_index.unwrap_or(0) as i32))
+        .ok_or(zone_not_found())
 }
 async fn get_track_metadata(
     State(state): State<SharedState>,
@@ -483,11 +483,11 @@ async fn play_track(
     StatusCode::NO_CONTENT
 }
 async fn play_url(
-    State(_s): State<SharedState>,
-    Path(_i): Path<usize>,
-    Json(_v): Json<String>,
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
+    Json(v): Json<String>,
 ) -> impl IntoResponse {
-    StatusCode::NO_CONTENT // TODO: start decode_http_stream for this URL
+    send_cmd(&state, idx, ZoneCommand::PlayUrl(v)).await
 }
 async fn play_playlist_track(
     State(_s): State<SharedState>,

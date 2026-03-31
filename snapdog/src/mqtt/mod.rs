@@ -191,8 +191,36 @@ impl MqttBridge {
             }
             ["zones", idx, "control", "set"] => {
                 let index: usize = idx.parse()?;
-                tracing::info!(zone = index, command = payload, "MQTT: zone control");
-                // TODO: dispatch play/pause/stop/next/previous
+                match payload.to_lowercase().as_str() {
+                    "play" => {
+                        let mut store = state.write().await;
+                        if let Some(zone) = store.zones.get_mut(&index) {
+                            zone.playback = crate::state::PlaybackState::Playing;
+                        }
+                    }
+                    "pause" => {
+                        let mut store = state.write().await;
+                        if let Some(zone) = store.zones.get_mut(&index) {
+                            zone.playback = crate::state::PlaybackState::Paused;
+                        }
+                    }
+                    "stop" => {
+                        let mut store = state.write().await;
+                        if let Some(zone) = store.zones.get_mut(&index) {
+                            zone.playback = crate::state::PlaybackState::Stopped;
+                        }
+                    }
+                    "next" | "previous" => {
+                        tracing::info!(zone = index, command = payload, "MQTT: zone control");
+                    }
+                    _ => {
+                        tracing::debug!(
+                            zone = index,
+                            command = payload,
+                            "Unknown MQTT control command"
+                        );
+                    }
+                }
             }
             ["zones", idx, "playlist", "set"] => {
                 let index: usize = idx.parse()?;
