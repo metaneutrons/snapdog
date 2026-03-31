@@ -67,9 +67,26 @@ async fn run(
     // Subsonic client (if configured)
     let subsonic = config.subsonic.as_ref().map(SubsonicClient::new);
 
-    // AirPlay PCM channel (always listening)
-    let (_airplay_tx, mut airplay_rx) = audio::pcm_channel(128);
-    // TODO: start AirplayReceiver with _airplay_tx when implemented
+    // AirPlay: PCM channel + event channel + receiver instance
+    let (airplay_pcm_tx, mut airplay_rx) = audio::pcm_channel(128);
+    let (airplay_event_tx, mut airplay_event_rx) =
+        mpsc::channel::<crate::airplay::AirplayEvent>(32);
+    let _airplay_receiver = {
+        let ap_config = crate::config::AirplayConfig {
+            name: zone_config.airplay_name.clone(),
+            password: config.airplay.password.clone(),
+        };
+        match crate::airplay::AirplayReceiver::start(&ap_config, airplay_pcm_tx, airplay_event_tx) {
+            Ok(r) => {
+                tracing::info!(zone = zone_index, name = %ap_config.name, "AirPlay receiver active");
+                Some(r)
+            }
+            Err(e) => {
+                tracing::warn!(zone = zone_index, error = %e, "AirPlay receiver failed to start");
+                None
+            }
+        }
+    };
 
     // Decode task state
     let mut current_decode: Option<JoinHandle<()>> = None;
@@ -397,6 +414,53 @@ async fn run(
                 if pcm.is_empty() { continue; }
                 if let Err(e) = tcp.write_all(&pcm).await {
                     tracing::error!(zone = zone_index, error = %e, "TCP write failed (AirPlay)");
+                }
+            }
+
+            // ── AirPlay events (metadata, cover, progress, disconnect) ──
+            Some(event) = airplay_event_rx.recv() => {
+                use crate::airplay::AirplayEvent;
+                match event {
+                    AirplayEvent::Metadata { title, artist, album } => {
+                        update_zone_state(&store, zone_index, |z| {
+                            z.track = Some(TrackInfo {
+                                title, artist, album,
+                                album_artist: None, genre: None, year: None,
+                                track_number: None, disc_number: None,
+                                duration_ms: 0, position_ms: 0,
+                                source: SourceType::AirPlay,
+                                bitrate_kbps: None, content_type: None, sample_rate: Some(44100),
+                            });
+                        }).await;
+                    }
+                    AirplayEvent::CoverArt { bytes } => {
+                        covers.write().await.set_auto_mime(zone_index, bytes);
+                        tracing::debug!(zone = zone_index, "AirPlay cover art cached");
+                    }
+                    AirplayEvent::Progress { position_ms, duration_ms } => {
+                        update_zone_state(&store, zone_index, |z| {
+                            if let Some(ref mut track) = z.track {
+                                track.position_ms = position_ms as i64;
+                                track.duration_ms = duration_ms as i64;
+                            }
+                        }).await;
+                    }
+                    AirplayEvent::Volume { percent } => {
+                        update_zone_state(&store, zone_index, |z| {
+                            z.volume = percent;
+                        }).await;
+                        // TODO: forward to snapcast group volume
+                    }
+                    AirplayEvent::SessionEnded => {
+                        source = ActiveSource::Idle;
+                        covers.write().await.clear(zone_index);
+                        update_zone_state(&store, zone_index, |z| {
+                            z.playback = PlaybackState::Stopped;
+                            z.source = SourceType::Idle;
+                            z.track = None;
+                        }).await;
+                        tracing::info!(zone = zone_index, "AirPlay session ended, zone idle");
+                    }
                 }
             }
         }
