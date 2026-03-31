@@ -8,9 +8,33 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::api::SharedState;
+
+/// Volume value: absolute (e.g. `75`) or relative (e.g. `"+5"`, `"-3"`).
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum VolumeValue {
+    Absolute(i32),
+    Relative(String),
+}
+
+impl VolumeValue {
+    /// Resolve to an absolute volume given the current value. Clamps to 0..=100.
+    pub fn resolve(&self, current: i32) -> Result<i32, &'static str> {
+        let v = match self {
+            Self::Absolute(v) => *v,
+            Self::Relative(s) => {
+                let delta: i32 = s
+                    .parse()
+                    .map_err(|_| "Invalid relative volume (use e.g. \"+5\" or \"-3\")")?;
+                current + delta
+            }
+        };
+        Ok(v.clamp(0, 100))
+    }
+}
 
 #[derive(Serialize)]
 struct ZoneInfo {
@@ -120,10 +144,19 @@ async fn get_volume(State(_state): State<SharedState>, Path(_idx): Path<usize>) 
 async fn set_volume(
     State(_state): State<SharedState>,
     Path(_idx): Path<usize>,
-    Json(volume): Json<i32>,
+    Json(value): Json<VolumeValue>,
 ) -> impl IntoResponse {
-    tracing::info!(volume, "Set zone volume");
-    StatusCode::NO_CONTENT // TODO: apply
+    let current = 50; // TODO: read from state
+    match value.resolve(current) {
+        Ok(volume) => {
+            tracing::info!(volume, "Set zone volume");
+            StatusCode::NO_CONTENT
+        }
+        Err(msg) => {
+            tracing::warn!(msg, "Invalid volume value");
+            StatusCode::BAD_REQUEST
+        }
+    }
 }
 
 async fn get_mute(State(_state): State<SharedState>, Path(_idx): Path<usize>) -> Json<bool> {

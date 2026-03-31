@@ -11,6 +11,7 @@ use axum::{Json, Router};
 use serde::Serialize;
 
 use crate::api::SharedState;
+use crate::api::routes::zones::VolumeValue;
 
 #[derive(Serialize)]
 struct ClientInfo {
@@ -92,10 +93,16 @@ async fn get_volume(State(_state): State<SharedState>, Path(_idx): Path<usize>) 
 async fn set_volume(
     State(_state): State<SharedState>,
     Path(_idx): Path<usize>,
-    Json(v): Json<i32>,
+    Json(value): Json<VolumeValue>,
 ) -> impl IntoResponse {
-    tracing::info!(volume = v, "Set client volume");
-    StatusCode::NO_CONTENT
+    let current = 50; // TODO: read from state
+    match value.resolve(current) {
+        Ok(v) => {
+            tracing::info!(volume = v, "Set client volume");
+            StatusCode::NO_CONTENT
+        }
+        Err(_) => StatusCode::BAD_REQUEST,
+    }
 }
 async fn get_mute(State(_state): State<SharedState>, Path(_idx): Path<usize>) -> Json<bool> {
     Json(false)
