@@ -171,7 +171,7 @@ AirPlay receiver, and Snapcast TCP source connection.
 **Architecture:**
 ```
 ZonePlayer (one per zone, runs as tokio task)
-├── Command Channel: Play(Source), Stop, Pause, Resume, Next, Previous
+├── Command Channel: mpsc::Receiver<ZoneCommand>
 ├── State: Idle | Playing(Source) | AirPlayActive
 ├── AirPlay Receiver (own libshairplay instance, own mDNS name)
 ├── Decode Task (abortable): Radio/Subsonic/URL → PCM
@@ -180,30 +180,94 @@ ZonePlayer (one per zone, runs as tokio task)
 └── Volume: controlled via Snapcast Group (never PCM amplitude)
 ```
 
-**Source types:**
-- Radio: endless live stream, no pause, next/previous cycles through stations
-- Subsonic Playlist: sequential tracks, pause supported, next/previous tracks
-- Subsonic Track: single track, pause supported
-- URL: arbitrary HTTP stream
-- AirPlay: PCM from libshairplay callback, externally controlled
+**Complete command set:**
+```rust
+enum ZoneCommand {
+    // Source selection
+    PlayRadio(usize),                        // Radio station index from config
+    PlaySubsonicPlaylist(String, usize),     // Playlist ID, start track index
+    PlaySubsonicTrack(String),               // Single track ID
+    PlayUrl(String),                         // Arbitrary HTTP stream URL
+    SetTrack(usize),                         // Jump to track N in current playlist
+
+    // Transport
+    Play,                                    // Resume or restart current source
+    Pause,
+    Stop,
+    Next,                                    // Next track (playlist) or next station (radio)
+    Previous,                                // Previous track/station
+
+    // Playlist navigation
+    NextPlaylist,
+    PreviousPlaylist,
+    SetPlaylist(usize),                      // Switch to playlist by index
+
+    // Seek
+    Seek(i64),                               // Absolute position in ms
+    SeekProgress(f64),                        // Relative 0.0..1.0
+
+    // Zone settings
+    SetVolume(i32),                          // → Snapcast Group Volume
+    SetMute(bool),
+    ToggleMute,
+    SetShuffle(bool),
+    ToggleShuffle,
+    SetRepeat(bool),                         // Playlist repeat
+    ToggleRepeat,
+    SetTrackRepeat(bool),                    // Single track repeat
+    ToggleTrackRepeat,
+}
+```
+
+**Volume routing decision:** Volume/Mute commands go through the ZonePlayer even though
+they only call Snapcast Group API. Rationale: single entry point for all zone operations,
+consistent state updates, and future-proof (e.g. volume fade effects).
+
+**Source types and behavior:**
+
+| Source | Pause | Seek | Next/Previous | Auto-advance | Metadata source |
+|--------|-------|------|---------------|-------------|-----------------|
+| Radio | No (Stop+Restart) | No | Next/prev station | No | ICY-metadata + config |
+| Subsonic Playlist | Yes | Yes | Next/prev track | Yes | Subsonic API (before play) |
+| Subsonic Track | Yes | Yes | No | No | Subsonic API (before play) |
+| URL | No | No | No | No | ICY-metadata if available |
+| AirPlay | External | External | External | External | DMAP callbacks |
+
+**Metadata architecture:**
+- Subsonic: full metadata (title, artist, album, cover URL, duration) set in state
+  *before* decode starts. Position updated from symphonia packet timestamps during playback.
+- Radio: station name from config set initially. ICY-metadata parsed from HTTP stream
+  updates title live (e.g. "Artist - Song"). Cover URL optional from config.
+- AirPlay: `audio_set_metadata` callback delivers DMAP (title/artist/album),
+  `audio_set_coverart` delivers JPEG/PNG bytes, `audio_set_progress` delivers position.
+- All metadata written to shared state store. API/MQTT/WebSocket read from there.
+
+**Track completion and auto-advance:**
+- Decode task ends → PCM channel closes → `pcm_rx.recv()` returns `None`
+- ZonePlayer detects this and applies repeat/advance logic:
+  - TrackRepeat=true → restart same track
+  - More tracks in playlist → start next track
+  - Last track + PlaylistRepeat=true → restart from track 1
+  - Last track + PlaylistRepeat=false → zone goes Idle
+  - Shuffle=true → random next track (no immediate repeats)
 
 **Preemption rules:**
 - AirPlay preempts everything — stops current decode, takes over PCM channel
-- When AirPlay ends, zone returns to Idle
+- When AirPlay session ends, zone returns to Idle (previous source NOT resumed)
 - Play(new source) stops current source, starts new one
-- Zones are fully independent — same radio station on two zones = two decode tasks
+- Second AirPlay connection to same zone: libshairplay handles this (max_clients=1,
+  new connection replaces old)
 
 **AirPlay naming convention:**
 - Default: `{airplay.name} {zone.name}` → e.g. "SnapDog Ground Floor"
 - Override: `zone.airplay_name` in config
 
+**Error handling:**
+- Stream connection failure → log error, zone goes to Idle, state updated
+- Decode error mid-stream → skip packet, continue (radio) or advance track (playlist)
+- Snapcast TCP write failure → reconnect TCP, resume writing
+
 **Volume architecture:**
 - Zone volume = Snapcast Group volume (digital mixing in client, full dynamic range)
 - Client volume = Snapcast Client volume (per-speaker within a zone)
 - PCM stream is always full-scale — never attenuated in the pipeline
-
-**Rationale:**
-- Independent tasks per zone = no shared mutable state between zones
-- Command channel = clean async interface from API/MQTT/KNX
-- AirPlay per zone = user sees one AirPlay target per room on their iPhone
-- Snapcast volume = no audio quality loss from PCM amplitude scaling
