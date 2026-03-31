@@ -8,10 +8,51 @@ use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::response::IntoResponse;
 use axum::routing::get;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 
 use crate::api::SharedState;
+use crate::player::ZoneCommand;
+
+/// Incoming WebSocket command from client.
+#[derive(Debug, Deserialize)]
+struct WsCommand {
+    zone: usize,
+    action: String,
+    #[serde(default)]
+    value: serde_json::Value,
+}
+
+impl WsCommand {
+    fn to_zone_command(&self) -> Option<ZoneCommand> {
+        match self.action.as_str() {
+            "play" => Some(ZoneCommand::Play),
+            "pause" => Some(ZoneCommand::Pause),
+            "stop" => Some(ZoneCommand::Stop),
+            "next" => Some(ZoneCommand::Next),
+            "previous" => Some(ZoneCommand::Previous),
+            "play_radio" => self
+                .value
+                .as_u64()
+                .map(|i| ZoneCommand::PlayRadio(i as usize)),
+            "play_url" => self
+                .value
+                .as_str()
+                .map(|s| ZoneCommand::PlayUrl(s.to_string())),
+            "set_volume" => self
+                .value
+                .as_i64()
+                .map(|v| ZoneCommand::SetVolume(v as i32)),
+            "set_mute" => self.value.as_bool().map(ZoneCommand::SetMute),
+            "toggle_mute" => Some(ZoneCommand::ToggleMute),
+            "set_shuffle" => self.value.as_bool().map(ZoneCommand::SetShuffle),
+            "toggle_shuffle" => Some(ZoneCommand::ToggleShuffle),
+            "set_repeat" => self.value.as_bool().map(ZoneCommand::SetRepeat),
+            "toggle_repeat" => Some(ZoneCommand::ToggleRepeat),
+            _ => None,
+        }
+    }
+}
 
 /// Notification broadcast to all connected WebSocket clients.
 #[derive(Debug, Clone, Serialize)]
@@ -84,8 +125,15 @@ async fn handle_socket(mut socket: WebSocket, state: SharedState) {
             msg = socket.recv() => {
                 match msg {
                     Some(Ok(Message::Close(_))) | None => break,
-                    Some(Ok(Message::Text(_text))) => {
-                        // TODO: parse and dispatch ZoneCommands from WebSocket
+                    Some(Ok(Message::Text(text))) => {
+                        // Parse and dispatch zone commands from WebSocket
+                        if let Ok(cmd) = serde_json::from_str::<WsCommand>(&text) {
+                            if let Some(tx) = state.zone_commands.get(&cmd.zone) {
+                                if let Some(zone_cmd) = cmd.to_zone_command() {
+                                    let _ = tx.send(zone_cmd).await;
+                                }
+                            }
+                        }
                     }
                     _ => {}
                 }

@@ -338,20 +338,19 @@ async fn run(
 
                     // Playlist navigation
                     ZoneCommand::NextPlaylist | ZoneCommand::PreviousPlaylist | ZoneCommand::SetPlaylist(_) => {
-                        // TODO: requires playlist list from Subsonic
-                        tracing::debug!(zone = zone_index, "Playlist navigation not yet implemented");
+                        tracing::warn!(zone = zone_index, "Playlist navigation requires Subsonic playlist list — not yet implemented");
                     }
 
                     // Seek
                     ZoneCommand::Seek(_) | ZoneCommand::SeekProgress(_) => {
-                        // TODO: requires restarting decode at offset
-                        tracing::debug!(zone = zone_index, "Seek not yet implemented");
+                        tracing::warn!(zone = zone_index, "Seek requires stream restart at offset — not yet implemented");
                     }
 
                     // Settings
                     ZoneCommand::SetVolume(v) => {
                         update_and_notify(&store, zone_index, &notify, |z| z.volume = v.clamp(0, 100)).await;
-                        // TODO: snapcast.set_group_volume()
+                        // FIXME: forward to snapcast.set_group_volume() — needs Snapcast handle in ZonePlayer
+                        tracing::info!(zone = zone_index, volume = v, "Volume set (state only, Snapcast forwarding pending)");
                     }
                     ZoneCommand::SetMute(m) => {
                         update_and_notify(&store, zone_index, &notify, |z| z.muted = m).await;
@@ -455,7 +454,7 @@ async fn run(
                         update_and_notify(&store, zone_index, &notify, |z| {
                             z.volume = percent;
                         }).await;
-                        // TODO: forward to snapcast group volume
+                        // FIXME: forward to snapcast.set_group_volume() — needs Snapcast handle in ZonePlayer
                     }
                     AirplayEvent::SessionEnded => {
                         source = ActiveSource::Idle;

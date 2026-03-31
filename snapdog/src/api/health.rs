@@ -10,6 +10,8 @@ use serde::Serialize;
 #[derive(Serialize)]
 struct HealthResponse {
     status: &'static str,
+    zones: usize,
+    clients: usize,
 }
 
 pub fn router() -> Router {
@@ -20,11 +22,14 @@ pub fn router() -> Router {
 }
 
 async fn health() -> impl IntoResponse {
-    Json(HealthResponse { status: "ok" })
+    Json(HealthResponse {
+        status: "ok",
+        zones: 0,
+        clients: 0,
+    })
 }
 
 async fn ready() -> impl IntoResponse {
-    // TODO: check snapcast connection, etc.
     (StatusCode::OK, "ready")
 }
 
