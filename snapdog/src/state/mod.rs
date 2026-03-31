@@ -55,6 +55,10 @@ pub struct ZoneState {
     pub track: Option<TrackInfo>,
     pub playlist_index: Option<usize>,
     pub playlist_name: Option<String>,
+    pub playlist_track_index: Option<usize>,
+    pub playlist_track_count: Option<usize>,
+    pub radio_index: Option<usize>,
+    pub source: SourceType,
     pub snapcast_group_id: Option<String>,
 }
 
@@ -80,14 +84,39 @@ pub enum PlaybackState {
     Paused,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum SourceType {
+    #[default]
+    Idle,
+    Radio,
+    SubsonicPlaylist,
+    SubsonicTrack,
+    Url,
+    AirPlay,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrackInfo {
+    // Metadata
     pub title: String,
     pub artist: String,
     pub album: String,
+    pub album_artist: Option<String>,
+    pub genre: Option<String>,
+    pub year: Option<u32>,
+    pub track_number: Option<u32>,
+    pub disc_number: Option<u32>,
+
+    // Playback
     pub duration_ms: i64,
     pub position_ms: i64,
-    pub cover_url: Option<String>,
+    pub source: SourceType,
+
+    // Technical
+    pub bitrate_kbps: Option<u32>,
+    pub content_type: Option<String>,
+    pub sample_rate: Option<u32>,
 }
 
 impl Store {
@@ -111,6 +140,10 @@ impl Store {
                         track: None,
                         playlist_index: None,
                         playlist_name: None,
+                        playlist_track_index: None,
+                        playlist_track_count: None,
+                        radio_index: None,
+                        source: SourceType::Idle,
                         snapcast_group_id: None,
                     },
                 )
@@ -276,6 +309,10 @@ mod tests {
                 track: None,
                 playlist_index: None,
                 playlist_name: None,
+                playlist_track_index: None,
+                playlist_track_count: None,
+                radio_index: None,
+                source: SourceType::Idle,
                 snapcast_group_id: None,
             },
         );

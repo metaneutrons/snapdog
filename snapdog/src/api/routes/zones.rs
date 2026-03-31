@@ -394,7 +394,7 @@ async fn get_track_cover(
 ) -> impl IntoResponse {
     read_zone(&state, idx)
         .await
-        .map(|z| Json(z.track.and_then(|t| t.cover_url).unwrap_or_default()))
+        .map(|_| Json(format!("/api/v1/zones/{idx}/cover")))
         .ok_or(zone_not_found())
 }
 async fn get_track_duration(
