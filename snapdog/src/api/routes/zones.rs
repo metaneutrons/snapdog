@@ -108,6 +108,7 @@ pub fn router(state: SharedState) -> Router {
         .route("/{zone_index}/playlist/info", get(get_playlist_info))
         .route("/{zone_index}/playlist/count", get(get_playlist_count))
         .route("/{zone_index}/clients", get(get_clients))
+        .route("/{zone_index}/cover", get(get_cover))
         .with_state(state)
 }
 
@@ -557,4 +558,15 @@ async fn get_clients(State(state): State<SharedState>, Path(idx): Path<usize>) -
             })
             .collect(),
     )
+}
+
+async fn get_cover(State(state): State<SharedState>, Path(idx): Path<usize>) -> impl IntoResponse {
+    let cache = state.covers.read().await;
+    match cache.get(idx) {
+        Some(entry) => Ok((
+            [(axum::http::header::CONTENT_TYPE, entry.mime.clone())],
+            entry.bytes.clone(),
+        )),
+        None => Err(StatusCode::NO_CONTENT),
+    }
 }
