@@ -47,7 +47,7 @@ pub async fn serve(
     });
 
     let app = Router::new()
-        .merge(health::router())
+        .merge(health::router(state.clone()))
         .merge(ws::router(state.clone()))
         .nest("/api/v1/zones", routes::zones::router(state.clone()))
         .nest("/api/v1/clients", routes::clients::router(state.clone()))
