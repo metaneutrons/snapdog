@@ -44,6 +44,7 @@ struct ZoneInfo {
     volume: i32,
     muted: bool,
     playback: String,
+    source: String,
 }
 
 pub fn router(state: SharedState) -> Router {
@@ -143,6 +144,7 @@ async fn get_all(State(state): State<SharedState>) -> Json<Vec<ZoneInfo>> {
                     playback: zs.map_or("stopped".into(), |s| {
                         format!("{:?}", s.playback).to_lowercase()
                     }),
+                    source: zs.map_or("idle".into(), |s| format!("{:?}", s.source).to_lowercase()),
                 }
             })
             .collect(),
@@ -162,6 +164,7 @@ async fn get_zone(State(state): State<SharedState>, Path(idx): Path<usize>) -> i
         playback: zs.map_or("stopped".into(), |s| {
             format!("{:?}", s.playback).to_lowercase()
         }),
+        source: zs.map_or("idle".into(), |s| format!("{:?}", s.source).to_lowercase()),
     }))
 }
 
@@ -357,8 +360,21 @@ async fn get_track_metadata(
         "title": zone.track.as_ref().map_or("", |t| &t.title),
         "artist": zone.track.as_ref().map_or("", |t| &t.artist),
         "album": zone.track.as_ref().map_or("", |t| &t.album),
+        "album_artist": zone.track.as_ref().and_then(|t| t.album_artist.as_deref()),
+        "genre": zone.track.as_ref().and_then(|t| t.genre.as_deref()),
+        "year": zone.track.as_ref().and_then(|t| t.year),
+        "track_number": zone.track.as_ref().and_then(|t| t.track_number),
+        "disc_number": zone.track.as_ref().and_then(|t| t.disc_number),
         "duration_ms": zone.track.as_ref().map_or(0, |t| t.duration_ms),
         "position_ms": zone.track.as_ref().map_or(0, |t| t.position_ms),
+        "bitrate_kbps": zone.track.as_ref().and_then(|t| t.bitrate_kbps),
+        "content_type": zone.track.as_ref().and_then(|t| t.content_type.as_deref()),
+        "sample_rate": zone.track.as_ref().and_then(|t| t.sample_rate),
+        "source": format!("{:?}", zone.source).to_lowercase(),
+        "cover": format!("/api/v1/zones/{idx}/cover"),
+        "radio_index": zone.radio_index,
+        "playlist_track_index": zone.playlist_track_index,
+        "playlist_track_count": zone.playlist_track_count,
     })))
 }
 async fn get_track_title(
