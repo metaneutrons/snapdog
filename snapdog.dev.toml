@@ -15,10 +15,10 @@ codec = "flac"
 port = 5555
 
 [snapcast]
-address = "localhost"                  # Docker-exposed port
+address = "localhost"
 jsonrpc_port = 1780
 streaming_port = 1704
-managed = false                        # Don't start snapserver — it's a container
+managed = true                         # snapdog starts snapserver
 
 [airplay]
 name = "SnapDog-Dev"
