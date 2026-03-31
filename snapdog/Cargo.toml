@@ -25,6 +25,7 @@ tracing-subscriber = { workspace = true }
 tracing-appender = { workspace = true }
 snapcast-control = { workspace = true }
 symphonia = { workspace = true }
+rubato = { workspace = true }
 rumqttc = { workspace = true }
 knxkit = { workspace = true }
 reqwest = { workspace = true }
