@@ -4,12 +4,15 @@
 //! MQTT integration via rumqttc.
 //!
 //! Bidirectional: subscribes to command topics (`*/set`), publishes status updates.
-//! Topic schema compatible with SnapDog2.
+//! All incoming commands are routed through ZonePlayer command channels.
+
+use std::collections::HashMap;
 
 use anyhow::{Context, Result};
 use rumqttc::{AsyncClient, Event, MqttOptions, Packet, QoS};
 
 use crate::config::MqttConfig;
+use crate::player::{ZoneCommand, ZoneCommandSender};
 use crate::state;
 
 /// MQTT bridge: receives commands, publishes status.
@@ -135,8 +138,12 @@ impl MqttBridge {
         Ok(())
     }
 
-    /// Run the event loop, dispatching incoming commands.
-    pub async fn run(&mut self, state: state::SharedState) -> Result<()> {
+    /// Run the event loop, dispatching incoming commands via ZonePlayer channels.
+    pub async fn run(
+        &mut self,
+        zone_commands: HashMap<usize, ZoneCommandSender>,
+        state: state::SharedState,
+    ) -> Result<()> {
         loop {
             match self.eventloop.poll().await {
                 Ok(Event::Incoming(Packet::Publish(msg))) => {
@@ -144,11 +151,14 @@ impl MqttBridge {
                     let payload = String::from_utf8_lossy(&msg.payload).to_string();
                     tracing::debug!(topic = %topic, payload = %payload, "MQTT message received");
 
-                    if let Err(e) = self.handle_command(&topic, &payload, &state).await {
+                    if let Err(e) = self
+                        .handle_command(&topic, &payload, &zone_commands, &state)
+                        .await
+                    {
                         tracing::warn!(error = %e, topic = %topic, "Failed to handle MQTT command");
                     }
                 }
-                Ok(_) => {} // Other events (connack, suback, etc.)
+                Ok(_) => {}
                 Err(e) => {
                     tracing::warn!(error = %e, "MQTT connection error, retrying");
                     tokio::time::sleep(std::time::Duration::from_secs(5)).await;
@@ -161,9 +171,9 @@ impl MqttBridge {
         &self,
         topic: &str,
         payload: &str,
+        zone_commands: &HashMap<usize, ZoneCommandSender>,
         state: &state::SharedState,
     ) -> Result<()> {
-        // Parse topic: {base}/zones/{index}/{command}/set or {base}/clients/{index}/{command}/set
         let stripped = topic
             .strip_prefix(&self.base_topic)
             .and_then(|t| t.strip_prefix('/'))
@@ -172,75 +182,57 @@ impl MqttBridge {
         let parts: Vec<&str> = stripped.split('/').collect();
 
         match parts.as_slice() {
+            // Zone commands → routed through ZonePlayer
             ["zones", idx, "volume", "set"] => {
                 let index: usize = idx.parse()?;
                 let volume: i32 = payload.parse()?;
-                let mut store = state.write().await;
-                if let Some(zone) = store.zones.get_mut(&index) {
-                    zone.volume = volume.clamp(0, 100);
-                    tracing::info!(zone = index, volume = zone.volume, "MQTT: zone volume set");
-                }
+                send_zone_cmd(zone_commands, index, ZoneCommand::SetVolume(volume)).await;
             }
             ["zones", idx, "mute", "set"] => {
                 let index: usize = idx.parse()?;
                 let muted: bool = payload.parse()?;
-                let mut store = state.write().await;
-                if let Some(zone) = store.zones.get_mut(&index) {
-                    zone.muted = muted;
-                }
+                send_zone_cmd(zone_commands, index, ZoneCommand::SetMute(muted)).await;
             }
             ["zones", idx, "control", "set"] => {
                 let index: usize = idx.parse()?;
-                match payload.to_lowercase().as_str() {
-                    "play" => {
-                        let mut store = state.write().await;
-                        if let Some(zone) = store.zones.get_mut(&index) {
-                            zone.playback = crate::state::PlaybackState::Playing;
-                        }
-                    }
-                    "pause" => {
-                        let mut store = state.write().await;
-                        if let Some(zone) = store.zones.get_mut(&index) {
-                            zone.playback = crate::state::PlaybackState::Paused;
-                        }
-                    }
-                    "stop" => {
-                        let mut store = state.write().await;
-                        if let Some(zone) = store.zones.get_mut(&index) {
-                            zone.playback = crate::state::PlaybackState::Stopped;
-                        }
-                    }
-                    "next" | "previous" => {
-                        tracing::info!(zone = index, command = payload, "MQTT: zone control");
-                    }
+                let cmd = match payload.to_lowercase().as_str() {
+                    "play" => Some(ZoneCommand::Play),
+                    "pause" => Some(ZoneCommand::Pause),
+                    "stop" => Some(ZoneCommand::Stop),
+                    "next" => Some(ZoneCommand::Next),
+                    "previous" => Some(ZoneCommand::Previous),
                     _ => {
-                        tracing::debug!(
-                            zone = index,
-                            command = payload,
-                            "Unknown MQTT control command"
-                        );
+                        tracing::debug!(zone = index, command = payload, "Unknown control command");
+                        None
                     }
+                };
+                if let Some(cmd) = cmd {
+                    send_zone_cmd(zone_commands, index, cmd).await;
                 }
             }
             ["zones", idx, "playlist", "set"] => {
                 let index: usize = idx.parse()?;
                 let playlist: usize = payload.parse()?;
-                let mut store = state.write().await;
-                if let Some(zone) = store.zones.get_mut(&index) {
-                    zone.playlist_index = Some(playlist);
-                }
+                send_zone_cmd(zone_commands, index, ZoneCommand::SetPlaylist(playlist)).await;
             }
+            ["zones", idx, "track", "set"] => {
+                let index: usize = idx.parse()?;
+                let track: usize = payload.parse()?;
+                send_zone_cmd(zone_commands, index, ZoneCommand::SetTrack(track)).await;
+            }
+            ["zones", idx, "track", "position", "set"] => {
+                let index: usize = idx.parse()?;
+                let pos: i64 = payload.parse()?;
+                send_zone_cmd(zone_commands, index, ZoneCommand::Seek(pos)).await;
+            }
+
+            // Client commands → direct state mutation (no ZonePlayer involvement)
             ["clients", idx, "volume", "set"] => {
                 let index: usize = idx.parse()?;
                 let volume: i32 = payload.parse()?;
                 let mut store = state.write().await;
                 if let Some(client) = store.clients.get_mut(&index) {
                     client.volume = volume.clamp(0, 100);
-                    tracing::info!(
-                        client = index,
-                        volume = client.volume,
-                        "MQTT: client volume set"
-                    );
                 }
             }
             ["clients", idx, "mute", "set"] => {
@@ -276,7 +268,20 @@ impl MqttBridge {
     }
 }
 
-/// Parse port from broker string like "mqtt:1883" or "localhost:1883".
+async fn send_zone_cmd(
+    zone_commands: &HashMap<usize, ZoneCommandSender>,
+    index: usize,
+    cmd: ZoneCommand,
+) {
+    if let Some(tx) = zone_commands.get(&index) {
+        if let Err(e) = tx.send(cmd).await {
+            tracing::warn!(zone = index, error = %e, "Failed to send zone command from MQTT");
+        }
+    } else {
+        tracing::warn!(zone = index, "No ZonePlayer for MQTT command");
+    }
+}
+
 fn parse_port(broker: &str) -> Result<u16> {
     broker
         .rsplit_once(':')
