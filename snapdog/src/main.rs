@@ -52,21 +52,22 @@ async fn main() -> Result<()> {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
 
-    // Start API server
-    let api_config = config::load(&PathBuf::from(&config_path))?;
-    let api_store = store.clone();
-    tokio::spawn(async move {
-        if let Err(e) = api::serve(api_config, api_store).await {
-            tracing::error!(error = %e, "API server failed");
-        }
-    });
-
     // Connect to snapcast JSON-RPC
     let mut snap = snapcast::Snapcast::from_config(&config).await?;
     snap.init().await?;
 
     // Spawn ZonePlayers
     let zone_commands = player::spawn_zone_players(config.clone(), store.clone()).await?;
+
+    // Start API server (needs zone_commands)
+    let api_config = config::load(&PathBuf::from(&config_path))?;
+    let api_store = store.clone();
+    let api_commands = zone_commands.clone();
+    tokio::spawn(async move {
+        if let Err(e) = api::serve(api_config, api_store, api_commands).await {
+            tracing::error!(error = %e, "API server failed");
+        }
+    });
 
     // Auto-start first radio on first zone
     if !config.radios.is_empty() {
