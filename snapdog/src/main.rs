@@ -8,7 +8,7 @@ pub mod config;
 mod knx;
 mod mqtt;
 mod process;
-mod snapcast;
+pub mod snapcast;
 mod state;
 mod subsonic;
 
@@ -42,6 +42,10 @@ async fn main() -> Result<()> {
 
     // Start snapserver (or skip if managed=false)
     let mut snapserver = process::SnapserverHandle::start(&config).await?;
+
+    // Connect to snapcast JSON-RPC
+    let mut snap = snapcast::Snapcast::from_config(&config).await?;
+    snap.init().await?;
 
     // Graceful shutdown on Ctrl+C
     tokio::signal::ctrl_c().await?;
