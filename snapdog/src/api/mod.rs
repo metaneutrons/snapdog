@@ -6,6 +6,7 @@
 mod health;
 mod routes;
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -13,20 +14,30 @@ use axum::Router;
 use tokio::net::TcpListener;
 
 use crate::config::AppConfig;
+use crate::player::ZoneCommandSender;
 use crate::state;
 
 /// Shared application state accessible from all handlers.
 pub struct AppState {
     pub config: AppConfig,
     pub store: state::SharedState,
+    pub zone_commands: HashMap<usize, ZoneCommandSender>,
 }
 
 pub type SharedState = Arc<AppState>;
 
 /// Start the HTTP server.
-pub async fn serve(config: AppConfig, store: state::SharedState) -> Result<()> {
+pub async fn serve(
+    config: AppConfig,
+    store: state::SharedState,
+    zone_commands: HashMap<usize, ZoneCommandSender>,
+) -> Result<()> {
     let port = config.http.port;
-    let state = Arc::new(AppState { config, store });
+    let state = Arc::new(AppState {
+        config,
+        store,
+        zone_commands,
+    });
 
     let app = Router::new()
         .merge(health::router())

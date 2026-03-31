@@ -10,4 +10,4 @@ mod commands;
 mod runner;
 
 pub use commands::ZoneCommand;
-pub use runner::spawn_zone_players;
+pub use runner::{ZoneCommandSender, spawn_zone_players};

@@ -11,6 +11,7 @@ use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 
 use crate::api::SharedState;
+use crate::player::ZoneCommand;
 use crate::state;
 
 /// Volume value: absolute (e.g. `75`) or relative (e.g. `"+5"`, `"-3"`).
@@ -120,6 +121,16 @@ fn zone_not_found() -> StatusCode {
     StatusCode::NOT_FOUND
 }
 
+async fn send_cmd(state: &SharedState, idx: usize, cmd: ZoneCommand) -> Result<(), StatusCode> {
+    state
+        .zone_commands
+        .get(&idx)
+        .ok_or(StatusCode::NOT_FOUND)?
+        .send(cmd)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
 // ── Zone listing ──────────────────────────────────────────────
 
 async fn get_count(State(state): State<SharedState>) -> Json<usize> {
@@ -182,14 +193,11 @@ async fn set_volume(
     Path(idx): Path<usize>,
     Json(value): Json<VolumeValue>,
 ) -> impl IntoResponse {
-    let mut store = state.store.write().await;
-    let zone = store.zones.get_mut(&idx).ok_or(zone_not_found())?;
-    let current = zone.volume;
+    let current = read_zone(&state, idx).await.map_or(50, |z| z.volume);
     let volume = value
         .resolve(current)
         .map_err(|_| StatusCode::BAD_REQUEST)?;
-    zone.volume = volume;
-    tracing::info!(zone = idx, volume, "Zone volume set");
+    send_cmd(&state, idx, ZoneCommand::SetVolume(volume)).await?;
     Ok::<_, StatusCode>(Json(volume))
 }
 
@@ -203,55 +211,41 @@ async fn get_mute(State(state): State<SharedState>, Path(idx): Path<usize>) -> i
 async fn set_mute(
     State(state): State<SharedState>,
     Path(idx): Path<usize>,
-    Json(muted): Json<bool>,
+    Json(v): Json<bool>,
 ) -> impl IntoResponse {
-    let mut store = state.store.write().await;
-    let zone = store.zones.get_mut(&idx).ok_or(zone_not_found())?;
-    zone.muted = muted;
-    Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
+    send_cmd(&state, idx, ZoneCommand::SetMute(v)).await
 }
 
 async fn toggle_mute(
     State(state): State<SharedState>,
     Path(idx): Path<usize>,
 ) -> impl IntoResponse {
-    let mut store = state.store.write().await;
-    let zone = store.zones.get_mut(&idx).ok_or(zone_not_found())?;
-    zone.muted = !zone.muted;
-    Ok::<_, StatusCode>(Json(zone.muted))
+    send_cmd(&state, idx, ZoneCommand::ToggleMute).await
 }
 
 // ── Playback control ──────────────────────────────────────────
 
 async fn play(State(state): State<SharedState>, Path(idx): Path<usize>) -> impl IntoResponse {
-    let mut store = state.store.write().await;
-    let zone = store.zones.get_mut(&idx).ok_or(zone_not_found())?;
-    zone.playback = state::PlaybackState::Playing;
-    tracing::info!(zone = idx, "Zone play");
-    Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
+    send_cmd(&state, idx, ZoneCommand::Play).await
 }
 
 async fn pause(State(state): State<SharedState>, Path(idx): Path<usize>) -> impl IntoResponse {
-    let mut store = state.store.write().await;
-    let zone = store.zones.get_mut(&idx).ok_or(zone_not_found())?;
-    zone.playback = state::PlaybackState::Paused;
-    tracing::info!(zone = idx, "Zone pause");
-    Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
+    send_cmd(&state, idx, ZoneCommand::Pause).await
 }
 
 async fn stop(State(state): State<SharedState>, Path(idx): Path<usize>) -> impl IntoResponse {
-    let mut store = state.store.write().await;
-    let zone = store.zones.get_mut(&idx).ok_or(zone_not_found())?;
-    zone.playback = state::PlaybackState::Stopped;
-    tracing::info!(zone = idx, "Zone stop");
-    Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
+    send_cmd(&state, idx, ZoneCommand::Stop).await
 }
 
-async fn next_track(State(_s): State<SharedState>, Path(_i): Path<usize>) -> impl IntoResponse {
-    StatusCode::NO_CONTENT // TODO
+async fn next_track(State(state): State<SharedState>, Path(idx): Path<usize>) -> impl IntoResponse {
+    send_cmd(&state, idx, ZoneCommand::Next).await
 }
-async fn previous_track(State(_s): State<SharedState>, Path(_i): Path<usize>) -> impl IntoResponse {
-    StatusCode::NO_CONTENT
+
+async fn previous_track(
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
+) -> impl IntoResponse {
+    send_cmd(&state, idx, ZoneCommand::Previous).await
 }
 
 // ── Playlist ──────────────────────────────────────────────────
@@ -271,15 +265,14 @@ async fn set_playlist(
     Path(idx): Path<usize>,
     Json(v): Json<usize>,
 ) -> impl IntoResponse {
-    let mut store = state.store.write().await;
-    let zone = store.zones.get_mut(&idx).ok_or(zone_not_found())?;
-    zone.playlist_index = Some(v);
-    tracing::info!(zone = idx, playlist = v, "Zone playlist set");
-    Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
+    send_cmd(&state, idx, ZoneCommand::SetPlaylist(v)).await
 }
 
-async fn next_playlist(State(_s): State<SharedState>, Path(_i): Path<usize>) -> impl IntoResponse {
-    StatusCode::NO_CONTENT
+async fn next_playlist(
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
+) -> impl IntoResponse {
+    send_cmd(&state, idx, ZoneCommand::NextPlaylist).await
 }
 async fn previous_playlist(
     State(_s): State<SharedState>,
@@ -302,19 +295,13 @@ async fn set_shuffle(
     Path(idx): Path<usize>,
     Json(v): Json<bool>,
 ) -> impl IntoResponse {
-    let mut store = state.store.write().await;
-    let zone = store.zones.get_mut(&idx).ok_or(zone_not_found())?;
-    zone.shuffle = v;
-    Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
+    send_cmd(&state, idx, ZoneCommand::SetShuffle(v)).await
 }
 async fn toggle_shuffle(
     State(state): State<SharedState>,
     Path(idx): Path<usize>,
 ) -> impl IntoResponse {
-    let mut store = state.store.write().await;
-    let zone = store.zones.get_mut(&idx).ok_or(zone_not_found())?;
-    zone.shuffle = !zone.shuffle;
-    Ok::<_, StatusCode>(Json(zone.shuffle))
+    send_cmd(&state, idx, ZoneCommand::ToggleShuffle).await
 }
 
 async fn get_repeat(State(state): State<SharedState>, Path(idx): Path<usize>) -> impl IntoResponse {
@@ -328,19 +315,13 @@ async fn set_repeat(
     Path(idx): Path<usize>,
     Json(v): Json<bool>,
 ) -> impl IntoResponse {
-    let mut store = state.store.write().await;
-    let zone = store.zones.get_mut(&idx).ok_or(zone_not_found())?;
-    zone.repeat = v;
-    Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
+    send_cmd(&state, idx, ZoneCommand::SetRepeat(v)).await
 }
 async fn toggle_repeat(
     State(state): State<SharedState>,
     Path(idx): Path<usize>,
 ) -> impl IntoResponse {
-    let mut store = state.store.write().await;
-    let zone = store.zones.get_mut(&idx).ok_or(zone_not_found())?;
-    zone.repeat = !zone.repeat;
-    Ok::<_, StatusCode>(Json(zone.repeat))
+    send_cmd(&state, idx, ZoneCommand::ToggleRepeat).await
 }
 
 // ── Track info ────────────────────────────────────────────────
@@ -482,19 +463,13 @@ async fn set_track_repeat(
     Path(idx): Path<usize>,
     Json(v): Json<bool>,
 ) -> impl IntoResponse {
-    let mut store = state.store.write().await;
-    let zone = store.zones.get_mut(&idx).ok_or(zone_not_found())?;
-    zone.track_repeat = v;
-    Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
+    send_cmd(&state, idx, ZoneCommand::SetTrackRepeat(v)).await
 }
 async fn toggle_track_repeat(
     State(state): State<SharedState>,
     Path(idx): Path<usize>,
 ) -> impl IntoResponse {
-    let mut store = state.store.write().await;
-    let zone = store.zones.get_mut(&idx).ok_or(zone_not_found())?;
-    zone.track_repeat = !zone.track_repeat;
-    Ok::<_, StatusCode>(Json(zone.track_repeat))
+    send_cmd(&state, idx, ZoneCommand::ToggleTrackRepeat).await
 }
 
 // ── Play specific content ─────────────────────────────────────
