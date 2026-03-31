@@ -6,6 +6,7 @@
 //! Fetches HTTP audio streams, decodes via symphonia to raw PCM (S16LE),
 //! and sends PCM chunks to a consumer (Snapcast TCP source).
 
+pub mod icy;
 pub mod resample;
 
 use std::io::{Read, Seek};
@@ -32,13 +33,19 @@ pub fn pcm_channel(buffer: usize) -> (PcmSender, PcmReceiver) {
 
 /// Decode an HTTP audio stream to PCM and send chunks to the provided sender.
 /// Runs until the stream ends or the sender is dropped.
-#[tracing::instrument(skip(tx, audio_config))]
+/// Returns an optional ICY metadata receiver for live title updates.
+#[tracing::instrument(skip(tx, audio_config, icy_meta_tx))]
 pub async fn decode_http_stream(
     url: String,
     tx: PcmSender,
     audio_config: AudioConfig,
+    icy_meta_tx: Option<tokio::sync::mpsc::Sender<icy::IcyMetadata>>,
 ) -> Result<()> {
-    let response = reqwest::get(&url)
+    // Use ICY-aware client to request metadata
+    let client = icy::icy_client();
+    let response = client
+        .get(&url)
+        .send()
         .await
         .with_context(|| format!("Failed to fetch {url}"))?
         .error_for_status()
@@ -51,21 +58,35 @@ pub async fn decode_http_stream(
         .unwrap_or("")
         .to_string();
 
-    tracing::info!(content_type = %content_type, "Stream connected");
+    // Set up ICY metadata stripping if server supports it
+    let metaint = icy::parse_metaint(&response);
+    let mut icy_processor =
+        metaint.and_then(|mi| icy_meta_tx.map(|tx| icy::IcyProcessor::new(mi, tx)));
+
+    if metaint.is_some() {
+        tracing::info!(content_type = %content_type, metaint = ?metaint, "Stream connected (ICY enabled)");
+    } else {
+        tracing::info!(content_type = %content_type, "Stream connected");
+    }
 
     // Collect the async byte stream into a sync reader via a pipe
     let (mut pipe_tx, pipe_rx) = tokio::io::duplex(64 * 1024);
 
-    // Task: read HTTP chunks and write to pipe
+    // Task: read HTTP chunks, strip ICY metadata, write audio to pipe
     let url_clone = url.clone();
     let http_task = tokio::spawn(async move {
+        use futures_util::StreamExt;
         use tokio::io::AsyncWriteExt;
         let mut stream = response.bytes_stream();
-        use futures_util::StreamExt;
         while let Some(chunk) = stream.next().await {
             match chunk {
                 Ok(bytes) => {
-                    if pipe_tx.write_all(&bytes).await.is_err() {
+                    let audio = if let Some(ref mut proc) = icy_processor {
+                        proc.process(bytes)
+                    } else {
+                        bytes.to_vec()
+                    };
+                    if !audio.is_empty() && pipe_tx.write_all(&audio).await.is_err() {
                         break; // Decoder closed
                     }
                 }
