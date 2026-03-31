@@ -109,6 +109,32 @@ Log levels:
 - Pin workspace dependency versions in `Cargo.toml`
 - Minimize dependency count — every crate must justify its existence
 
+### Git Workflow
+
+**Conventional Commits** — every commit message follows the format:
+```
+<type>(<scope>): <description>
+
+[optional body]
+```
+
+Types: `feat`, `fix`, `refactor`, `docs`, `test`, `ci`, `chore`, `perf`, `style`
+Scopes: `config`, `audio`, `airplay`, `snapcast`, `api`, `mqtt`, `knx`, `subsonic`, `state`, `process`
+
+Examples:
+```
+feat(config): add TOML parsing with convention-over-config
+fix(snapcast): handle reconnect on connection loss
+refactor(audio): extract PCM pipeline into separate module
+docs: update architecture decisions
+ci: add clippy to pre-push hook
+```
+
+**Git Hooks (enforced):**
+- **pre-commit**: `cargo fmt -- --check` — no commit without clean formatting
+- **pre-push**: `cargo clippy -- -D warnings` — no push without clean lints
+- Hooks live in `.githooks/`, activated via `make setup` (runs `git config core.hooksPath .githooks`)
+
 ## Development Workflow
 ```bash
 cargo build                    # Build
