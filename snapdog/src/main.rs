@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2025 Fabian Schmieder
 
-mod airplay;
+pub mod airplay;
 pub mod api;
 pub mod audio;
 pub mod config;
