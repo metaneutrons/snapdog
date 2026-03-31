@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2025 Fabian Schmieder
 
+use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Json, Router};
 use serde::Serialize;
+
+use crate::api::SharedState;
 
 #[derive(Serialize)]
 struct HealthResponse {
@@ -14,18 +17,19 @@ struct HealthResponse {
     clients: usize,
 }
 
-pub fn router() -> Router {
+pub fn router(state: SharedState) -> Router {
     Router::new()
         .route("/health", get(health))
         .route("/health/ready", get(ready))
         .route("/health/live", get(live))
+        .with_state(state)
 }
 
-async fn health() -> impl IntoResponse {
+async fn health(State(state): State<SharedState>) -> impl IntoResponse {
     Json(HealthResponse {
         status: "ok",
-        zones: 0,
-        clients: 0,
+        zones: state.config.zones.len(),
+        clients: state.config.clients.len(),
     })
 }
 
