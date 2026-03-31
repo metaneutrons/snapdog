@@ -1,0 +1,91 @@
+services:
+  # Snapcast Server — managed separately in dev (in prod, snapdog starts it)
+  snapcast-server:
+    image: ghcr.io/snapcast/snapcast-server:latest
+    ports:
+      - "1704:1704"   # Client streaming
+      - "1780:1780"   # JSON-RPC / WebSocket
+    volumes:
+      - snapcast_sinks:/snapsinks
+    networks:
+      snapdog-dev:
+    restart: unless-stopped
+
+  # Snapcast Clients (simulated)
+  snapclient-living-room:
+    image: ghcr.io/snapcast/snapcast-client:latest
+    depends_on: [snapcast-server]
+    environment:
+      - SNAPSERVER=snapcast-server
+    networks:
+      snapdog-dev:
+        mac_address: 02:42:ac:11:00:10
+    restart: unless-stopped
+
+  snapclient-kitchen:
+    image: ghcr.io/snapcast/snapcast-client:latest
+    depends_on: [snapcast-server]
+    environment:
+      - SNAPSERVER=snapcast-server
+    networks:
+      snapdog-dev:
+        mac_address: 02:42:ac:11:00:11
+    restart: unless-stopped
+
+  snapclient-bedroom:
+    image: ghcr.io/snapcast/snapcast-client:latest
+    depends_on: [snapcast-server]
+    environment:
+      - SNAPSERVER=snapcast-server
+    networks:
+      snapdog-dev:
+        mac_address: 02:42:ac:11:00:12
+    restart: unless-stopped
+
+  # MQTT Broker
+  mqtt:
+    image: eclipse-mosquitto:2.0
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./devcontainer/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    networks:
+      snapdog-dev:
+    restart: unless-stopped
+
+  # KNX Gateway Simulator
+  knxd:
+    image: knxd/knxd:latest
+    environment:
+      - ADDRESS=0.0.1
+      - CLIENT_ADDRESS=0.0.2:8
+      - INTERFACE=dummy
+    ports:
+      - "3671:3671"
+    networks:
+      snapdog-dev:
+    restart: unless-stopped
+
+  # Navidrome (Subsonic API)
+  navidrome:
+    image: deluan/navidrome:latest
+    environment:
+      ND_SCANSCHEDULE: "1h"
+      ND_LOGLEVEL: info
+      ND_MUSICFOLDER: /music
+    ports:
+      - "4533:4533"
+    volumes:
+      - ./devcontainer/music:/music:ro
+      - navidrome_data:/data
+    networks:
+      snapdog-dev:
+    restart: unless-stopped
+
+volumes:
+  snapcast_sinks:
+  navidrome_data:
+
+networks:
+  snapdog-dev:
+    driver: bridge

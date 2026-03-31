@@ -1,0 +1,95 @@
+# SnapDog Configuration Example
+# Copy to snapdog.toml and adjust to your setup.
+
+[system]
+log_level = "info"                    # trace, debug, info, warn, error
+# log_file = "/var/log/snapdog/snapdog.log"  # Optional: enable file logging
+
+[audio]
+sample_rate = 48000
+bit_depth = 16
+channels = 2
+codec = "flac"                        # Snapcast streaming codec
+
+[http]
+port = 5555
+
+[snapcast]
+address = "127.0.0.1"                 # Loopback — snapserver is a child process
+jsonrpc_port = 1780
+streaming_port = 1704
+
+[airplay]
+name = "SnapDog"                      # Visible name on AirPlay devices
+# password = ""                       # Optional: require password for AirPlay
+
+[subsonic]
+url = "http://navidrome:4533"
+username = "admin"
+password = "admin"
+
+[mqtt]
+broker = "mqtt:1883"
+username = "snapdog"
+password = "snapdog"
+base_topic = "snapdog/"
+
+[knx]
+enabled = false                       # Enable for KNX integration
+# connection = "tunnel"               # tunnel or router
+# gateway = "knxd:3671"              # For tunnel mode
+# multicast = "224.0.23.12"          # For router mode
+
+# ── Zones ──────────────────────────────────────────────────────
+# KNX addresses auto-generated: zone N → N/{1-4}/x
+# Sink paths auto-generated: /snapsinks/zoneN
+
+[[zone]]
+name = "Ground Floor"
+icon = "🏠"
+# sink = "/snapsinks/zone1"          # Auto-generated, override if needed
+# [zone.knx]                         # Override specific KNX addresses:
+# play = "1/1/1"                     # Only specify what deviates from convention
+
+[[zone]]
+name = "1st Floor"
+icon = "🏠"
+
+# ── Clients ────────────────────────────────────────────────────
+# KNX addresses auto-generated: client N → 3/N/x
+
+[[client]]
+name = "Living Room"
+mac = "02:42:ac:11:00:10"
+zone = "Ground Floor"                 # Reference by name
+icon = "🛋️"
+
+[[client]]
+name = "Kitchen"
+mac = "02:42:ac:11:00:11"
+zone = "Ground Floor"
+icon = "🍽️"
+
+[[client]]
+name = "Bedroom"
+mac = "02:42:ac:11:00:12"
+zone = "1st Floor"
+icon = "🛏️"
+
+# ── Radio Stations ─────────────────────────────────────────────
+
+[[radio]]
+name = "Deutschlandfunk"
+url = "https://st01.sslstream.dlf.de/dlf/01/high/aac/stream.aac"
+
+[[radio]]
+name = "DLF Kultur"
+url = "https://st02.sslstream.dlf.de/dlf/02/high/aac/stream.aac"
+
+[[radio]]
+name = "NDR Info"
+url = "http://www.ndr.de/resources/metadaten/audio/m3u/ndrinfo.m3u"
+
+[[radio]]
+name = "Swiss Jazz"
+url = "https://stream.srg-ssr.ch/rsj/aacp_96.m3u"
