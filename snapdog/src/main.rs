@@ -9,7 +9,7 @@ mod knx;
 mod mqtt;
 mod process;
 pub mod snapcast;
-mod state;
+pub mod state;
 mod subsonic;
 
 use std::path::PathBuf;
