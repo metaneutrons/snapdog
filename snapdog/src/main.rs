@@ -2,7 +2,7 @@
 // Copyright (C) 2025 Fabian Schmieder
 
 mod airplay;
-mod api;
+pub mod api;
 pub mod audio;
 pub mod config;
 mod knx;
@@ -44,6 +44,14 @@ async fn main() -> Result<()> {
     // Start snapserver (or skip if managed=false)
     let mut snapserver = process::SnapserverHandle::start(&config).await?;
 
+    // Start API server (runs in background)
+    let api_config = config::load(&PathBuf::from(&config_path))?;
+    tokio::spawn(async move {
+        if let Err(e) = api::serve(api_config).await {
+            tracing::error!(error = %e, "API server failed");
+        }
+    });
+
     // Connect to snapcast JSON-RPC
     let mut snap = snapcast::Snapcast::from_config(&config).await?;
     snap.init().await?;
@@ -51,50 +59,32 @@ async fn main() -> Result<()> {
     // MVP: Play first radio station on first zone
     if let Some(radio) = config.radios.first() {
         let zone = &config.zones[0];
-        tracing::info!(
-            radio = %radio.name,
-            zone = %zone.name,
-            port = zone.tcp_source_port,
-            "Starting radio playback"
-        );
+        tracing::info!(radio = %radio.name, zone = %zone.name, "Starting radio playback");
 
-        // Open TCP connection to snapcast source
         let mut tcp = snapcast::open_audio_source(zone.tcp_source_port).await?;
-
-        // PCM channel: decoder → TCP writer
         let (tx, mut rx) = audio::pcm_channel(64);
 
-        // Spawn decoder task
         let url = radio.url.clone();
         let audio_config = config.audio.clone();
-        let decode_handle = tokio::spawn(async move {
+        tokio::spawn(async move {
             if let Err(e) = audio::decode_http_stream(url, tx, audio_config).await {
                 tracing::error!(error = %e, "Decode stream failed");
             }
         });
 
-        // Spawn TCP writer task
-        let write_handle = tokio::spawn(async move {
+        tokio::spawn(async move {
             while let Some(pcm) = rx.recv().await {
                 if let Err(e) = tcp.write_all(&pcm).await {
                     tracing::error!(error = %e, "TCP write failed");
                     break;
                 }
             }
-            tracing::info!("PCM writer stopped");
         });
-
-        // Wait for Ctrl+C
-        tokio::signal::ctrl_c().await?;
-        tracing::info!("Shutting down");
-
-        decode_handle.abort();
-        write_handle.abort();
-    } else {
-        tracing::warn!("No radio stations configured — waiting for Ctrl+C");
-        tokio::signal::ctrl_c().await?;
     }
 
+    // Wait for Ctrl+C
+    tokio::signal::ctrl_c().await?;
+    tracing::info!("Shutting down");
     snapserver.stop().await?;
     Ok(())
 }
