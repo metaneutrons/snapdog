@@ -276,10 +276,10 @@ async fn next_playlist(
     send_cmd(&state, idx, ZoneCommand::NextPlaylist).await
 }
 async fn previous_playlist(
-    State(_s): State<SharedState>,
-    Path(_i): Path<usize>,
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
 ) -> impl IntoResponse {
-    StatusCode::NO_CONTENT
+    send_cmd(&state, idx, ZoneCommand::PreviousPlaylist).await
 }
 
 async fn get_shuffle(
@@ -414,11 +414,11 @@ async fn get_track_position(
         .ok_or(zone_not_found())
 }
 async fn seek_position(
-    State(_s): State<SharedState>,
-    Path(_i): Path<usize>,
-    Json(_v): Json<i64>,
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
+    Json(v): Json<i64>,
 ) -> impl IntoResponse {
-    StatusCode::NO_CONTENT
+    send_cmd(&state, idx, ZoneCommand::Seek(v)).await
 }
 async fn get_track_progress(
     State(state): State<SharedState>,
@@ -435,11 +435,11 @@ async fn get_track_progress(
     Ok::<_, StatusCode>(Json(progress))
 }
 async fn seek_progress(
-    State(_s): State<SharedState>,
-    Path(_i): Path<usize>,
-    Json(_v): Json<f64>,
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
+    Json(v): Json<f64>,
 ) -> impl IntoResponse {
-    StatusCode::NO_CONTENT
+    send_cmd(&state, idx, ZoneCommand::SeekProgress(v)).await
 }
 async fn get_track_playing(
     State(state): State<SharedState>,
@@ -476,11 +476,11 @@ async fn toggle_track_repeat(
 // ── Play specific content ─────────────────────────────────────
 
 async fn play_track(
-    State(_s): State<SharedState>,
-    Path(_i): Path<usize>,
-    Json(_v): Json<i32>,
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
+    Json(v): Json<i32>,
 ) -> impl IntoResponse {
-    StatusCode::NO_CONTENT
+    send_cmd(&state, idx, ZoneCommand::SetTrack(v as usize)).await
 }
 async fn play_url(
     State(state): State<SharedState>,
@@ -490,11 +490,11 @@ async fn play_url(
     send_cmd(&state, idx, ZoneCommand::PlayUrl(v)).await
 }
 async fn play_playlist_track(
-    State(_s): State<SharedState>,
-    Path((_zone, _playlist)): Path<(usize, usize)>,
-    Json(_v): Json<i32>,
+    State(state): State<SharedState>,
+    Path((zone, _playlist)): Path<(usize, usize)>,
+    Json(v): Json<i32>,
 ) -> impl IntoResponse {
-    StatusCode::NO_CONTENT
+    send_cmd(&state, zone, ZoneCommand::SetTrack(v as usize)).await
 }
 
 // ── Zone info ─────────────────────────────────────────────────
@@ -533,13 +533,22 @@ async fn get_playlist_info(
     State(state): State<SharedState>,
     Path(idx): Path<usize>,
 ) -> impl IntoResponse {
+    let zone = read_zone(&state, idx).await.ok_or(zone_not_found())?;
+    Ok::<_, StatusCode>(Json(serde_json::json!({
+        "index": zone.playlist_index,
+        "name": zone.playlist_name,
+        "track_index": zone.playlist_track_index,
+        "track_count": zone.playlist_track_count,
+    })))
+}
+async fn get_playlist_count(
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
+) -> impl IntoResponse {
     read_zone(&state, idx)
         .await
-        .map(|_| Json(serde_json::json!({})))
+        .map(|z| Json(z.playlist_track_count.unwrap_or(0) as i32))
         .ok_or(zone_not_found())
-}
-async fn get_playlist_count(State(_s): State<SharedState>, Path(_i): Path<usize>) -> Json<i32> {
-    Json(0)
 }
 async fn get_clients(State(state): State<SharedState>, Path(idx): Path<usize>) -> Json<Vec<usize>> {
     let store = state.store.read().await;
