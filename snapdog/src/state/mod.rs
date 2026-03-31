@@ -6,6 +6,8 @@
 //! In-memory state for zones and clients, persisted to JSON file.
 //! Thread-safe via `Arc<RwLock<_>>` for concurrent access from API, MQTT, audio pipeline.
 
+pub mod cover;
+
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

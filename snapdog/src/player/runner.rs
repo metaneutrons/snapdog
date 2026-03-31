@@ -15,6 +15,7 @@ use super::commands::{ActiveSource, ZoneCommand};
 use crate::audio;
 use crate::config::AppConfig;
 use crate::snapcast;
+use crate::state::cover::SharedCoverCache;
 use crate::state::{self, PlaybackState, SourceType, TrackInfo};
 use crate::subsonic::SubsonicClient;
 
@@ -25,6 +26,7 @@ pub type ZoneCommandSender = mpsc::Sender<ZoneCommand>;
 pub async fn spawn_zone_players(
     config: Arc<AppConfig>,
     store: state::SharedState,
+    covers: SharedCoverCache,
 ) -> Result<HashMap<usize, ZoneCommandSender>> {
     let mut senders = HashMap::new();
 
@@ -34,10 +36,11 @@ pub async fn spawn_zone_players(
 
         let config = config.clone();
         let store = store.clone();
+        let covers = covers.clone();
         let zone_index = zone.index;
 
         tokio::spawn(async move {
-            if let Err(e) = run(zone_index, cmd_rx, config, store).await {
+            if let Err(e) = run(zone_index, cmd_rx, config, store, covers).await {
                 tracing::error!(zone = zone_index, error = %e, "ZonePlayer crashed");
             }
         });
@@ -54,6 +57,7 @@ async fn run(
     mut commands: mpsc::Receiver<ZoneCommand>,
     config: Arc<AppConfig>,
     store: state::SharedState,
+    covers: SharedCoverCache,
 ) -> Result<()> {
     let zone_config = &config.zones[zone_index - 1];
 
@@ -121,6 +125,18 @@ async fn run(
                                 });
                             }).await;
                             tracing::info!(zone = zone_index, radio = %radio.name, "Playing radio");
+                            // Fetch cover art if configured
+                            if let Some(cover_url) = &radio.cover {
+                                let covers = covers.clone();
+                                let url = cover_url.clone();
+                                let zi = zone_index;
+                                tokio::spawn(async move {
+                                    if let Some((bytes, mime)) = state::cover::fetch_cover(&url).await {
+                                        covers.write().await.set(zi, bytes, mime);
+                                        tracing::debug!(zone = zi, "Radio cover art cached");
+                                    }
+                                });
+                            }
                         }
                     }
 

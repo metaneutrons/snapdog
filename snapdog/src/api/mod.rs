@@ -22,6 +22,7 @@ pub struct AppState {
     pub config: AppConfig,
     pub store: state::SharedState,
     pub zone_commands: HashMap<usize, ZoneCommandSender>,
+    pub covers: state::cover::SharedCoverCache,
 }
 
 pub type SharedState = Arc<AppState>;
@@ -31,12 +32,14 @@ pub async fn serve(
     config: AppConfig,
     store: state::SharedState,
     zone_commands: HashMap<usize, ZoneCommandSender>,
+    covers: state::cover::SharedCoverCache,
 ) -> Result<()> {
     let port = config.http.port;
     let state = Arc::new(AppState {
         config,
         store,
         zone_commands,
+        covers,
     });
 
     let app = Router::new()

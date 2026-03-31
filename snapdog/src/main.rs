@@ -44,6 +44,7 @@ async fn main() -> Result<()> {
 
     // Initialize state store
     let store = state::init(&config, Some(&PathBuf::from("state.json")))?;
+    let covers = state::cover::new_cache();
 
     // Start snapserver (or skip if managed=false)
     let mut snapserver = process::SnapserverHandle::start(&config).await?;
@@ -57,14 +58,16 @@ async fn main() -> Result<()> {
     snap.init().await?;
 
     // Spawn ZonePlayers
-    let zone_commands = player::spawn_zone_players(config.clone(), store.clone()).await?;
+    let zone_commands =
+        player::spawn_zone_players(config.clone(), store.clone(), covers.clone()).await?;
 
     // Start API server (needs zone_commands)
     let api_config = config::load(&PathBuf::from(&config_path))?;
     let api_store = store.clone();
     let api_commands = zone_commands.clone();
+    let api_covers = covers.clone();
     tokio::spawn(async move {
-        if let Err(e) = api::serve(api_config, api_store, api_commands).await {
+        if let Err(e) = api::serve(api_config, api_store, api_commands, api_covers).await {
             tracing::error!(error = %e, "API server failed");
         }
     });
