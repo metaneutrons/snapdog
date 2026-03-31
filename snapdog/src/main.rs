@@ -10,7 +10,7 @@ pub mod mqtt;
 mod process;
 pub mod snapcast;
 pub mod state;
-mod subsonic;
+pub mod subsonic;
 
 use std::path::PathBuf;
 

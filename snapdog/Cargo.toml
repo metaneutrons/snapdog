@@ -31,6 +31,8 @@ reqwest = { workspace = true }
 futures-util = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
+md5 = { workspace = true }
+fastrand = { workspace = true }
 
 [dev-dependencies]
 mockall = { workspace = true }

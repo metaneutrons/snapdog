@@ -51,6 +51,10 @@ futures-util = "0.3"
 thiserror = "2"
 anyhow = "1"
 
+# Utilities
+md5 = "0.7"
+fastrand = "2"
+
 # Testing
 [workspace.dependencies.mockall]
 version = "0.13"
