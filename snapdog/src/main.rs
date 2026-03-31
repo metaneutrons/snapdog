@@ -6,7 +6,7 @@ pub mod api;
 pub mod audio;
 pub mod config;
 mod knx;
-mod mqtt;
+pub mod mqtt;
 mod process;
 pub mod snapcast;
 pub mod state;
