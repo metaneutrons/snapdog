@@ -127,6 +127,7 @@ impl Resampling {
     /// Process a PCM chunk. Returns the data unchanged if passthrough.
     pub fn process(&mut self, pcm: &[u8]) -> Vec<u8> {
         match self {
+            // TODO: avoid copy — return Cow<[u8]> or pass ownership
             Self::Passthrough => pcm.to_vec(),
             Self::Active(r) => {
                 let out = r.process(pcm);
