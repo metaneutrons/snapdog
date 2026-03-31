@@ -97,8 +97,24 @@ async fn run(
                             decode_rx = Some(rx);
                             let url = radio.url.clone();
                             let ac = config.audio.clone();
+                            // ICY metadata channel for live title updates
+                            let (icy_tx, mut icy_rx) = tokio::sync::mpsc::channel::<audio::icy::IcyMetadata>(4);
+                            let icy_store = store.clone();
+                            let icy_zone = zone_index;
+                            tokio::spawn(async move {
+                                while let Some(meta) = icy_rx.recv().await {
+                                    if let Some(title) = meta.title {
+                                        tracing::info!(zone = icy_zone, title = %title, "ICY title update");
+                                        update_zone_state(&icy_store, icy_zone, |z| {
+                                            if let Some(ref mut track) = z.track {
+                                                track.title = title.clone();
+                                            }
+                                        }).await;
+                                    }
+                                }
+                            });
                             current_decode = Some(tokio::spawn(async move {
-                                if let Err(e) = audio::decode_http_stream(url, tx, ac).await {
+                                if let Err(e) = audio::decode_http_stream(url, tx, ac, Some(icy_tx)).await {
                                     tracing::error!(error = %e, "Radio decode failed");
                                 }
                             }));
@@ -180,7 +196,7 @@ async fn run(
                             decode_rx = Some(rx);
                             let ac = config.audio.clone();
                             current_decode = Some(tokio::spawn(async move {
-                                if let Err(e) = audio::decode_http_stream(url, tx, ac).await {
+                                if let Err(e) = audio::decode_http_stream(url, tx, ac, None).await {
                                     tracing::error!(error = %e, "Subsonic track decode failed");
                                 }
                             }));
@@ -199,7 +215,7 @@ async fn run(
                         let ac = config.audio.clone();
                         let url_clone = url.clone();
                         current_decode = Some(tokio::spawn(async move {
-                            if let Err(e) = audio::decode_http_stream(url_clone, tx, ac).await {
+                            if let Err(e) = audio::decode_http_stream(url_clone, tx, ac, None).await {
                                 tracing::error!(error = %e, "URL decode failed");
                             }
                         }));
@@ -251,7 +267,7 @@ async fn run(
                                         let url = radio.url.clone();
                                         let ac = config.audio.clone();
                                         current_decode = Some(tokio::spawn(async move {
-                                            if let Err(e) = audio::decode_http_stream(url, tx, ac).await {
+                                            if let Err(e) = audio::decode_http_stream(url, tx, ac, None).await {
                                                 tracing::error!(error = %e, "Radio decode failed");
                                             }
                                         }));
@@ -422,7 +438,7 @@ async fn start_subsonic_track_decode(
     *decode_rx = Some(rx);
     let ac = config.audio.clone();
     *current_decode = Some(tokio::spawn(async move {
-        if let Err(e) = audio::decode_http_stream(url, tx, ac).await {
+        if let Err(e) = audio::decode_http_stream(url, tx, ac, None).await {
             tracing::error!(error = %e, "Subsonic decode failed");
         }
     }));
@@ -466,7 +482,7 @@ async fn handle_next(
                 let url = radio.url.clone();
                 let ac = config.audio.clone();
                 *current_decode = Some(tokio::spawn(async move {
-                    if let Err(e) = audio::decode_http_stream(url, tx, ac).await {
+                    if let Err(e) = audio::decode_http_stream(url, tx, ac, None).await {
                         tracing::error!(error = %e, "Radio decode failed");
                     }
                 }));
@@ -574,7 +590,7 @@ async fn handle_previous(
                 let url = radio.url.clone();
                 let ac = config.audio.clone();
                 *current_decode = Some(tokio::spawn(async move {
-                    if let Err(e) = audio::decode_http_stream(url, tx, ac).await {
+                    if let Err(e) = audio::decode_http_stream(url, tx, ac, None).await {
                         tracing::error!(error = %e, "Radio decode failed");
                     }
                 }));
@@ -709,7 +725,7 @@ async fn handle_track_complete(
                     let url = radio.url.clone();
                     let ac = config.audio.clone();
                     *current_decode = Some(tokio::spawn(async move {
-                        if let Err(e) = audio::decode_http_stream(url, tx, ac).await {
+                        if let Err(e) = audio::decode_http_stream(url, tx, ac, None).await {
                             tracing::error!(error = %e, "Radio restart failed");
                         }
                     }));

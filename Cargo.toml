@@ -57,6 +57,7 @@ anyhow = "1"
 # Utilities
 md5 = "0.7"
 fastrand = "2"
+bytes = "1"
 
 # Testing
 [workspace.dependencies.mockall]
