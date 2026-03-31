@@ -271,3 +271,7 @@ consistent state updates, and future-proof (e.g. volume fade effects).
 - Zone volume = Snapcast Group volume (digital mixing in client, full dynamic range)
 - Client volume = Snapcast Client volume (per-speaker within a zone)
 - PCM stream is always full-scale — never attenuated in the pipeline
+
+**Extensibility:**
+- The PCM channel between decoder and TCP writer serves as the insertion point for
+  future audio processing (EQ, crossfade, normalization). No architectural changes needed.
