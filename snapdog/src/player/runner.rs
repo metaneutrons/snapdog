@@ -19,6 +19,8 @@ use crate::state::cover::SharedCoverCache;
 use crate::state::{self, PlaybackState, SourceType, TrackInfo};
 use crate::subsonic::SubsonicClient;
 
+pub type NotifySender = tokio::sync::broadcast::Sender<crate::api::ws::Notification>;
+
 /// Command sender handle — one per zone, shared with API/MQTT/KNX.
 pub type ZoneCommandSender = mpsc::Sender<ZoneCommand>;
 
@@ -27,6 +29,7 @@ pub async fn spawn_zone_players(
     config: Arc<AppConfig>,
     store: state::SharedState,
     covers: SharedCoverCache,
+    notify: NotifySender,
 ) -> Result<HashMap<usize, ZoneCommandSender>> {
     let mut senders = HashMap::new();
 
@@ -37,10 +40,11 @@ pub async fn spawn_zone_players(
         let config = config.clone();
         let store = store.clone();
         let covers = covers.clone();
+        let notify = notify.clone();
         let zone_index = zone.index;
 
         tokio::spawn(async move {
-            if let Err(e) = run(zone_index, cmd_rx, config, store, covers).await {
+            if let Err(e) = run(zone_index, cmd_rx, config, store, covers, notify).await {
                 tracing::error!(zone = zone_index, error = %e, "ZonePlayer crashed");
             }
         });
@@ -58,6 +62,7 @@ async fn run(
     config: Arc<AppConfig>,
     store: state::SharedState,
     covers: SharedCoverCache,
+    notify: NotifySender,
 ) -> Result<()> {
     let zone_config = &config.zones[zone_index - 1];
 
@@ -314,7 +319,7 @@ async fn run(
                     ZoneCommand::Stop => {
                         stop_decode(&mut current_decode, &mut decode_rx).await;
                         source = ActiveSource::Idle;
-                        update_zone_state(&store, zone_index, |z| {
+                        update_and_notify(&store, zone_index, &notify, |z| {
                             z.playback = PlaybackState::Stopped;
                             z.source = SourceType::Idle;
                             z.track = None;
@@ -487,6 +492,27 @@ async fn update_zone_state(
     let mut s = store.write().await;
     if let Some(zone) = s.zones.get_mut(&zone_index) {
         f(zone);
+    }
+}
+
+/// Update zone state and broadcast a notification.
+async fn update_and_notify(
+    store: &state::SharedState,
+    zone_index: usize,
+    notify: &NotifySender,
+    f: impl FnOnce(&mut state::ZoneState),
+) {
+    let mut s = store.write().await;
+    if let Some(zone) = s.zones.get_mut(&zone_index) {
+        f(zone);
+        // Broadcast state change
+        let _ = notify.send(crate::api::ws::Notification::ZoneStateChanged {
+            zone: zone_index,
+            playback: format!("{:?}", zone.playback).to_lowercase(),
+            volume: zone.volume,
+            muted: zone.muted,
+            source: format!("{:?}", zone.source).to_lowercase(),
+        });
     }
 }
 
