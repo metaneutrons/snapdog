@@ -36,12 +36,14 @@ impl Snapcast {
 
     /// Connect using app config.
     pub async fn from_config(config: &AppConfig) -> Result<Self> {
-        let addr: SocketAddr = format!(
-            "{}:{}",
-            config.snapcast.address, config.snapcast.jsonrpc_port
-        )
-        .parse()
-        .context("Invalid snapcast address")?;
+        // snapcast-control uses raw TCP JSON-RPC (default port 1705)
+        let tcp_port = config.snapcast.streaming_port + 1;
+        let host = &config.snapcast.address;
+        let addr: SocketAddr = tokio::net::lookup_host(format!("{host}:{tcp_port}"))
+            .await
+            .context("Failed to resolve snapcast address")?
+            .next()
+            .context("No address found for snapcast host")?;
         Self::connect(addr).await
     }
 

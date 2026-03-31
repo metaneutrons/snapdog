@@ -44,6 +44,11 @@ async fn main() -> Result<()> {
     // Start snapserver (or skip if managed=false)
     let mut snapserver = process::SnapserverHandle::start(&config).await?;
 
+    // Give snapserver time to start listening
+    if config.snapcast.managed {
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    }
+
     // Start API server (runs in background)
     let api_config = config::load(&PathBuf::from(&config_path))?;
     tokio::spawn(async move {
