@@ -76,6 +76,9 @@ fn main() {
         .compile("shairplay");
 
     // Link against dns_sd (Bonjour on macOS, Avahi on Linux)
+    #[cfg(target_os = "macos")]
+    println!("cargo:rustc-link-lib=framework=CoreFoundation");
+    #[cfg(not(target_os = "macos"))]
     println!("cargo:rustc-link-lib=dylib=dns_sd");
     println!("cargo:rerun-if-changed={}", base.display());
 }
