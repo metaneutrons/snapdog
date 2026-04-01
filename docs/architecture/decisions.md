@@ -378,3 +378,95 @@ pub struct TrackInfo {
 **Rationale:** `source` tells the WebUI what controls to show (seek for Subsonic,
 next station for Radio, nothing for AirPlay). Cover art is decoupled because it's
 binary data with its own caching and serving strategy (ADR-012).
+
+---
+
+## ADR-014: Embedded WebUI — Next.js Static Export in Rust Binary
+
+**Decision:** Build a reactive, mobile-first WebUI using Next.js (latest) with static
+export (`output: 'export'`). The built assets are embedded into the Rust binary at
+compile time via `rust-embed` and served by axum.
+
+**Rationale:**
+- SnapDog's "single binary" philosophy (ADR-001) extends to the frontend — no separate
+  web server, no external files, no CDN
+- Next.js static export produces plain HTML/CSS/JS — no Node.js runtime needed
+- The WebUI is a pure client-side SPA that talks to the existing REST API + WebSocket
+- `rust-embed` bakes the `webui/out/` directory into the binary at compile time
+- axum serves embedded assets with a catch-all fallback route for SPA client-side routing
+
+**Tech stack:**
+- **Next.js** (latest stable) with App Router, `output: 'export'`
+- **React 19** — transitions, optimistic updates, `use` hook
+- **Tailwind CSS v4** — CSS-first configuration, no `tailwind.config.js`
+- **shadcn/ui** — accessible component primitives built on Radix UI
+- **Framer Motion** — swipe gestures, page transitions, spring animations
+- **Zustand** — lightweight reactive state management
+- **Native WebSocket** — connects to existing `/ws` endpoint (replaces SignalR from ADR-006)
+
+**Project structure:**
+```
+SnapDogRust/
+├── snapdog/          # Rust binary crate
+├── webui/            # Next.js app (independent, not a Rust crate)
+│   ├── package.json
+│   ├── next.config.ts
+│   ├── src/
+│   │   ├── app/          # App Router pages
+│   │   ├── components/   # shadcn/ui + custom components
+│   │   ├── hooks/        # useWebSocket, useZoneStore, etc.
+│   │   ├── lib/          # API client, utils
+│   │   └── stores/       # Zustand stores
+│   └── out/              # Static export output (gitignored)
+└── Cargo.toml
+```
+
+**Responsive layout — Apple-style adaptive design:**
+
+| Breakpoint | Layout | Interaction |
+|------------|--------|-------------|
+| Mobile (< 768px) | Full-viewport zone cards, swipe left/right | Thumb-reachable controls in lower 2/3, swipe up for clients/playlists |
+| Tablet (768–1280px) | Left rail with zone previews, right detail pane | Tap zone in rail → crossfade transition |
+| Desktop (> 1280px) | Persistent sidebar + full zone detail | Keyboard shortcuts (Cmd+1/2/3) |
+
+**Theme:**
+- System-default dark/light via `prefers-color-scheme` (Tailwind `darkMode: 'media'`)
+- System font stack: `-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif`
+- Warm neutral palette (Tailwind stone scale): light `stone-50` (#FAFAF9), dark `stone-950` (#0C0A09)
+- Accent: amber-500 (#F59E0B) — warm, energetic, fits "SnapDog" brand
+- Connected/active: teal accent
+- Muted/disconnected: soft red indicator
+
+**Embedding in Rust:**
+```rust
+#[derive(rust_embed::Embed)]
+#[folder = "../webui/out"]
+struct WebAssets;
+```
+- Axum catch-all route serves embedded files with correct MIME types
+- API routes (`/api/v1/...`, `/ws`, `/health`) take precedence over static assets
+- SPA fallback: any non-API, non-file request returns `index.html`
+
+**Build integration:**
+- `make build-webui` runs `npm run build` in `webui/`
+- `cargo build --release` optionally triggers webui build via `build.rs`
+- CI builds webui first, then Rust binary
+- Dev workflow: `cd webui && npm run dev` with proxy to running Rust backend
+
+**API consumption:**
+- REST: all endpoints under `/api/v1/zones`, `/api/v1/clients`, `/api/v1/media`, `/api/v1/system`
+- WebSocket: `/ws` for real-time state updates (zone_state_changed, zone_track_changed,
+  zone_progress, client_state_changed) and bidirectional commands
+- Cover art: `/api/v1/zones/{id}/cover` — unified proxy (ADR-012)
+
+**What the WebUI does NOT do:**
+- No server-side rendering (static export only)
+- No API routes inside Next.js (all API is in Rust)
+- No server actions or middleware
+- No direct Snapcast/MQTT/KNX access — everything goes through the REST API
+
+**Consequences:**
+- Binary size increases by ~1-3 MB (compressed static assets)
+- `rust-embed` adds a build dependency on the webui output directory
+- Development requires Node.js toolchain in addition to Rust
+- Two build steps: `npm run build` → `cargo build --release`

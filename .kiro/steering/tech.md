@@ -53,6 +53,15 @@
 - **thiserror** — typed errors for library-style modules
 - **anyhow** — top-level error propagation in main/CLI
 
+### WebUI (embedded static SPA)
+- **Next.js** (latest stable) — App Router, `output: 'export'` (static SPA)
+- **React 19** — transitions, optimistic updates
+- **Tailwind CSS v4** — CSS-first configuration
+- **shadcn/ui** — accessible component primitives (Radix UI)
+- **Framer Motion** — swipe gestures, page transitions, spring animations
+- **Zustand** — lightweight reactive state management
+- **rust-embed** — embeds `webui/out/` into the Rust binary at compile time
+
 ## Code Conventions
 
 ### File Header

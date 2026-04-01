@@ -10,3 +10,8 @@ snapdog.toml
 state.json
 *.log
 .env.test
+
+# WebUI
+webui/out/
+webui/node_modules/
+webui/.next/
