@@ -391,7 +391,7 @@ async fn run(
             pcm = async { match &mut decode_rx { Some(rx) => rx.recv().await, None => std::future::pending().await } } => {
                 match pcm {
                     Some(data) => {
-                        let data = resampler.process(&data);
+                        let data = resampler.process(&data).unwrap_or(data);
                         if data.is_empty() { continue; }
                         if let Err(e) = tcp.write_all(&data).await {
                             tracing::error!(zone = zone_index, error = %e, "TCP write failed");
@@ -411,7 +411,7 @@ async fn run(
                     source = ActiveSource::AirPlay;
                     update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Playing; z.source = SourceType::AirPlay; }).await;
                 }
-                let pcm = airplay_resampler.process(&pcm);
+                let pcm = airplay_resampler.process(&pcm).unwrap_or(pcm);
                 if pcm.is_empty() { continue; }
                 if let Err(e) = tcp.write_all(&pcm).await { tracing::error!(zone = zone_index, error = %e, "TCP write failed (AirPlay)"); }
             }
