@@ -9,18 +9,6 @@ fn main() {
     let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     let base = manifest_dir.join("../vendor/shairplay/src/lib");
     let include = manifest_dir.join("../vendor/shairplay/include");
-    let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
-
-    // Patch dnssd.c for macOS: use libSystem.B.dylib instead of libdns_sd.so
-    let dnssd_src = base.join("dnssd.c");
-    let dnssd_patched = out_dir.join("dnssd_patched.c");
-    let dnssd_content = std::fs::read_to_string(&dnssd_src).expect("Failed to read dnssd.c");
-    let dnssd_content = dnssd_content.replace(
-        r#"dlopen("libdns_sd.so""#,
-        "dlopen(\n#ifdef __APPLE__\n\t\"/usr/lib/libSystem.B.dylib\"\n#else\n\t\"libdns_sd.so\"\n#endif\n\t",
-    );
-    std::fs::write(&dnssd_patched, dnssd_content).expect("Failed to write patched dnssd.c");
-
     cc::Build::new()
         .include(&base)
         .include(base.join("alac"))
@@ -39,8 +27,8 @@ fn main() {
         .file(base.join("http_request.c"))
         .file(base.join("http_response.c"))
         .file(base.join("httpd.c"))
-        // DNS-SD (patched for macOS)
-        .file(&dnssd_patched)
+        // DNS-SD
+        .file(base.join("dnssd.c"))
         // Crypto
         .file(base.join("rsakey.c"))
         .file(base.join("rsapem.c"))
