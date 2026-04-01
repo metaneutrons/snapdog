@@ -336,3 +336,331 @@ async fn subsonic_playlists_not_empty() {
         .expect("Should fetch playlists");
     assert!(!playlists.is_empty(), "Should have at least one playlist");
 }
+
+// ── API Tests (real HTTP against real snapserver) ─────────────
+
+/// Start the full system including API server, return the API base URL.
+async fn start_system_with_api(
+    config: Arc<AppConfig>,
+) -> (
+    SnapserverHandle,
+    state::SharedState,
+    String, // api_base_url
+) {
+    let api_port = free_port().await;
+
+    let toml_str = format!(
+        r#"
+        [system]
+        log_level = "info"
+        [http]
+        port = {api_port}
+        [snapcast]
+        address = "127.0.0.1"
+        streaming_port = {}
+        jsonrpc_port = {}
+        managed = true
+        [[zone]]
+        name = "Test Zone 1"
+        [[zone]]
+        name = "Test Zone 2"
+        [[client]]
+        name = "Test Client"
+        mac = "00:00:00:00:00:01"
+        zone = "Test Zone 1"
+        [[radio]]
+        name = "DLF Test"
+        url = "https://st01.sslstream.dlf.de/dlf/01/high/aac/stream.aac"
+        [[radio]]
+        name = "DLF Kultur Test"
+        url = "https://st02.sslstream.dlf.de/dlf/02/high/aac/stream.aac"
+        "#,
+        config.snapcast.streaming_port, config.snapcast.jsonrpc_port,
+    );
+    let mut api_config = config::load_raw(toml::from_str::<RawConfig>(&toml_str).unwrap()).unwrap();
+    api_config.zones[0].tcp_source_port = config.zones[0].tcp_source_port;
+    api_config.zones[1].tcp_source_port = config.zones[1].tcp_source_port;
+    api_config.snapcast.managed = true;
+
+    let snapserver = SnapserverHandle::start(&api_config).await.unwrap();
+    tokio::time::sleep(Duration::from_secs(2)).await;
+
+    let mut snap = Snapcast::from_config(&api_config).await.unwrap();
+    snap.init().await.unwrap();
+    let snap_state = snap.state().clone();
+
+    let store = state::init(&api_config, None).unwrap();
+    let covers = state::cover::new_cache();
+    let (notify_tx, _) = tokio::sync::broadcast::channel(64);
+    let (snap_cmd_tx, _) = mpsc::channel::<player::SnapcastCmd>(64);
+
+    let zone_commands = player::spawn_zone_players(ZonePlayerContext {
+        config: Arc::new({
+            let mut c = config::load_raw(toml::from_str::<RawConfig>(&toml_str).unwrap()).unwrap();
+            c.zones[0].tcp_source_port = config.zones[0].tcp_source_port;
+            c.zones[1].tcp_source_port = config.zones[1].tcp_source_port;
+            c.snapcast.managed = true;
+            c
+        }),
+        store: store.clone(),
+        covers: covers.clone(),
+        notify: notify_tx.clone(),
+        snap_tx: snap_cmd_tx,
+        client_mac_map: snap_state
+            .clients
+            .iter()
+            .map(|e| (e.value().host.mac.to_lowercase(), e.key().clone()))
+            .collect(),
+        group_ids: snap_state.groups.iter().map(|g| g.key().clone()).collect(),
+        group_clients: snap_state
+            .groups
+            .iter()
+            .map(|g| (g.key().clone(), g.clients.iter().cloned().collect()))
+            .collect(),
+    })
+    .await
+    .unwrap();
+
+    // Start API server
+    let api_store = store.clone();
+    let api_covers = covers.clone();
+    tokio::spawn(async move {
+        let _ =
+            snapdog::api::serve(api_config, api_store, zone_commands, api_covers, notify_tx).await;
+    });
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    let base = format!("http://127.0.0.1:{api_port}");
+    (snapserver, store, base)
+}
+
+#[tokio::test]
+async fn api_health() {
+    let (config, _, _, _) = test_config().await;
+    let (mut snapserver, _, base) = start_system_with_api(config).await;
+
+    let resp = reqwest::get(format!("{base}/health")).await.unwrap();
+    assert_eq!(resp.status(), 200);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(body["status"], "ok");
+    assert_eq!(body["zones"], 2);
+    assert_eq!(body["clients"], 1);
+
+    snapserver.stop().await.unwrap();
+}
+
+#[tokio::test]
+async fn api_get_zones() {
+    let (config, _, _, _) = test_config().await;
+    let (mut snapserver, _, base) = start_system_with_api(config).await;
+
+    let resp = reqwest::get(format!("{base}/api/v1/zones")).await.unwrap();
+    assert_eq!(resp.status(), 200);
+    let zones: Vec<serde_json::Value> = resp.json().await.unwrap();
+    assert_eq!(zones.len(), 2);
+    assert_eq!(zones[0]["name"], "Test Zone 1");
+    assert_eq!(zones[0]["playback"], "stopped");
+
+    snapserver.stop().await.unwrap();
+}
+
+#[tokio::test]
+async fn api_play_radio_and_check_state() {
+    let (config, _, _, _) = test_config().await;
+    let (mut snapserver, _, base) = start_system_with_api(config).await;
+    let client = reqwest::Client::new();
+
+    // Play radio via API (use play/url with DLF stream)
+    let resp = client
+        .post(format!("{base}/api/v1/zones/1/play/url"))
+        .header("Content-Type", "application/json")
+        .body("\"https://st01.sslstream.dlf.de/dlf/01/high/aac/stream.aac\"")
+        .send()
+        .await
+        .unwrap();
+    assert!(resp.status().is_success() || resp.status() == 204);
+    tokio::time::sleep(Duration::from_secs(3)).await;
+
+    // Check playback state
+    let playback: String = reqwest::get(format!("{base}/api/v1/zones/1/playback"))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(playback, "playing");
+
+    // Check track metadata
+    let meta: serde_json::Value = reqwest::get(format!("{base}/api/v1/zones/1/track/metadata"))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(meta["source"], "url");
+    assert_eq!(playback, "playing");
+
+    // Stop
+    client
+        .post(format!("{base}/api/v1/zones/1/stop"))
+        .send()
+        .await
+        .unwrap();
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    let playback: String = reqwest::get(format!("{base}/api/v1/zones/1/playback"))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(playback, "stopped");
+
+    snapserver.stop().await.unwrap();
+}
+
+#[tokio::test]
+async fn api_volume_absolute_and_relative() {
+    let (config, _, _, _) = test_config().await;
+    let (mut snapserver, _, base) = start_system_with_api(config).await;
+    let client = reqwest::Client::new();
+
+    // Set absolute volume
+    let resp = client
+        .put(format!("{base}/api/v1/zones/1/volume"))
+        .header("Content-Type", "application/json")
+        .body("80")
+        .send()
+        .await
+        .unwrap();
+    let vol: i32 = resp.json().await.unwrap();
+    assert_eq!(vol, 80);
+
+    // Read back
+    let vol: i32 = reqwest::get(format!("{base}/api/v1/zones/1/volume"))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(vol, 80);
+
+    // Relative volume +10
+    let resp = client
+        .put(format!("{base}/api/v1/zones/1/volume"))
+        .header("Content-Type", "application/json")
+        .body("\"+10\"")
+        .send()
+        .await
+        .unwrap();
+    let vol: i32 = resp.json().await.unwrap();
+    assert_eq!(vol, 90);
+
+    // Relative volume -5
+    let resp = client
+        .put(format!("{base}/api/v1/zones/1/volume"))
+        .header("Content-Type", "application/json")
+        .body("\"-5\"")
+        .send()
+        .await
+        .unwrap();
+    let vol: i32 = resp.json().await.unwrap();
+    assert_eq!(vol, 85);
+
+    snapserver.stop().await.unwrap();
+}
+
+#[tokio::test]
+async fn api_mute_toggle() {
+    let (config, _, _, _) = test_config().await;
+    let (mut snapserver, _, base) = start_system_with_api(config).await;
+    let client = reqwest::Client::new();
+
+    // Set mute
+    client
+        .put(format!("{base}/api/v1/zones/1/mute"))
+        .header("Content-Type", "application/json")
+        .body("true")
+        .send()
+        .await
+        .unwrap();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let muted: bool = reqwest::get(format!("{base}/api/v1/zones/1/mute"))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(muted);
+
+    // Toggle
+    client
+        .post(format!("{base}/api/v1/zones/1/mute/toggle"))
+        .send()
+        .await
+        .unwrap();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let muted: bool = reqwest::get(format!("{base}/api/v1/zones/1/mute"))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(!muted);
+
+    snapserver.stop().await.unwrap();
+}
+
+#[tokio::test]
+async fn api_zone_not_found() {
+    let (config, _, _, _) = test_config().await;
+    let (mut snapserver, _, base) = start_system_with_api(config).await;
+
+    let resp = reqwest::get(format!("{base}/api/v1/zones/99"))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 404);
+
+    let resp = reqwest::get(format!("{base}/api/v1/zones/99/volume"))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 404);
+
+    snapserver.stop().await.unwrap();
+}
+
+#[tokio::test]
+async fn api_clients_list() {
+    let (config, _, _, _) = test_config().await;
+    let (mut snapserver, _, base) = start_system_with_api(config).await;
+
+    let clients: Vec<serde_json::Value> = reqwest::get(format!("{base}/api/v1/clients"))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(clients.len(), 1);
+    assert_eq!(clients[0]["name"], "Test Client");
+    assert_eq!(clients[0]["zone_index"], 1);
+
+    snapserver.stop().await.unwrap();
+}
+
+#[tokio::test]
+async fn api_system_version() {
+    let (config, _, _, _) = test_config().await;
+    let (mut snapserver, _, base) = start_system_with_api(config).await;
+
+    let ver: serde_json::Value = reqwest::get(format!("{base}/api/v1/system/version"))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(ver["version"], env!("CARGO_PKG_VERSION"));
+
+    snapserver.stop().await.unwrap();
+}
