@@ -36,8 +36,8 @@ impl SnapserverHandle {
         let child = Command::new("snapserver")
             .arg("-c")
             .arg(&config_path)
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
             .kill_on_drop(true)
             .spawn()
             .context("Failed to start snapserver — is it installed?")?;
@@ -75,7 +75,11 @@ impl Drop for SnapserverHandle {
 
 /// Generate snapserver.conf from app config. Returns path to the generated file.
 fn generate_config(config: &AppConfig) -> Result<PathBuf> {
-    let path = std::env::temp_dir().join("snapdog-snapserver.conf");
+    let path = std::env::temp_dir().join(format!(
+        "snapdog-snapserver-{}-{}.conf",
+        std::process::id(),
+        config.snapcast.streaming_port
+    ));
     let content = render_config(config);
     std::fs::write(&path, &content)
         .with_context(|| format!("Failed to write {}", path.display()))?;
@@ -85,15 +89,22 @@ fn generate_config(config: &AppConfig) -> Result<PathBuf> {
 fn render_config(config: &AppConfig) -> String {
     let mut out = String::new();
 
-    // HTTP / JSON-RPC
+    // HTTP / JSON-RPC (WebSocket)
     out.push_str(&format!(
         "[http]\nenabled = true\nbind_to_address = 127.0.0.1\nport = {}\n\n",
         config.snapcast.jsonrpc_port
     ));
 
+    // TCP control (JSON-RPC raw TCP — used by snapcast-control crate)
+    let tcp_control_port = config.snapcast.streaming_port + 1;
+    out.push_str(&format!(
+        "[tcp-control]\nenabled = true\nbind_to_address = 127.0.0.1\nport = {}\n\n",
+        tcp_control_port
+    ));
+
     // Streaming server
     out.push_str(&format!(
-        "[server]\nbind_to_address = 0.0.0.0\nport = {}\n\n",
+        "[tcp-streaming]\nbind_to_address = 0.0.0.0\nport = {}\n\n",
         config.snapcast.streaming_port
     ));
 
