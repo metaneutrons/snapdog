@@ -13,6 +13,12 @@ use crate::config::AppConfig;
 use crate::state::{self, PlaybackState, SourceType, TrackInfo};
 use crate::subsonic::SubsonicClient;
 
+/// Mutable decode state passed to navigation helpers.
+pub struct DecodeState<'a> {
+    pub current_decode: &'a mut Option<JoinHandle<()>>,
+    pub decode_rx: &'a mut Option<mpsc::Receiver<Vec<u8>>>,
+    pub source: &'a mut ActiveSource,
+}
 pub async fn start_subsonic_track_decode(
     sub: &SubsonicClient,
     track: &crate::subsonic::Track,
@@ -86,24 +92,21 @@ async fn start_radio_decode(
     }));
 }
 
-#[allow(clippy::too_many_arguments)]
 pub async fn handle_next(
-    source: &mut ActiveSource,
+    ds: &mut DecodeState<'_>,
     config: &AppConfig,
     subsonic: &Option<SubsonicClient>,
     store: &state::SharedState,
     zone_index: usize,
-    current_decode: &mut Option<JoinHandle<()>>,
-    decode_rx: &mut Option<mpsc::Receiver<Vec<u8>>>,
     notify: &NotifySender,
 ) {
-    match source.clone() {
+    match ds.source.clone() {
         ActiveSource::Radio { index } => {
             let next = (index + 1) % config.radios.len();
-            stop_decode(current_decode, decode_rx).await;
+            stop_decode(ds.current_decode, ds.decode_rx).await;
             if let Some(radio) = config.radios.get(next) {
-                start_radio_decode(&radio.url, config, current_decode, decode_rx).await;
-                *source = ActiveSource::Radio { index: next };
+                start_radio_decode(&radio.url, config, ds.current_decode, ds.decode_rx).await;
+                *ds.source = ActiveSource::Radio { index: next };
                 update_and_notify(store, zone_index, notify, |z| {
                     z.radio_index = Some(next);
                     z.track = Some(radio_track_info(&radio.name));
@@ -120,7 +123,7 @@ pub async fn handle_next(
             let next = track_index + 1;
             if next < track_count {
                 advance_playlist_track(
-                    source,
+                    ds,
                     &playlist_id,
                     next,
                     track_count,
@@ -128,8 +131,6 @@ pub async fn handle_next(
                     subsonic,
                     store,
                     zone_index,
-                    current_decode,
-                    decode_rx,
                     notify,
                 )
                 .await;
@@ -142,7 +143,7 @@ pub async fn handle_next(
                     .is_some_and(|z| z.repeat);
                 if repeat {
                     advance_playlist_track(
-                        source,
+                        ds,
                         &playlist_id,
                         0,
                         track_count,
@@ -150,14 +151,12 @@ pub async fn handle_next(
                         subsonic,
                         store,
                         zone_index,
-                        current_decode,
-                        decode_rx,
                         notify,
                     )
                     .await;
                 } else {
-                    stop_decode(current_decode, decode_rx).await;
-                    *source = ActiveSource::Idle;
+                    stop_decode(ds.current_decode, ds.decode_rx).await;
+                    *ds.source = ActiveSource::Idle;
                     update_and_notify(store, zone_index, notify, |z| {
                         z.playback = PlaybackState::Stopped;
                         z.source = SourceType::Idle;
@@ -170,28 +169,25 @@ pub async fn handle_next(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 pub async fn handle_previous(
-    source: &mut ActiveSource,
+    ds: &mut DecodeState<'_>,
     config: &AppConfig,
     subsonic: &Option<SubsonicClient>,
     store: &state::SharedState,
     zone_index: usize,
-    current_decode: &mut Option<JoinHandle<()>>,
-    decode_rx: &mut Option<mpsc::Receiver<Vec<u8>>>,
     notify: &NotifySender,
 ) {
-    match source.clone() {
+    match ds.source.clone() {
         ActiveSource::Radio { index } => {
             let prev = if index == 0 {
                 config.radios.len() - 1
             } else {
                 index - 1
             };
-            stop_decode(current_decode, decode_rx).await;
+            stop_decode(ds.current_decode, ds.decode_rx).await;
             if let Some(radio) = config.radios.get(prev) {
-                start_radio_decode(&radio.url, config, current_decode, decode_rx).await;
-                *source = ActiveSource::Radio { index: prev };
+                start_radio_decode(&radio.url, config, ds.current_decode, ds.decode_rx).await;
+                *ds.source = ActiveSource::Radio { index: prev };
                 update_and_notify(store, zone_index, notify, |z| {
                     z.radio_index = Some(prev);
                     z.track = Some(radio_track_info(&radio.name));
@@ -207,7 +203,7 @@ pub async fn handle_previous(
         } => {
             if track_index > 0 {
                 advance_playlist_track(
-                    source,
+                    ds,
                     &playlist_id,
                     track_index - 1,
                     track_count,
@@ -215,8 +211,6 @@ pub async fn handle_previous(
                     subsonic,
                     store,
                     zone_index,
-                    current_decode,
-                    decode_rx,
                     notify,
                 )
                 .await;
@@ -226,15 +220,12 @@ pub async fn handle_previous(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 pub async fn handle_track_complete(
-    source: &mut ActiveSource,
+    ds: &mut DecodeState<'_>,
     config: &AppConfig,
     subsonic: &Option<SubsonicClient>,
     store: &state::SharedState,
     zone_index: usize,
-    current_decode: &mut Option<JoinHandle<()>>,
-    decode_rx: &mut Option<mpsc::Receiver<Vec<u8>>>,
     notify: &NotifySender,
 ) {
     let track_repeat = store
@@ -250,7 +241,7 @@ pub async fn handle_track_complete(
         .get(&zone_index)
         .is_some_and(|z| z.shuffle);
 
-    match source.clone() {
+    match ds.source.clone() {
         ActiveSource::SubsonicPlaylist {
             playlist_id,
             track_index,
@@ -258,7 +249,7 @@ pub async fn handle_track_complete(
         } => {
             if track_repeat {
                 advance_playlist_track(
-                    source,
+                    ds,
                     &playlist_id,
                     track_index,
                     track_count,
@@ -266,15 +257,13 @@ pub async fn handle_track_complete(
                     subsonic,
                     store,
                     zone_index,
-                    current_decode,
-                    decode_rx,
                     notify,
                 )
                 .await;
             } else if shuffle {
                 let next = fastrand::usize(..track_count);
                 advance_playlist_track(
-                    source,
+                    ds,
                     &playlist_id,
                     next,
                     track_count,
@@ -282,33 +271,21 @@ pub async fn handle_track_complete(
                     subsonic,
                     store,
                     zone_index,
-                    current_decode,
-                    decode_rx,
                     notify,
                 )
                 .await;
             } else {
-                handle_next(
-                    source,
-                    config,
-                    subsonic,
-                    store,
-                    zone_index,
-                    current_decode,
-                    decode_rx,
-                    notify,
-                )
-                .await;
+                handle_next(ds, config, subsonic, store, zone_index, notify).await;
             }
         }
         ActiveSource::Radio { index } => {
             tracing::warn!(zone = zone_index, "Radio stream ended, restarting");
             if let Some(radio) = config.radios.get(index) {
-                start_radio_decode(&radio.url, config, current_decode, decode_rx).await;
+                start_radio_decode(&radio.url, config, ds.current_decode, ds.decode_rx).await;
             }
         }
         ActiveSource::AirPlay => {
-            *source = ActiveSource::Idle;
+            *ds.source = ActiveSource::Idle;
             update_and_notify(store, zone_index, notify, |z| {
                 z.playback = PlaybackState::Stopped;
                 z.source = SourceType::Idle;
@@ -318,7 +295,7 @@ pub async fn handle_track_complete(
             tracing::info!(zone = zone_index, "AirPlay ended, zone idle");
         }
         _ => {
-            *source = ActiveSource::Idle;
+            *ds.source = ActiveSource::Idle;
             update_and_notify(store, zone_index, notify, |z| {
                 z.playback = PlaybackState::Stopped;
                 z.source = SourceType::Idle;
@@ -330,7 +307,7 @@ pub async fn handle_track_complete(
 
 #[allow(clippy::too_many_arguments)]
 async fn advance_playlist_track(
-    source: &mut ActiveSource,
+    ds: &mut DecodeState<'_>,
     playlist_id: &str,
     track_index: usize,
     track_count: usize,
@@ -338,16 +315,15 @@ async fn advance_playlist_track(
     subsonic: &Option<SubsonicClient>,
     store: &state::SharedState,
     zone_index: usize,
-    current_decode: &mut Option<JoinHandle<()>>,
-    decode_rx: &mut Option<mpsc::Receiver<Vec<u8>>>,
     notify: &NotifySender,
 ) {
-    stop_decode(current_decode, decode_rx).await;
+    stop_decode(ds.current_decode, ds.decode_rx).await;
     if let Some(sub) = subsonic {
         if let Ok(playlist) = sub.get_playlist(playlist_id).await {
             if let Some(track) = playlist.entry.get(track_index) {
-                start_subsonic_track_decode(sub, track, config, current_decode, decode_rx).await;
-                *source = ActiveSource::SubsonicPlaylist {
+                start_subsonic_track_decode(sub, track, config, ds.current_decode, ds.decode_rx)
+                    .await;
+                *ds.source = ActiveSource::SubsonicPlaylist {
                     playlist_id: playlist_id.to_string(),
                     track_index,
                     track_count,
