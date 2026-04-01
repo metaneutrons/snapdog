@@ -61,6 +61,18 @@ services:
       snapdog-dev:
     restart: unless-stopped
 
+  knx-monitor:
+    image: ghcr.io/metaneutrons/knxmonitor:latest
+    volumes:
+      - ./devcontainer/knx-groupaddresses.csv:/app/knx-groupaddresses.csv:ro
+    environment:
+      - TZ=Europe/Berlin
+    command: ["-g", "knxd", "--csv", "/app/knx-groupaddresses.csv", "--logging-mode"]
+    depends_on: [knxd]
+    networks:
+      snapdog-dev:
+    restart: unless-stopped
+
   navidrome:
     image: deluan/navidrome:latest
     environment:
