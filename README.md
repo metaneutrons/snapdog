@@ -72,12 +72,8 @@ See [docs/architecture/decisions.md](docs/architecture/decisions.md) for 13 Arch
 ## Development
 
 ```bash
-make setup          # Git hooks (pre-commit: fmt, pre-push: clippy)
-make check          # fmt + clippy + test
-make dev            # Start Docker dev infrastructure
-
 cargo build         # Build
-cargo test          # 38 tests
+cargo test          # Run all tests (use --test-threads=1 for integration tests)
 cargo run -- --config snapdog.dev.toml
 ```
 
@@ -91,13 +87,6 @@ cargo run -- --config snapdog.dev.toml
 | knxd | KNX gateway simulator |
 | knx-monitor | Visual KNX bus debugging |
 | navidrome | Subsonic-compatible music server |
-
-## Stats
-
-- ~4500 lines Rust
-- 42 commits, 38 tests
-- 13 ADRs
-- 0 FIXMEs, 1 performance TODO
 
 ## License
 
