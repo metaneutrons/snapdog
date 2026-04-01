@@ -98,7 +98,7 @@ impl AirplayReceiver {
         unsafe { ffi::raop_set_log_level(raop, 6) };
 
         let hwaddr: [u8; 6] = [0x02, 0x42, 0xAA, 0xBB, 0xCC, 0xDD];
-        let mut port: u16 = 0; // OS assigns free port
+        let mut port: u16 = find_free_port(5000); // Start at 5000, find first free
         let password = config
             .password
             .as_deref()
@@ -347,4 +347,16 @@ mod tests {
         assert_eq!(artist, "Artist");
         assert_eq!(album, "");
     }
+}
+
+/// Find a free TCP port starting from `start`, incrementing until one is available.
+fn find_free_port(start: u16) -> u16 {
+    for port in start..=65535 {
+        let v4_free = std::net::TcpListener::bind(("0.0.0.0", port)).is_ok();
+        let v6_free = std::net::TcpListener::bind(("::1", port)).is_ok();
+        if v4_free && v6_free {
+            return port;
+        }
+    }
+    0
 }
