@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   VolumeHighIcon,
@@ -18,26 +18,42 @@ interface VolumeSliderProps {
 }
 
 export function VolumeSlider({ zone, sendCommand }: VolumeSliderProps) {
+  const [localVolume, setLocalVolume] = useState(zone.volume);
+  const [dragging, setDragging] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // Sync from server only when not dragging
+  useEffect(() => {
+    if (!dragging) setLocalVolume(zone.volume);
+  }, [zone.volume, dragging]);
 
   const volumeIcon = zone.muted
     ? VolumeMute02Icon
-    : zone.volume > 50
+    : localVolume > 50
       ? VolumeHighIcon
       : VolumeLowIcon;
 
   const handleVolumeChange = useCallback(
     (value: number[]) => {
       const v = value[0];
-      // Optimistic: update via WS immediately
-      sendCommand(zone.index, "set_volume", v);
-      // Debounced REST call as backup
+      setLocalVolume(v);
+      setDragging(true);
+      // Debounced API call
       clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
-        api.zones.setVolume(zone.index, v).catch(() => {});
-      }, 300);
+        sendCommand(zone.index, "set_volume", v);
+      }, 50);
     },
     [zone.index, sendCommand],
+  );
+
+  const handleVolumeCommit = useCallback(
+    (value: number[]) => {
+      setDragging(false);
+      clearTimeout(timerRef.current);
+      api.zones.setVolume(zone.index, value[0]).catch(() => {});
+    },
+    [zone.index],
   );
 
   const toggleMute = useCallback(() => {
@@ -56,14 +72,15 @@ export function VolumeSlider({ zone, sendCommand }: VolumeSliderProps) {
         <HugeiconsIcon icon={volumeIcon} size={18} />
       </Button>
       <Slider
-        value={[zone.muted ? 0 : zone.volume]}
+        value={[zone.muted ? 0 : localVolume]}
         max={100}
         step={1}
         onValueChange={handleVolumeChange}
+        onValueCommit={handleVolumeCommit}
         className="flex-1"
       />
       <span className="text-xs text-muted-foreground tabular-nums w-7 text-right">
-        {zone.volume}
+        {localVolume}
       </span>
     </div>
   );

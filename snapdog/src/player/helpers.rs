@@ -10,6 +10,7 @@ use super::commands::ActiveSource;
 use super::context::{NotifySender, stop_decode, update_and_notify};
 use crate::audio;
 use crate::config::AppConfig;
+use crate::state::cover::SharedCoverCache;
 use crate::state::{self, PlaybackState, SourceType, TrackInfo};
 use crate::subsonic::SubsonicClient;
 
@@ -27,6 +28,7 @@ pub struct PlaybackCtx<'a> {
     pub store: &'a state::SharedState,
     pub zone_index: usize,
     pub notify: &'a NotifySender,
+    pub covers: &'a SharedCoverCache,
 }
 pub async fn start_subsonic_track_decode(
     sub: &SubsonicClient,
@@ -270,6 +272,17 @@ async fn advance_playlist_track(
                     z.track = Some(subsonic_track_info(track));
                 })
                 .await;
+                // Fetch cover art
+                if let Some(ref cover_id) = track.cover_art {
+                    let covers = ctx.covers.clone();
+                    let url = sub.cover_art_url(cover_id);
+                    let zi = ctx.zone_index;
+                    tokio::spawn(async move {
+                        if let Some((bytes, mime)) = state::cover::fetch_cover(&url).await {
+                            covers.write().await.set(zi, bytes, mime);
+                        }
+                    });
+                }
                 tracing::info!(
                     zone = ctx.zone_index,
                     track = track_index,

@@ -83,7 +83,12 @@ async fn run(
             name: zone_config.airplay_name.clone(),
             password: config.airplay.password.clone(),
         };
-        match crate::airplay::AirplayReceiver::start(&ap_config, airplay_pcm_tx, airplay_event_tx) {
+        match crate::airplay::AirplayReceiver::start(
+            &ap_config,
+            zone_index,
+            airplay_pcm_tx,
+            airplay_event_tx,
+        ) {
             Ok(r) => {
                 tracing::info!(zone = zone_index, name = %ap_config.name, "AirPlay receiver active");
                 Some(r)
@@ -174,6 +179,16 @@ async fn run(
                                         z.playlist_track_count = Some(track_count);
                                         z.track = Some(subsonic_track_info(track));
                                     }).await;
+                                    // Fetch cover art
+                                    if let Some(ref cover_id) = track.cover_art {
+                                        let covers = covers.clone();
+                                        let url = sub.cover_art_url(cover_id);
+                                        tokio::spawn(async move {
+                                            if let Some((bytes, mime)) = state::cover::fetch_cover(&url).await {
+                                                covers.write().await.set(zone_index, bytes, mime);
+                                            }
+                                        });
+                                    }
                                 }
                             }
                         }
@@ -249,8 +264,8 @@ async fn run(
                         source = ActiveSource::Idle;
                         update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Stopped; z.source = SourceType::Idle; z.track = None; }).await;
                     }
-                    ZoneCommand::Next => { handle_next(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify }).await; }
-                    ZoneCommand::Previous => { handle_previous(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify }).await; }
+                    ZoneCommand::Next => { handle_next(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers }).await; }
+                    ZoneCommand::Previous => { handle_previous(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers }).await; }
                     ZoneCommand::NextPlaylist | ZoneCommand::PreviousPlaylist | ZoneCommand::SetPlaylist(_) => {
                         if let Some(sub) = &subsonic {
                             match sub.get_playlists().await {
@@ -402,7 +417,7 @@ async fn run(
                     None => {
                         current_decode = None;
                         decode_rx = None;
-                        handle_track_complete(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify }).await;
+                        handle_track_complete(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers }).await;
                     }
                 }
             }

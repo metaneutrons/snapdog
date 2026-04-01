@@ -10,9 +10,6 @@ import { api } from "@/lib/api";
 
 export interface ZoneState extends ZoneInfo {
   track: TrackMetadata | null;
-  shuffle: boolean;
-  repeat: boolean;
-  trackRepeat: boolean;
 }
 
 // ── Store shape ───────────────────────────────────────────────
@@ -31,7 +28,7 @@ interface AppState {
   setZones: (zones: ZoneInfo[]) => void;
   updateZone: (
     id: number,
-    patch: Partial<Pick<ZoneState, "playback" | "volume" | "muted" | "source">>,
+    patch: Partial<Pick<ZoneState, "playback" | "volume" | "muted" | "source" | "shuffle" | "repeat" | "track_repeat">>,
   ) => void;
   updateZoneTrack: (
     id: number,
@@ -68,7 +65,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       const zones = new Map<number, ZoneState>();
       for (const z of zoneList) {
-        zones.set(z.index, { ...z, track: null, shuffle: false, repeat: false, trackRepeat: false });
+        zones.set(z.index, { ...z, track: null });
       }
 
       // Fetch track metadata for each zone in parallel
@@ -99,9 +96,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       zones.set(z.index, {
         ...z,
         track: existing?.track ?? null,
-        shuffle: existing?.shuffle ?? false,
-        repeat: existing?.repeat ?? false,
-        trackRepeat: existing?.trackRepeat ?? false,
       });
     }
     set({ zones });

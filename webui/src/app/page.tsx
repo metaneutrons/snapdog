@@ -95,8 +95,8 @@ function ZoneRailItem({ zone, selected, onSelect }: {
 function ZoneDetail({ zone, sendCommand }: { zone: ZoneState; sendCommand: (zone: number, action: string, value?: string | number | boolean) => void }) {
   return (
     <div className="flex flex-1 flex-col items-center overflow-y-auto">
-      <NowPlaying zone={zone} />
-      <div className="w-full max-w-xs space-y-4 px-6 pb-6">
+      <div className="w-full max-w-xs space-y-4 px-6 py-6">
+        <NowPlaying zone={zone} />
         <SeekBar zone={zone} />
         <TransportControls zone={zone} sendCommand={sendCommand} />
         <ShuffleRepeat zone={zone} />
@@ -135,6 +135,9 @@ export default function Home() {
             volume: n.volume,
             muted: n.muted,
             source: n.source,
+            shuffle: n.shuffle,
+            repeat: n.repeat,
+            track_repeat: n.track_repeat,
           });
           break;
         case "zone_track_changed":

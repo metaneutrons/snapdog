@@ -26,7 +26,11 @@ impl MqttBridge {
     /// Connect to MQTT broker.
     #[tracing::instrument(skip_all, fields(broker = %config.broker))]
     pub async fn connect(config: &MqttConfig) -> Result<Self> {
-        let mut opts = MqttOptions::new("snapdog", &config.broker, parse_port(&config.broker)?);
+        let mut opts = MqttOptions::new(
+            "snapdog",
+            parse_host(&config.broker),
+            parse_port(&config.broker)?,
+        );
         opts.set_keep_alive(std::time::Duration::from_secs(60));
         if !config.username.is_empty() {
             opts.set_credentials(&config.username, &config.password);
@@ -288,6 +292,10 @@ async fn send_zone_cmd(
     } else {
         tracing::warn!(zone = index, "No ZonePlayer for MQTT command");
     }
+}
+
+fn parse_host(broker: &str) -> &str {
+    broker.rsplit_once(':').map_or(broker, |(h, _)| h)
 }
 
 fn parse_port(broker: &str) -> Result<u16> {

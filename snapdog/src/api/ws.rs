@@ -39,6 +39,11 @@ impl WsCommand {
                 .value
                 .as_str()
                 .map(|s| ZoneCommand::PlayUrl(s.to_string())),
+            "play_playlist" => self.value.as_object().and_then(|o| {
+                let id = o.get("id")?.as_str()?.to_string();
+                let track = o.get("track").and_then(|t| t.as_u64()).unwrap_or(0) as usize;
+                Some(ZoneCommand::PlaySubsonicPlaylist(id, track))
+            }),
             "set_volume" => self
                 .value
                 .as_i64()
@@ -64,6 +69,9 @@ pub enum Notification {
         volume: i32,
         muted: bool,
         source: String,
+        shuffle: bool,
+        repeat: bool,
+        track_repeat: bool,
     },
     ZoneTrackChanged {
         zone: usize,

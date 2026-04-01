@@ -66,22 +66,54 @@ pub async fn update_and_notify(
     notify: &NotifySender,
     f: impl FnOnce(&mut state::ZoneState),
 ) {
-    // Update state, capture notification data, then drop lock before broadcasting
-    let notification = {
+    let notifications = {
         let mut s = store.write().await;
         let Some(zone) = s.zones.get_mut(&zone_index) else {
             return;
         };
+        let old_track_title = zone.track.as_ref().map(|t| t.title.clone());
+        let old_position = zone.track.as_ref().map(|t| t.position_ms);
         f(zone);
-        crate::api::ws::Notification::ZoneStateChanged {
+        let mut notifs = vec![crate::api::ws::Notification::ZoneStateChanged {
             zone: zone_index,
             playback: zone.playback.to_string(),
             volume: zone.volume,
             muted: zone.muted,
             source: zone.source.to_string(),
+            shuffle: zone.shuffle,
+            repeat: zone.repeat,
+            track_repeat: zone.track_repeat,
+        }];
+        // Send track changed if title changed or track appeared/disappeared
+        let new_track_title = zone.track.as_ref().map(|t| t.title.clone());
+        if old_track_title != new_track_title {
+            if let Some(ref t) = zone.track {
+                notifs.push(crate::api::ws::Notification::ZoneTrackChanged {
+                    zone: zone_index,
+                    title: t.title.clone(),
+                    artist: t.artist.clone(),
+                    album: t.album.clone(),
+                    duration_ms: t.duration_ms,
+                    position_ms: t.position_ms,
+                });
+            }
         }
-    }; // Lock dropped here
-    let _ = notify.send(notification);
+        // Send progress if position changed
+        let new_position = zone.track.as_ref().map(|t| t.position_ms);
+        if old_position != new_position {
+            if let Some(ref t) = zone.track {
+                notifs.push(crate::api::ws::Notification::ZoneProgress {
+                    zone: zone_index,
+                    position_ms: t.position_ms,
+                    duration_ms: t.duration_ms,
+                });
+            }
+        }
+        notifs
+    };
+    for n in notifications {
+        let _ = notify.send(n);
+    }
 }
 
 /// Set up Snapcast group for a zone: find clients by MAC, assign to group, set stream.

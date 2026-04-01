@@ -16,16 +16,21 @@ const SOURCE_LABELS: Record<string, string> = {
 export function NowPlaying({ zone }: { zone: ZoneState }) {
   const track = zone.track;
   const isIdle = zone.source === "idle" || !track;
-  const coverUrl = zones.coverUrl(zone.index);
   const sourceLabel = SOURCE_LABELS[zone.source];
+  const coverKey = `${zone.index}-${track?.title}-${track?.artist}`;
+  const coverUrl = `${zones.coverUrl(zone.index)}?t=${encodeURIComponent(coverKey)}`;
   const [coverError, setCoverError] = useState(false);
+  const [lastKey, setLastKey] = useState(coverKey);
 
-  // Reset error state when zone/track changes
-  const coverKey = `${zone.index}-${track?.title}`;
+  // Reset error state when track changes
+  if (coverKey !== lastKey) {
+    setCoverError(false);
+    setLastKey(coverKey);
+  }
 
   if (isIdle) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6">
+      <div className="flex flex-col items-center justify-center gap-3 py-12">
         <span className="text-5xl">{zone.icon || "🔊"}</span>
         <h2 className="text-xl font-semibold">{zone.name}</h2>
         <p className="text-sm text-muted-foreground">No audio playing</p>
@@ -34,9 +39,9 @@ export function NowPlaying({ zone }: { zone: ZoneState }) {
   }
 
   return (
-    <div className="flex flex-1 flex-col items-center p-6 gap-5 overflow-y-auto">
+    <div className="flex flex-col items-center gap-5">
       {/* Cover art with blurred background */}
-      <div className="relative w-full max-w-xs aspect-square rounded-2xl overflow-hidden bg-muted shadow-lg">
+      <div className="relative w-full max-w-xs aspect-square rounded-2xl overflow-hidden bg-muted shadow-lg shrink-0">
         {coverError ? (
           <div className="flex items-center justify-center size-full">
             <span className="text-6xl">{zone.icon || "🎵"}</span>

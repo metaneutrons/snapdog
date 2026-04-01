@@ -37,8 +37,8 @@ export function PlaylistBrowser({ zone }: PlaylistBrowserProps) {
     }
   };
 
-  const playTrack = (trackIndex: number) => {
-    api.zones.playTrack(zone.index, trackIndex).catch(() => {});
+  const playTrack = (playlistId: string, trackIndex: number) => {
+    api.zones.playPlaylist(zone.index, playlistId, trackIndex).catch(() => {});
   };
 
   if (loading) {
@@ -59,29 +59,47 @@ export function PlaylistBrowser({ zone }: PlaylistBrowserProps) {
     <div className="w-full space-y-1">
       {playlists.map((pl) => (
         <div key={pl.id}>
-          <button
-            onClick={() => togglePlaylist(pl.id)}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors hover:bg-muted ${
-              expandedId === pl.id ? "bg-muted" : ""
-            }`}
-          >
-            <div className="size-8 rounded bg-primary/10 flex items-center justify-center shrink-0">
-              <HugeiconsIcon icon={MusicNote03Icon} size={16} className="text-primary" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-medium truncate">{pl.name}</div>
-              <div className="text-xs text-muted-foreground">
-                {pl.song_count} tracks · {formatDuration(Number(pl.duration))}
+          <div className={`flex items-center gap-1 rounded-lg transition-colors ${
+            expandedId === pl.id ? "bg-muted" : ""
+          }`}>
+            <button
+              onClick={() => togglePlaylist(pl.id)}
+              className="flex-1 flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted rounded-lg"
+            >
+              <div className="size-8 rounded bg-primary/10 flex items-center justify-center shrink-0 overflow-hidden">
+                {pl.cover_art ? (
+                  <img
+                    src={`/api/v1/media/playlists/${pl.cover_art}/cover`}
+                    alt=""
+                    className="size-full object-cover"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                  />
+                ) : (
+                  <HugeiconsIcon icon={MusicNote03Icon} size={16} className="text-primary" />
+                )}
               </div>
-            </div>
-          </button>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium truncate">{pl.name}</div>
+                <div className="text-xs text-muted-foreground">
+                  {pl.song_count} tracks · {formatDuration(Number(pl.duration))}
+                </div>
+              </div>
+            </button>
+            <button
+              onClick={() => playTrack(pl.id, 0)}
+              className="shrink-0 size-8 flex items-center justify-center rounded-full hover:bg-primary/10 transition-colors mr-1"
+              title={`Play ${pl.name}`}
+            >
+              <HugeiconsIcon icon={PlayIcon} size={16} className="text-primary" />
+            </button>
+          </div>
 
           {expandedId === pl.id && (
             <div className="ml-11 border-l border-border pl-3 space-y-0.5 py-1">
               {tracks.map((t, i) => (
                 <button
                   key={t.id}
-                  onClick={() => playTrack(i)}
+                  onClick={() => playTrack(pl.id, i)}
                   className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-muted transition-colors group"
                 >
                   <span className="text-xs text-muted-foreground w-5 text-right tabular-nums">
