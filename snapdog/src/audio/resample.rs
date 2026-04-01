@@ -128,19 +128,16 @@ impl Resampling {
         }
     }
 
-    /// Process a PCM chunk. Returns the data unchanged if passthrough.
-    pub fn process(&mut self, pcm: &[u8]) -> Vec<u8> {
+    /// Process a PCM chunk. Returns resampled data, or empty Vec to signal passthrough.
+    pub fn process(&mut self, pcm: &[u8]) -> Option<Vec<u8>> {
         match self {
-            // TODO: avoid copy — return Cow<[u8]> or pass ownership
-            Self::Passthrough => pcm.to_vec(),
+            Self::Passthrough => None, // Caller uses original data
             Self::Active(r) => {
                 let out = r.process(pcm);
                 if out.is_empty() {
-                    // Not enough data accumulated yet — return empty
-                    // The caller should handle this (skip TCP write)
-                    Vec::new()
+                    None // Resampler buffering, no output yet
                 } else {
-                    out
+                    Some(out)
                 }
             }
         }
@@ -155,7 +152,7 @@ mod tests {
     fn passthrough_when_rates_match() {
         let mut r = Resampling::new(48000, 48000, 2);
         let pcm = vec![1u8; 1024];
-        assert_eq!(r.process(&pcm), pcm);
+        assert!(r.process(&pcm).is_none());
     }
 
     #[test]
@@ -178,7 +175,9 @@ mod tests {
                 pcm.extend_from_slice(&sample.to_le_bytes()); // R
             }
             let out = r.process(&pcm);
-            total_output.extend_from_slice(&out);
+            if let Some(out) = out {
+                total_output.extend_from_slice(&out);
+            }
         }
         // After 8 * 256 = 2048 frames, we should have output
         assert!(

@@ -193,7 +193,10 @@ fn decode_to_pcm(
         sample_buf.copy_interleaved_ref(decoded);
 
         let samples = sample_buf.samples();
-        let bytes: Vec<u8> = samples.iter().flat_map(|s| s.to_le_bytes()).collect();
+        let mut bytes = Vec::with_capacity(samples.len() * 2);
+        for s in samples {
+            bytes.extend_from_slice(&s.to_le_bytes());
+        }
 
         if tx.blocking_send(bytes).is_err() {
             tracing::debug!("PCM consumer dropped, stopping decode");
