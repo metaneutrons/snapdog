@@ -14,7 +14,7 @@ services:
   snapclient-living-room:
     build: ./devcontainer/snapcast-client
     depends_on: [snapcast-server]
-    command: ["snapclient", "--host", "snapcast-server"]
+    command: ["snapclient", "--host", "snapcast-server", "--player", "file:filename=/dev/null"]
     networks:
       snapdog-dev:
         mac_address: 02:42:ac:11:00:10
@@ -23,7 +23,7 @@ services:
   snapclient-kitchen:
     build: ./devcontainer/snapcast-client
     depends_on: [snapcast-server]
-    command: ["snapclient", "--host", "snapcast-server"]
+    command: ["snapclient", "--host", "snapcast-server", "--player", "file:filename=/dev/null"]
     networks:
       snapdog-dev:
         mac_address: 02:42:ac:11:00:11
@@ -32,7 +32,7 @@ services:
   snapclient-bedroom:
     build: ./devcontainer/snapcast-client
     depends_on: [snapcast-server]
-    command: ["snapclient", "--host", "snapcast-server"]
+    command: ["snapclient", "--host", "snapcast-server", "--player", "file:filename=/dev/null"]
     networks:
       snapdog-dev:
         mac_address: 02:42:ac:11:00:12
