@@ -5,6 +5,8 @@ services:
       - "1704:1704"
       - "1705:1705"
       - "1780:1780"
+      - "4953:4953"
+      - "4954:4954"
     volumes:
       - snapcast_sinks:/snapsinks
     networks:
