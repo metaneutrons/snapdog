@@ -13,8 +13,8 @@ use tokio::task::JoinHandle;
 
 use super::commands::{ActiveSource, ZoneCommand};
 use super::context::*;
-use super::helpers::DecodeState;
 use super::helpers::*;
+use super::helpers::{DecodeState, PlaybackCtx};
 use crate::audio;
 use crate::snapcast;
 use crate::state::{self, PlaybackState, SourceType, TrackInfo};
@@ -248,8 +248,8 @@ async fn run(
                         source = ActiveSource::Idle;
                         update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Stopped; z.source = SourceType::Idle; z.track = None; }).await;
                     }
-                    ZoneCommand::Next => { handle_next(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, config, &subsonic, store, zone_index, notify).await; }
-                    ZoneCommand::Previous => { handle_previous(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, config, &subsonic, store, zone_index, notify).await; }
+                    ZoneCommand::Next => { handle_next(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify }).await; }
+                    ZoneCommand::Previous => { handle_previous(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify }).await; }
                     ZoneCommand::NextPlaylist | ZoneCommand::PreviousPlaylist | ZoneCommand::SetPlaylist(_) => {
                         if let Some(sub) = &subsonic {
                             match sub.get_playlists().await {
@@ -364,20 +364,20 @@ async fn run(
                     ZoneCommand::SetVolume(v) => {
                         update_and_notify(store, zone_index, notify, |z| z.volume = v.clamp(0, 100)).await;
                         if let Some(ref gid) = group_id {
-                            let _ = ctx.snap_tx.send(SnapcastCmd::SetGroupVolume { group_id: gid.clone(), percent: v }).await;
+                            let _ = ctx.snap_tx.send(SnapcastCmd { group_id: gid.clone(), action: SnapcastAction::Volume(v) }).await;
                         }
                     }
                     ZoneCommand::SetMute(m) => {
                         update_and_notify(store, zone_index, notify, |z| z.muted = m).await;
                         if let Some(ref gid) = group_id {
-                            let _ = ctx.snap_tx.send(SnapcastCmd::SetGroupMute { group_id: gid.clone(), muted: m }).await;
+                            let _ = ctx.snap_tx.send(SnapcastCmd { group_id: gid.clone(), action: SnapcastAction::Mute(m) }).await;
                         }
                     }
                     ZoneCommand::ToggleMute => {
                         let muted = { store.read().await.zones.get(&zone_index).is_some_and(|z| !z.muted) };
                         update_and_notify(store, zone_index, notify, |z| z.muted = muted).await;
                         if let Some(ref gid) = group_id {
-                            let _ = ctx.snap_tx.send(SnapcastCmd::SetGroupMute { group_id: gid.clone(), muted }).await;
+                            let _ = ctx.snap_tx.send(SnapcastCmd { group_id: gid.clone(), action: SnapcastAction::Mute(muted) }).await;
                         }
                     }
                     ZoneCommand::SetShuffle(v) => { update_and_notify(store, zone_index, notify, |z| z.shuffle = v).await; }
@@ -401,7 +401,7 @@ async fn run(
                     None => {
                         current_decode = None;
                         decode_rx = None;
-                        handle_track_complete(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, config, &subsonic, store, zone_index, notify).await;
+                        handle_track_complete(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify }).await;
                     }
                 }
             }
@@ -430,7 +430,7 @@ async fn run(
                     AirplayEvent::Volume { percent } => {
                         update_and_notify(store, zone_index, notify, |z| z.volume = percent).await;
                         if let Some(ref gid) = group_id {
-                            let _ = ctx.snap_tx.send(SnapcastCmd::SetGroupVolume { group_id: gid.clone(), percent }).await;
+                            let _ = ctx.snap_tx.send(SnapcastCmd { group_id: gid.clone(), action: SnapcastAction::Volume(percent) }).await;
                         }
                     }
                     AirplayEvent::SessionEnded => {

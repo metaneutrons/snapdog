@@ -9,5 +9,7 @@ mod helpers;
 mod runner;
 
 pub use commands::ZoneCommand;
-pub use context::{SnapcastCmd, SnapcastCmdSender, ZoneCommandSender, ZonePlayerContext};
+pub use context::{
+    SnapcastAction, SnapcastCmd, SnapcastCmdSender, ZoneCommandSender, ZonePlayerContext,
+};
 pub use runner::spawn_zone_players;

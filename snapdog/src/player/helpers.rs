@@ -19,6 +19,15 @@ pub struct DecodeState<'a> {
     pub decode_rx: &'a mut Option<mpsc::Receiver<Vec<u8>>>,
     pub source: &'a mut ActiveSource,
 }
+
+/// Read-only playback context shared by all navigation helpers.
+pub struct PlaybackCtx<'a> {
+    pub config: &'a AppConfig,
+    pub subsonic: &'a Option<SubsonicClient>,
+    pub store: &'a state::SharedState,
+    pub zone_index: usize,
+    pub notify: &'a NotifySender,
+}
 pub async fn start_subsonic_track_decode(
     sub: &SubsonicClient,
     track: &crate::subsonic::Track,
@@ -92,27 +101,20 @@ async fn start_radio_decode(
     }));
 }
 
-pub async fn handle_next(
-    ds: &mut DecodeState<'_>,
-    config: &AppConfig,
-    subsonic: &Option<SubsonicClient>,
-    store: &state::SharedState,
-    zone_index: usize,
-    notify: &NotifySender,
-) {
+pub async fn handle_next(ds: &mut DecodeState<'_>, ctx: &PlaybackCtx<'_>) {
     match ds.source.clone() {
         ActiveSource::Radio { index } => {
-            let next = (index + 1) % config.radios.len();
+            let next = (index + 1) % ctx.config.radios.len();
             stop_decode(ds.current_decode, ds.decode_rx).await;
-            if let Some(radio) = config.radios.get(next) {
-                start_radio_decode(&radio.url, config, ds.current_decode, ds.decode_rx).await;
+            if let Some(radio) = ctx.config.radios.get(next) {
+                start_radio_decode(&radio.url, ctx.config, ds.current_decode, ds.decode_rx).await;
                 *ds.source = ActiveSource::Radio { index: next };
-                update_and_notify(store, zone_index, notify, |z| {
+                update_and_notify(ctx.store, ctx.zone_index, ctx.notify, |z| {
                     z.radio_index = Some(next);
                     z.track = Some(radio_track_info(&radio.name));
                 })
                 .await;
-                tracing::info!(zone = zone_index, radio = %radio.name, "Next radio station");
+                tracing::info!(zone = ctx.zone_index, radio = %radio.name, "Next radio station");
             }
         }
         ActiveSource::SubsonicPlaylist {
@@ -122,42 +124,21 @@ pub async fn handle_next(
         } => {
             let next = track_index + 1;
             if next < track_count {
-                advance_playlist_track(
-                    ds,
-                    &playlist_id,
-                    next,
-                    track_count,
-                    config,
-                    subsonic,
-                    store,
-                    zone_index,
-                    notify,
-                )
-                .await;
+                advance_playlist_track(ds, &playlist_id, next, track_count, ctx).await;
             } else {
-                let repeat = store
+                let repeat = ctx
+                    .store
                     .read()
                     .await
                     .zones
-                    .get(&zone_index)
+                    .get(&ctx.zone_index)
                     .is_some_and(|z| z.repeat);
                 if repeat {
-                    advance_playlist_track(
-                        ds,
-                        &playlist_id,
-                        0,
-                        track_count,
-                        config,
-                        subsonic,
-                        store,
-                        zone_index,
-                        notify,
-                    )
-                    .await;
+                    advance_playlist_track(ds, &playlist_id, 0, track_count, ctx).await;
                 } else {
                     stop_decode(ds.current_decode, ds.decode_rx).await;
                     *ds.source = ActiveSource::Idle;
-                    update_and_notify(store, zone_index, notify, |z| {
+                    update_and_notify(ctx.store, ctx.zone_index, ctx.notify, |z| {
                         z.playback = PlaybackState::Stopped;
                         z.source = SourceType::Idle;
                     })
@@ -169,31 +150,24 @@ pub async fn handle_next(
     }
 }
 
-pub async fn handle_previous(
-    ds: &mut DecodeState<'_>,
-    config: &AppConfig,
-    subsonic: &Option<SubsonicClient>,
-    store: &state::SharedState,
-    zone_index: usize,
-    notify: &NotifySender,
-) {
+pub async fn handle_previous(ds: &mut DecodeState<'_>, ctx: &PlaybackCtx<'_>) {
     match ds.source.clone() {
         ActiveSource::Radio { index } => {
             let prev = if index == 0 {
-                config.radios.len() - 1
+                ctx.config.radios.len() - 1
             } else {
                 index - 1
             };
             stop_decode(ds.current_decode, ds.decode_rx).await;
-            if let Some(radio) = config.radios.get(prev) {
-                start_radio_decode(&radio.url, config, ds.current_decode, ds.decode_rx).await;
+            if let Some(radio) = ctx.config.radios.get(prev) {
+                start_radio_decode(&radio.url, ctx.config, ds.current_decode, ds.decode_rx).await;
                 *ds.source = ActiveSource::Radio { index: prev };
-                update_and_notify(store, zone_index, notify, |z| {
+                update_and_notify(ctx.store, ctx.zone_index, ctx.notify, |z| {
                     z.radio_index = Some(prev);
                     z.track = Some(radio_track_info(&radio.name));
                 })
                 .await;
-                tracing::info!(zone = zone_index, radio = %radio.name, "Previous radio station");
+                tracing::info!(zone = ctx.zone_index, radio = %radio.name, "Previous radio station");
             }
         }
         ActiveSource::SubsonicPlaylist {
@@ -202,43 +176,27 @@ pub async fn handle_previous(
             track_count,
         } => {
             if track_index > 0 {
-                advance_playlist_track(
-                    ds,
-                    &playlist_id,
-                    track_index - 1,
-                    track_count,
-                    config,
-                    subsonic,
-                    store,
-                    zone_index,
-                    notify,
-                )
-                .await;
+                advance_playlist_track(ds, &playlist_id, track_index - 1, track_count, ctx).await;
             }
         }
         _ => {}
     }
 }
 
-pub async fn handle_track_complete(
-    ds: &mut DecodeState<'_>,
-    config: &AppConfig,
-    subsonic: &Option<SubsonicClient>,
-    store: &state::SharedState,
-    zone_index: usize,
-    notify: &NotifySender,
-) {
-    let track_repeat = store
+pub async fn handle_track_complete(ds: &mut DecodeState<'_>, ctx: &PlaybackCtx<'_>) {
+    let track_repeat = ctx
+        .store
         .read()
         .await
         .zones
-        .get(&zone_index)
+        .get(&ctx.zone_index)
         .is_some_and(|z| z.track_repeat);
-    let shuffle = store
+    let shuffle = ctx
+        .store
         .read()
         .await
         .zones
-        .get(&zone_index)
+        .get(&ctx.zone_index)
         .is_some_and(|z| z.shuffle);
 
     match ds.source.clone() {
@@ -248,55 +206,33 @@ pub async fn handle_track_complete(
             track_count,
         } => {
             if track_repeat {
-                advance_playlist_track(
-                    ds,
-                    &playlist_id,
-                    track_index,
-                    track_count,
-                    config,
-                    subsonic,
-                    store,
-                    zone_index,
-                    notify,
-                )
-                .await;
+                advance_playlist_track(ds, &playlist_id, track_index, track_count, ctx).await;
             } else if shuffle {
                 let next = fastrand::usize(..track_count);
-                advance_playlist_track(
-                    ds,
-                    &playlist_id,
-                    next,
-                    track_count,
-                    config,
-                    subsonic,
-                    store,
-                    zone_index,
-                    notify,
-                )
-                .await;
+                advance_playlist_track(ds, &playlist_id, next, track_count, ctx).await;
             } else {
-                handle_next(ds, config, subsonic, store, zone_index, notify).await;
+                handle_next(ds, ctx).await;
             }
         }
         ActiveSource::Radio { index } => {
-            tracing::warn!(zone = zone_index, "Radio stream ended, restarting");
-            if let Some(radio) = config.radios.get(index) {
-                start_radio_decode(&radio.url, config, ds.current_decode, ds.decode_rx).await;
+            tracing::warn!(zone = ctx.zone_index, "Radio stream ended, restarting");
+            if let Some(radio) = ctx.config.radios.get(index) {
+                start_radio_decode(&radio.url, ctx.config, ds.current_decode, ds.decode_rx).await;
             }
         }
         ActiveSource::AirPlay => {
             *ds.source = ActiveSource::Idle;
-            update_and_notify(store, zone_index, notify, |z| {
+            update_and_notify(ctx.store, ctx.zone_index, ctx.notify, |z| {
                 z.playback = PlaybackState::Stopped;
                 z.source = SourceType::Idle;
                 z.track = None;
             })
             .await;
-            tracing::info!(zone = zone_index, "AirPlay ended, zone idle");
+            tracing::info!(zone = ctx.zone_index, "AirPlay ended, zone idle");
         }
         _ => {
             *ds.source = ActiveSource::Idle;
-            update_and_notify(store, zone_index, notify, |z| {
+            update_and_notify(ctx.store, ctx.zone_index, ctx.notify, |z| {
                 z.playback = PlaybackState::Stopped;
                 z.source = SourceType::Idle;
             })
@@ -305,35 +241,40 @@ pub async fn handle_track_complete(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 async fn advance_playlist_track(
     ds: &mut DecodeState<'_>,
     playlist_id: &str,
     track_index: usize,
     track_count: usize,
-    config: &AppConfig,
-    subsonic: &Option<SubsonicClient>,
-    store: &state::SharedState,
-    zone_index: usize,
-    notify: &NotifySender,
+    ctx: &PlaybackCtx<'_>,
 ) {
     stop_decode(ds.current_decode, ds.decode_rx).await;
-    if let Some(sub) = subsonic {
+    if let Some(sub) = &ctx.subsonic {
         if let Ok(playlist) = sub.get_playlist(playlist_id).await {
             if let Some(track) = playlist.entry.get(track_index) {
-                start_subsonic_track_decode(sub, track, config, ds.current_decode, ds.decode_rx)
-                    .await;
+                start_subsonic_track_decode(
+                    sub,
+                    track,
+                    ctx.config,
+                    ds.current_decode,
+                    ds.decode_rx,
+                )
+                .await;
                 *ds.source = ActiveSource::SubsonicPlaylist {
                     playlist_id: playlist_id.to_string(),
                     track_index,
                     track_count,
                 };
-                update_and_notify(store, zone_index, notify, |z| {
+                update_and_notify(ctx.store, ctx.zone_index, ctx.notify, |z| {
                     z.playlist_track_index = Some(track_index);
                     z.track = Some(subsonic_track_info(track));
                 })
                 .await;
-                tracing::info!(zone = zone_index, track = track_index, "Advanced to track");
+                tracing::info!(
+                    zone = ctx.zone_index,
+                    track = track_index,
+                    "Advanced to track"
+                );
             }
         }
     }

@@ -346,3 +346,23 @@ mod tests {
         assert!(!store2.clients[&1].connected);
     }
 }
+
+/// Update client state and broadcast a notification.
+pub async fn update_client_and_notify(
+    store: &SharedState,
+    client_index: usize,
+    notify: &tokio::sync::broadcast::Sender<crate::api::ws::Notification>,
+    f: impl FnOnce(&mut ClientState),
+) {
+    let mut s = store.write().await;
+    if let Some(client) = s.clients.get_mut(&client_index) {
+        f(client);
+        let _ = notify.send(crate::api::ws::Notification::ClientStateChanged {
+            client: client_index,
+            volume: client.volume,
+            muted: client.muted,
+            connected: client.connected,
+            zone: client.zone_index,
+        });
+    }
+}

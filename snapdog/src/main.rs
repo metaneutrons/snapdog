@@ -111,17 +111,17 @@ async fn main() -> Result<()> {
     loop {
         tokio::select! {
             Some(cmd) = snap_cmd_rx.recv() => {
-                let result = match cmd {
-                    player::SnapcastCmd::SetGroupStream { group_id, stream_id } =>
-                        snap.set_group_stream(&group_id, &stream_id).await,
-                    player::SnapcastCmd::SetGroupClients { group_id, client_ids } =>
-                        snap.set_group_clients(&group_id, client_ids).await,
-                    player::SnapcastCmd::SetGroupName { group_id, name } =>
-                        snap.set_group_name(&group_id, &name).await,
-                    player::SnapcastCmd::SetGroupVolume { group_id, percent } =>
-                        snap.set_group_volume(&group_id, percent).await,
-                    player::SnapcastCmd::SetGroupMute { group_id, muted } =>
-                        snap.set_group_mute(&group_id, muted).await,
+                let result = match cmd.action {
+                    player::SnapcastAction::Stream(stream_id) =>
+                        snap.set_group_stream(&cmd.group_id, &stream_id).await,
+                    player::SnapcastAction::Clients(client_ids) =>
+                        snap.set_group_clients(&cmd.group_id, client_ids).await,
+                    player::SnapcastAction::Name(name) =>
+                        snap.set_group_name(&cmd.group_id, &name).await,
+                    player::SnapcastAction::Volume(percent) =>
+                        snap.set_group_volume(&cmd.group_id, percent).await,
+                    player::SnapcastAction::Mute(muted) =>
+                        snap.set_group_mute(&cmd.group_id, muted).await,
                 };
                 if let Err(e) = result {
                     tracing::warn!(error = %e, "Snapcast command failed");
