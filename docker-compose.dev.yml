@@ -1,48 +1,43 @@
 services:
-  # Snapcast Server — managed separately in dev (in prod, snapdog starts it)
   snapcast-server:
-    image: ghcr.io/snapcast/snapcast-server:latest
+    build: ./devcontainer/snapcast-server
     ports:
-      - "1704:1704"   # Client streaming
-      - "1780:1780"   # JSON-RPC / WebSocket
+      - "1704:1704"
+      - "1705:1705"
+      - "1780:1780"
     volumes:
       - snapcast_sinks:/snapsinks
     networks:
       snapdog-dev:
     restart: unless-stopped
 
-  # Snapcast Clients (simulated)
   snapclient-living-room:
-    image: ghcr.io/snapcast/snapcast-client:latest
+    build: ./devcontainer/snapcast-client
     depends_on: [snapcast-server]
-    environment:
-      - SNAPSERVER=snapcast-server
+    command: ["snapclient", "--host", "snapcast-server"]
     networks:
       snapdog-dev:
         mac_address: 02:42:ac:11:00:10
     restart: unless-stopped
 
   snapclient-kitchen:
-    image: ghcr.io/snapcast/snapcast-client:latest
+    build: ./devcontainer/snapcast-client
     depends_on: [snapcast-server]
-    environment:
-      - SNAPSERVER=snapcast-server
+    command: ["snapclient", "--host", "snapcast-server"]
     networks:
       snapdog-dev:
         mac_address: 02:42:ac:11:00:11
     restart: unless-stopped
 
   snapclient-bedroom:
-    image: ghcr.io/snapcast/snapcast-client:latest
+    build: ./devcontainer/snapcast-client
     depends_on: [snapcast-server]
-    environment:
-      - SNAPSERVER=snapcast-server
+    command: ["snapclient", "--host", "snapcast-server"]
     networks:
       snapdog-dev:
         mac_address: 02:42:ac:11:00:12
     restart: unless-stopped
 
-  # MQTT Broker
   mqtt:
     image: eclipse-mosquitto:2.0
     ports:
@@ -53,9 +48,9 @@ services:
       snapdog-dev:
     restart: unless-stopped
 
-  # KNX Gateway Simulator
   knxd:
-    image: knxd/knxd:latest
+    build:
+      context: ./devcontainer/knxd
     environment:
       - ADDRESS=0.0.1
       - CLIENT_ADDRESS=0.0.2:8
@@ -66,7 +61,6 @@ services:
       snapdog-dev:
     restart: unless-stopped
 
-  # Navidrome (Subsonic API)
   navidrome:
     image: deluan/navidrome:latest
     environment:
