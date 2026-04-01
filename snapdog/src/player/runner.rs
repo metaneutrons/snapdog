@@ -256,10 +256,115 @@ async fn run(
                     ZoneCommand::Next => { handle_next(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, config, &subsonic, store, zone_index, notify).await; }
                     ZoneCommand::Previous => { handle_previous(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, config, &subsonic, store, zone_index, notify).await; }
                     ZoneCommand::NextPlaylist | ZoneCommand::PreviousPlaylist | ZoneCommand::SetPlaylist(_) => {
-                        tracing::warn!(zone = zone_index, "Playlist navigation not yet implemented");
+                        if let Some(sub) = &subsonic {
+                            match sub.get_playlists().await {
+                                Ok(playlists) if !playlists.is_empty() => {
+                                    let current_pl_id = match &source {
+                                        ActiveSource::SubsonicPlaylist { playlist_id, .. } => Some(playlist_id.clone()),
+                                        _ => None,
+                                    };
+                                    let current_idx = current_pl_id.as_ref()
+                                        .and_then(|id| playlists.iter().position(|p| &p.id == id))
+                                        .unwrap_or(0);
+
+                                    let target_idx = match cmd {
+                                        ZoneCommand::NextPlaylist => (current_idx + 1) % playlists.len(),
+                                        ZoneCommand::PreviousPlaylist => if current_idx == 0 { playlists.len() - 1 } else { current_idx - 1 },
+                                        ZoneCommand::SetPlaylist(i) => i.min(playlists.len() - 1),
+                                        _ => unreachable!(),
+                                    };
+
+                                    let pl = &playlists[target_idx];
+                                    tracing::info!(zone = zone_index, playlist = %pl.name, "Switching playlist");
+                                    stop_decode(&mut current_decode, &mut decode_rx).await;
+                                    if let Ok(playlist) = sub.get_playlist(&pl.id).await {
+                                        if let Some(track) = playlist.entry.first() {
+                                            start_subsonic_track_decode(sub, track, config, &mut current_decode, &mut decode_rx).await;
+                                            source = ActiveSource::SubsonicPlaylist {
+                                                playlist_id: pl.id.clone(),
+                                                track_index: 0,
+                                                track_count: playlist.entry.len(),
+                                            };
+                                            update_and_notify(store, zone_index, notify, |z| {
+                                                z.playback = PlaybackState::Playing;
+                                                z.source = SourceType::SubsonicPlaylist;
+                                                z.playlist_index = Some(target_idx);
+                                                z.playlist_name = Some(playlist.name.clone());
+                                                z.playlist_track_index = Some(0);
+                                                z.playlist_track_count = Some(playlist.entry.len());
+                                                z.track = Some(subsonic_track_info(track));
+                                            }).await;
+                                        }
+                                    }
+                                }
+                                Ok(_) => tracing::warn!(zone = zone_index, "No playlists available"),
+                                Err(e) => tracing::error!(error = %e, "Failed to fetch playlists"),
+                            }
+                        }
                     }
-                    ZoneCommand::Seek(_) | ZoneCommand::SeekProgress(_) => {
-                        tracing::warn!(zone = zone_index, "Seek not yet implemented");
+                    ZoneCommand::Seek(pos_ms) => {
+                        if let Some(sub) = &subsonic {
+                            let track_id = match &source {
+                                ActiveSource::SubsonicTrack { track_id } => Some(track_id.clone()),
+                                ActiveSource::SubsonicPlaylist { playlist_id, track_index, .. } => {
+                                    sub.get_playlist(playlist_id).await.ok()
+                                        .and_then(|p| p.entry.get(*track_index).map(|t| t.id.clone()))
+                                }
+                                _ => None,
+                            };
+                            if let Some(tid) = track_id {
+                                stop_decode(&mut current_decode, &mut decode_rx).await;
+                                let offset_secs = (pos_ms / 1000).max(0) as u64;
+                                let url = sub.stream_url_with_offset(&tid, offset_secs);
+                                let (tx, rx) = audio::pcm_channel(64);
+                                decode_rx = Some(rx);
+                                let ac = config.audio.clone();
+                                current_decode = Some(tokio::spawn(async move {
+                                    if let Err(e) = audio::decode_http_stream(url, tx, ac, None).await {
+                                        tracing::error!(error = %e, "Seek decode failed");
+                                    }
+                                }));
+                                update_and_notify(store, zone_index, notify, |z| {
+                                    if let Some(ref mut t) = z.track { t.position_ms = pos_ms; }
+                                }).await;
+                                tracing::info!(zone = zone_index, position_ms = pos_ms, "Seeked");
+                            }
+                        }
+                    }
+                    ZoneCommand::SeekProgress(progress) => {
+                        let duration = store.read().await.zones.get(&zone_index)
+                            .and_then(|z| z.track.as_ref().map(|t| t.duration_ms)).unwrap_or(0);
+                        if duration > 0 {
+                            let pos_ms = (progress.clamp(0.0, 1.0) * duration as f64) as i64;
+                            let _ = commands.try_recv(); // drain
+                            // Re-dispatch as absolute seek — will be handled next iteration
+                            // For simplicity, inline the same logic:
+                            if let Some(sub) = &subsonic {
+                                let track_id = match &source {
+                                    ActiveSource::SubsonicTrack { track_id } => Some(track_id.clone()),
+                                    ActiveSource::SubsonicPlaylist { playlist_id, track_index, .. } => {
+                                        sub.get_playlist(playlist_id).await.ok()
+                                            .and_then(|p| p.entry.get(*track_index).map(|t| t.id.clone()))
+                                    }
+                                    _ => None,
+                                };
+                                if let Some(tid) = track_id {
+                                    stop_decode(&mut current_decode, &mut decode_rx).await;
+                                    let url = sub.stream_url_with_offset(&tid, (pos_ms / 1000).max(0) as u64);
+                                    let (tx, rx) = audio::pcm_channel(64);
+                                    decode_rx = Some(rx);
+                                    let ac = config.audio.clone();
+                                    current_decode = Some(tokio::spawn(async move {
+                                        if let Err(e) = audio::decode_http_stream(url, tx, ac, None).await {
+                                            tracing::error!(error = %e, "Seek decode failed");
+                                        }
+                                    }));
+                                    update_and_notify(store, zone_index, notify, |z| {
+                                        if let Some(ref mut t) = z.track { t.position_ms = pos_ms; }
+                                    }).await;
+                                }
+                            }
+                        }
                     }
                     ZoneCommand::SetVolume(v) => {
                         update_and_notify(store, zone_index, notify, |z| z.volume = v.clamp(0, 100)).await;

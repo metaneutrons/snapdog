@@ -70,11 +70,20 @@ impl SubsonicClient {
 
     /// Get the streaming URL for a track (does not fetch — returns the URL).
     pub fn stream_url(&self, track_id: &str) -> String {
+        self.stream_url_with_offset(track_id, 0)
+    }
+
+    /// Get the streaming URL with a time offset in seconds.
+    pub fn stream_url_with_offset(&self, track_id: &str, offset_secs: u64) -> String {
         let (token, salt) = self.auth_token();
-        format!(
+        let mut url = format!(
             "{}/rest/stream?id={}&u={}&t={}&s={}&v={}&c={}&f=json",
             self.base_url, track_id, self.username, token, salt, API_VERSION, CLIENT_NAME
-        )
+        );
+        if offset_secs > 0 {
+            url.push_str(&format!("&timeOffset={offset_secs}"));
+        }
+        url
     }
 
     /// Get cover art bytes.
