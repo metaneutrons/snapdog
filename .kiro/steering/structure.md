@@ -50,6 +50,17 @@ SnapDogRust/
 │       │   └── cover.rs        # CoverCache, MIME detection, fetch helper
 │       └── process/            # Child process management
 │           └── mod.rs          # SnapserverHandle, config generation
+├── webui/                      # Next.js WebUI (static export, embedded in binary)
+│   ├── package.json
+│   ├── next.config.ts
+│   ├── src/
+│   │   ├── app/                # App Router pages
+│   │   ├── components/         # shadcn/ui + custom components
+│   │   │   └── ui/             # shadcn/ui primitives
+│   │   ├── hooks/              # useWebSocket, useZoneStore, etc.
+│   │   ├── lib/                # API client, utils
+│   │   └── stores/             # Zustand stores
+│   └── out/                    # Static export output (gitignored)
 ├── vendor/
 │   └── shairplay/              # Git submodule: juhovh/shairplay
 ├── devcontainer/               # Docker dev environment
@@ -61,7 +72,7 @@ SnapDogRust/
 │   └── knx-groupaddresses.csv  # KNX group address database
 ├── docs/
 │   └── architecture/
-│       └── decisions.md        # 13 ADRs
+│       └── decisions.md        # 14 ADRs
 ├── .kiro/
 │   └── steering/               # product.md, structure.md, tech.md
 ├── .github/workflows/ci.yml

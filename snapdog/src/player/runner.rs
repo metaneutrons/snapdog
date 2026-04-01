@@ -267,7 +267,7 @@ async fn run(
                                         ZoneCommand::NextPlaylist => (current_idx + 1) % playlists.len(),
                                         ZoneCommand::PreviousPlaylist => if current_idx == 0 { playlists.len() - 1 } else { current_idx - 1 },
                                         ZoneCommand::SetPlaylist(i) => i.min(playlists.len() - 1),
-                                        _ => unreachable!(),
+                                        _ => continue,
                                     };
 
                                     let pl = &playlists[target_idx];
