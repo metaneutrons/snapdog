@@ -66,17 +66,22 @@ pub async fn update_and_notify(
     notify: &NotifySender,
     f: impl FnOnce(&mut state::ZoneState),
 ) {
-    let mut s = store.write().await;
-    if let Some(zone) = s.zones.get_mut(&zone_index) {
+    // Update state, capture notification data, then drop lock before broadcasting
+    let notification = {
+        let mut s = store.write().await;
+        let Some(zone) = s.zones.get_mut(&zone_index) else {
+            return;
+        };
         f(zone);
-        let _ = notify.send(crate::api::ws::Notification::ZoneStateChanged {
+        crate::api::ws::Notification::ZoneStateChanged {
             zone: zone_index,
-            playback: format!("{:?}", zone.playback).to_lowercase(),
+            playback: zone.playback.to_string(),
             volume: zone.volume,
             muted: zone.muted,
-            source: format!("{:?}", zone.source).to_lowercase(),
-        });
-    }
+            source: zone.source.to_string(),
+        }
+    }; // Lock dropped here
+    let _ = notify.send(notification);
 }
 
 /// Set up Snapcast group for a zone: find clients by MAC, assign to group, set stream.

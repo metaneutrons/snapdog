@@ -130,7 +130,7 @@ pub fn icy_client() -> reqwest::Client {
             h
         })
         .build()
-        .expect("Failed to build ICY HTTP client")
+        .unwrap_or_default()
 }
 
 #[cfg(test)]

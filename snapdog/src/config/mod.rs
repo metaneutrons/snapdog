@@ -17,7 +17,7 @@ use anyhow::{Context, Result};
 
 /// Load, validate, and resolve configuration from a TOML file.
 pub fn load(path: &Path) -> Result<AppConfig> {
-    let content = std::fs::read_to_string(path)
+    let content = std::fs::read_to_string(path) /* blocking OK: called once at startup */
         .with_context(|| format!("Failed to read {}", path.display()))?;
     let raw: RawConfig =
         toml::from_str(&content).with_context(|| format!("Failed to parse {}", path.display()))?;

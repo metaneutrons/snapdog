@@ -153,10 +153,8 @@ async fn get_all(State(state): State<SharedState>) -> Json<Vec<ZoneInfo>> {
                     icon: z.icon.clone(),
                     volume: zs.map_or(50, |s| s.volume),
                     muted: zs.is_some_and(|s| s.muted),
-                    playback: zs.map_or("stopped".into(), |s| {
-                        format!("{:?}", s.playback).to_lowercase()
-                    }),
-                    source: zs.map_or("idle".into(), |s| format!("{:?}", s.source).to_lowercase()),
+                    playback: zs.map_or("stopped".into(), |s| s.playback.to_string()),
+                    source: zs.map_or("idle".into(), |s| s.source.to_string()),
                 }
             })
             .collect(),
@@ -173,10 +171,8 @@ async fn get_zone(State(state): State<SharedState>, Path(idx): Path<usize>) -> i
         icon: cfg.icon.clone(),
         volume: zs.map_or(50, |s| s.volume),
         muted: zs.is_some_and(|s| s.muted),
-        playback: zs.map_or("stopped".into(), |s| {
-            format!("{:?}", s.playback).to_lowercase()
-        }),
-        source: zs.map_or("idle".into(), |s| format!("{:?}", s.source).to_lowercase()),
+        playback: zs.map_or("stopped".into(), |s| s.playback.to_string()),
+        source: zs.map_or("idle".into(), |s| s.source.to_string()),
     }))
 }
 
@@ -352,7 +348,7 @@ async fn get_track_metadata(
         "bitrate_kbps": zone.track.as_ref().and_then(|t| t.bitrate_kbps),
         "content_type": zone.track.as_ref().and_then(|t| t.content_type.as_deref()),
         "sample_rate": zone.track.as_ref().and_then(|t| t.sample_rate),
-        "source": format!("{:?}", zone.source).to_lowercase(),
+        "source": zone.source.to_string(),
         "cover": format!("/api/v1/zones/{idx}/cover"),
         "radio_index": zone.radio_index,
         "playlist_track_index": zone.playlist_track_index,
@@ -517,7 +513,7 @@ async fn get_playback(
 ) -> impl IntoResponse {
     read_zone(&state, idx)
         .await
-        .map(|z| Json(format!("{:?}", z.playback).to_lowercase()))
+        .map(|z| Json(z.playback.to_string()))
         .ok_or(zone_not_found())
 }
 async fn get_playlist_name(

@@ -48,7 +48,7 @@ async fn main() -> Result<()> {
     let snap_state = snap.state().clone();
 
     // Snapcast command channel (SnapcastConnection is !Send, stays on main task)
-    let (snap_cmd_tx, mut snap_cmd_rx) = tokio::sync::mpsc::channel::<player::SnapcastCmd>(64);
+    let (snap_cmd_tx, mut snap_cmd_rx) = tokio::sync::mpsc::channel::<player::SnapcastCmd>(64); // snapcast command backlog;
 
     // Spawn ZonePlayers
     let zone_commands = player::spawn_zone_players(player::ZonePlayerContext {
@@ -142,6 +142,7 @@ async fn main() -> Result<()> {
         }
     }
 
+    // Persist state (blocking I/O OK — shutdown path, called once)
     if let Err(e) = store.write().await.persist() {
         tracing::warn!(error = %e, "Failed to persist state");
     }

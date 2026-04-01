@@ -28,7 +28,7 @@ pub async fn spawn_zone_players(
     let ctx = Arc::new(ctx);
 
     for zone in &ctx.config.zones {
-        let (cmd_tx, cmd_rx) = mpsc::channel(32);
+        let (cmd_tx, cmd_rx) = mpsc::channel(32); // zone command backlog
         senders.insert(zone.index, cmd_tx);
 
         let ctx = ctx.clone();
