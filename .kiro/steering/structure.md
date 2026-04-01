@@ -96,11 +96,65 @@ SnapDogRust/
 
 ## Data Flow
 ```
-AirPlay Client ──RAOP──▶ airplay (FFI) ──PCM──▶ player (resampler) ──▶ TCP ──▶ snapserver
-Subsonic/Radio ──HTTP──▶ audio (symphonia) ──PCM──▶ player (resampler) ──▶ TCP ──▶ snapserver
-
-API/MQTT/WS/KNX ──ZoneCommand──▶ player ──state update──▶ state store
-                                    │                         │
-                                    ├──SnapcastCmd──▶ main loop ──▶ snapcast (JSON-RPC)
-                                    └──Notification──▶ WebSocket broadcast
+┌─────────────────────────────────────────────────────────────────────┐
+│ Sources                                                             │
+│                                                                     │
+│  iPhone ──AirPlay/RAOP──▶ airplay (libshairplay FFI)               │
+│                              ├── PCM (44.1kHz) ──▶ resampler       │
+│                              ├── DMAP metadata ──▶ state.track     │
+│                              ├── Cover art ──▶ cover cache         │
+│                              └── Progress ──▶ state.track.position │
+│                                                                     │
+│  Subsonic ──HTTP/JSON──▶ subsonic client                           │
+│                              ├── stream URL ──▶ audio (symphonia)  │
+│                              │                    └── PCM ──▶ resampler
+│                              ├── metadata ──▶ state.track          │
+│                              └── cover art ──▶ cover cache         │
+│                                                                     │
+│  Radio ──HTTP──▶ audio (symphonia + ICY parser)                    │
+│                    ├── PCM ──▶ resampler                           │
+│                    └── ICY StreamTitle ──▶ state.track.title       │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ ZonePlayer (one per zone)                                           │
+│                                                                     │
+│  ZoneCommand ◄── API (REST)                                        │
+│              ◄── MQTT (rumqttc)                                    │
+│              ◄── WebSocket (incoming)                              │
+│              ◄── KNX (knxkit)                                      │
+│                                                                     │
+│  PCM ──▶ resampler ──▶ TCP write ──▶ snapserver ──▶ Snapcast Clients
+│                                         ▲                          │
+│  SnapcastCmd ──▶ main loop ──▶ snapcast (JSON-RPC)                 │
+│    (SetGroupVolume, SetGroupStream, SetGroupClients, ...)          │
+│                                                                     │
+│  State update ──▶ state store ──▶ WebSocket broadcast              │
+│                                ──▶ MQTT publish (retained)         │
+│                                ──▶ KNX group write                 │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ Outputs                                                             │
+│                                                                     │
+│  REST API ◄── state store (read-only for API)                      │
+│    GET /zones/1/track/metadata ──▶ JSON                            │
+│    GET /zones/1/cover ──▶ image bytes (cover cache)                │
+│                                                                     │
+│  WebSocket ◄── broadcast channel ◄── every state change            │
+│    {"type":"zone_state_changed", "zone":1, "playback":"playing"}   │
+│                                                                     │
+│  MQTT ──▶ retained status topics                                   │
+│    snapdog/zones/1/track/title = "Moonlight Sonata"                │
+│                                                                     │
+│  KNX ──▶ group value writes                                       │
+│    1/3/10 (DPT 16.001) = "Moonlight Sonat"                        │
+│                                                                     │
+│  Snapcast Clients ◄── snapserver ◄── TCP PCM                      │
+│    Living Room (02:42:ac:11:00:10)                                 │
+│    Kitchen     (02:42:ac:11:00:11)                                 │
+│    Bedroom     (02:42:ac:11:00:12)                                 │
+└─────────────────────────────────────────────────────────────────────┘
 ```
