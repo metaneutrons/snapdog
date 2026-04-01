@@ -95,12 +95,7 @@ async fn main() -> Result<()> {
         }
     });
 
-    // Auto-start first radio on first zone
-    if !config.radios.is_empty() {
-        if let Some(tx) = zone_commands.get(&1) {
-            let _ = tx.send(player::ZoneCommand::PlayRadio(0)).await;
-        }
-    }
+    // Zones start idle — user controls playback via API/MQTT/KNX
 
     // Main loop: process Snapcast commands + wait for shutdown
     loop {
