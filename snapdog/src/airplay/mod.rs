@@ -98,7 +98,7 @@ impl AirplayReceiver {
         unsafe { ffi::raop_set_log_level(raop, 6) };
 
         let hwaddr: [u8; 6] = [0x02, 0x42, 0xAA, 0xBB, 0xCC, 0xDD];
-        let mut port: u16 = 5000;
+        let mut port: u16 = 0; // OS assigns free port
         let password = config
             .password
             .as_deref()
@@ -114,7 +114,7 @@ impl AirplayReceiver {
                 password_ptr,
             )
         };
-        if ret != 0 {
+        if ret < 0 {
             unsafe { ffi::raop_destroy(raop) };
             anyhow::bail!("raop_start failed with error {ret}");
         }
