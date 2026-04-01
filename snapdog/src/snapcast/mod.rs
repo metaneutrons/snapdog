@@ -111,6 +111,29 @@ impl Snapcast {
             .context("Failed to set group name")
     }
 
+    /// Set volume for all clients in a group.
+    pub async fn set_group_volume(&mut self, group_id: &str, percent: i32) -> Result<()> {
+        let client_ids: Vec<String> = self
+            .state()
+            .groups
+            .get(group_id)
+            .map(|g| g.clients.iter().cloned().collect())
+            .unwrap_or_default();
+        for client_id in client_ids {
+            self.set_client_volume(&client_id, percent.clamp(0, 100) as u8, false)
+                .await?;
+        }
+        Ok(())
+    }
+
+    /// Set mute for a group.
+    pub async fn set_group_mute(&mut self, group_id: &str, muted: bool) -> Result<()> {
+        self.conn
+            .group_set_mute(group_id.to_string(), muted)
+            .await
+            .context("Failed to set group mute")
+    }
+
     fn log_state(&self) {
         let state = self.state();
         let groups: Vec<_> = state.groups.iter().map(|g| g.key().clone()).collect();
