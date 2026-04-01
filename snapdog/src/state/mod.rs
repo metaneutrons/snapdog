@@ -86,6 +86,16 @@ pub enum PlaybackState {
     Paused,
 }
 
+impl std::fmt::Display for PlaybackState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Stopped => write!(f, "stopped"),
+            Self::Playing => write!(f, "playing"),
+            Self::Paused => write!(f, "paused"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum SourceType {
@@ -96,6 +106,19 @@ pub enum SourceType {
     SubsonicTrack,
     Url,
     AirPlay,
+}
+
+impl std::fmt::Display for SourceType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Idle => write!(f, "idle"),
+            Self::Radio => write!(f, "radio"),
+            Self::SubsonicPlaylist => write!(f, "subsonic_playlist"),
+            Self::SubsonicTrack => write!(f, "subsonic_track"),
+            Self::Url => write!(f, "url"),
+            Self::AirPlay => write!(f, "airplay"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -186,6 +209,7 @@ impl Store {
     }
 
     /// Persist current state to JSON file (atomic write).
+    /// Persist state to JSON file. Uses blocking I/O (called infrequently on state changes).
     pub fn persist(&self) -> Result<()> {
         let Some(path) = &self.persist_path else {
             return Ok(());
@@ -354,15 +378,19 @@ pub async fn update_client_and_notify(
     notify: &tokio::sync::broadcast::Sender<crate::api::ws::Notification>,
     f: impl FnOnce(&mut ClientState),
 ) {
-    let mut s = store.write().await;
-    if let Some(client) = s.clients.get_mut(&client_index) {
+    let notification = {
+        let mut s = store.write().await;
+        let Some(client) = s.clients.get_mut(&client_index) else {
+            return;
+        };
         f(client);
-        let _ = notify.send(crate::api::ws::Notification::ClientStateChanged {
+        crate::api::ws::Notification::ClientStateChanged {
             client: client_index,
             volume: client.volume,
             muted: client.muted,
             connected: client.connected,
             zone: client.zone_index,
-        });
-    }
+        }
+    };
+    let _ = notify.send(notification);
 }

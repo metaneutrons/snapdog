@@ -43,7 +43,11 @@ impl PcmResampler {
             chunk_size,
             ch,
         )
-        .expect("Failed to create resampler");
+        .map_err(|e| {
+            tracing::error!(error = %e, "Failed to create resampler");
+            e
+        })
+        .ok()?;
 
         let buffer = vec![Vec::new(); ch];
 
