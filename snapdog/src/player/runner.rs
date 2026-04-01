@@ -13,6 +13,7 @@ use tokio::task::JoinHandle;
 
 use super::commands::{ActiveSource, ZoneCommand};
 use super::context::*;
+use super::helpers::DecodeState;
 use super::helpers::*;
 use crate::audio;
 use crate::snapcast;
@@ -252,8 +253,8 @@ async fn run(
                         source = ActiveSource::Idle;
                         update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Stopped; z.source = SourceType::Idle; z.track = None; }).await;
                     }
-                    ZoneCommand::Next => { handle_next(&mut source, config, &subsonic, store, zone_index, &mut current_decode, &mut decode_rx, notify).await; }
-                    ZoneCommand::Previous => { handle_previous(&mut source, config, &subsonic, store, zone_index, &mut current_decode, &mut decode_rx, notify).await; }
+                    ZoneCommand::Next => { handle_next(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, config, &subsonic, store, zone_index, notify).await; }
+                    ZoneCommand::Previous => { handle_previous(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, config, &subsonic, store, zone_index, notify).await; }
                     ZoneCommand::NextPlaylist | ZoneCommand::PreviousPlaylist | ZoneCommand::SetPlaylist(_) => {
                         tracing::warn!(zone = zone_index, "Playlist navigation not yet implemented");
                     }
@@ -300,7 +301,7 @@ async fn run(
                     None => {
                         current_decode = None;
                         decode_rx = None;
-                        handle_track_complete(&mut source, config, &subsonic, store, zone_index, &mut current_decode, &mut decode_rx, notify).await;
+                        handle_track_complete(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, config, &subsonic, store, zone_index, notify).await;
                     }
                 }
             }
