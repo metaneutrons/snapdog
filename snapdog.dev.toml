@@ -34,6 +34,12 @@ username = ""
 password = ""
 base_topic = "snapdog/"
 
+[mqtt]
+broker = "localhost:1883"
+username = ""
+password = ""
+base_topic = "snapdog/"
+
 [knx]
 enabled = true
 connection = "tunnel"
