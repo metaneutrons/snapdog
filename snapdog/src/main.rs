@@ -1,23 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2025 Fabian Schmieder
 
-pub mod airplay;
-pub mod api;
-pub mod audio;
-pub mod config;
-pub mod knx;
-pub mod mqtt;
-pub mod player;
-mod process;
-pub mod snapcast;
-pub mod state;
-pub mod subsonic;
-
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::Result;
 use tracing_subscriber::EnvFilter;
+
+use snapdog::*;
 
 #[tokio::main]
 async fn main() -> Result<()> {
