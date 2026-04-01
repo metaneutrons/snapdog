@@ -87,7 +87,27 @@ async fn main() -> Result<()> {
 
     // Zones start idle — user controls playback via API/MQTT/KNX
 
-    // Main loop: process Snapcast commands + wait for shutdown
+    // Start MQTT bridge (if configured)
+    let mut mqtt_bridge = if let Some(mqtt_config) = &config.mqtt {
+        match mqtt::MqttBridge::connect(mqtt_config).await {
+            Ok(bridge) => {
+                if let Err(e) = bridge.subscribe_commands().await {
+                    tracing::warn!(error = %e, "MQTT subscribe failed");
+                }
+                Some(bridge)
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "MQTT connection failed — running without MQTT");
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    // Main loop: process Snapcast commands, MQTT events, + wait for shutdown
+    let mqtt_zone_cmds = zone_commands.clone();
+    let mqtt_store = store.clone();
     loop {
         tokio::select! {
             Some(cmd) = snap_cmd_rx.recv() => {
@@ -111,6 +131,14 @@ async fn main() -> Result<()> {
                 tracing::info!("Shutting down");
                 break;
             }
+            // MQTT event polling
+            _ = async {
+                if let Some(ref mut bridge) = mqtt_bridge {
+                    bridge.poll_once(&mqtt_zone_cmds, &mqtt_store).await;
+                } else {
+                    std::future::pending::<()>().await;
+                }
+            } => {}
         }
     }
 
