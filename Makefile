@@ -1,4 +1,4 @@
-.PHONY: setup check fmt clippy test dev
+.PHONY: setup check fmt clippy test dev build-webui build-all
 
 ## First-time setup: configure git hooks
 setup:
@@ -16,6 +16,14 @@ clippy:
 
 test:
 	cargo test
+
+## Build WebUI (Next.js static export)
+build-webui:
+	cd webui && npm ci && npm run build
+
+## Build everything: WebUI then Rust binary
+build-all: build-webui
+	cargo build --release
 
 ## Start dev environment
 dev:

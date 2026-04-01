@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useState, Component, type ReactNode } from "react";
 import { useAppStore, type ZoneState } from "@/stores/useAppStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { api, zones } from "@/lib/api";
 import type { WsNotification } from "@/lib/types";
+import { Skeleton } from "@/components/ui/skeleton";
 import { NowPlaying } from "@/components/NowPlaying";
 import { TransportControls } from "@/components/TransportControls";
 import { VolumeSlider } from "@/components/VolumeSlider";
@@ -14,6 +15,32 @@ import { RadioStations } from "@/components/RadioStations";
 import { PlaylistBrowser } from "@/components/PlaylistBrowser";
 import { ClientList } from "@/components/ClientList";
 import { ConnectionStatus } from "@/components/ConnectionStatus";
+
+// ── Error Boundary ────────────────────────────────────────────
+
+class ZoneErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="flex flex-1 items-center justify-center p-6 text-center">
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-destructive">Something went wrong</p>
+            <p className="text-xs text-muted-foreground">{this.state.error.message}</p>
+            <button
+              onClick={() => this.setState({ error: null })}
+              className="text-xs text-primary hover:underline"
+            >
+              Try again
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ── Zone Rail Item (tablet/desktop sidebar) ───────────────────
 
@@ -149,11 +176,31 @@ export default function Home() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-1 items-center justify-center">
-        <div className="text-center space-y-3">
-          <div className="size-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-sm text-muted-foreground">Loading zones…</p>
-        </div>
+      <div className="flex flex-1 h-full">
+        {/* Skeleton sidebar */}
+        <aside className="hidden md:flex flex-col border-r border-border bg-card md:w-60 xl:w-70 shrink-0">
+          <div className="px-4 py-4 border-b border-border">
+            <Skeleton className="h-5 w-24" />
+          </div>
+          <div className="p-2 space-y-2">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex items-center gap-3 px-3 py-3">
+                <Skeleton className="size-10 rounded-md" />
+                <div className="flex-1 space-y-1.5">
+                  <Skeleton className="h-3.5 w-24" />
+                  <Skeleton className="h-3 w-32" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </aside>
+        {/* Skeleton main */}
+        <main className="flex flex-1 flex-col items-center justify-center gap-5 p-6">
+          <Skeleton className="w-full max-w-xs aspect-square rounded-2xl" />
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="h-4 w-28" />
+          <Skeleton className="h-10 w-48 rounded-full" />
+        </main>
       </div>
     );
   }
@@ -205,7 +252,11 @@ export default function Home() {
         </div>
 
         {/* Zone detail */}
-        {currentZone && <ZoneDetail zone={currentZone} sendCommand={sendCommand} />}
+        {currentZone && (
+          <ZoneErrorBoundary>
+            <ZoneDetail zone={currentZone} sendCommand={sendCommand} />
+          </ZoneErrorBoundary>
+        )}
       </main>
     </div>
   );
