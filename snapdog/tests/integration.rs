@@ -3,6 +3,9 @@
 
 //! Integration tests — uses real snapserver (must be installed locally).
 
+// Run integration tests sequentially — each starts its own snapserver
+// and streams real audio from the internet.
+// Use: cargo test --test integration -- --test-threads=1
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -176,7 +179,7 @@ async fn play_radio_with_real_snapserver() {
     let (mut snapserver, store, cmds, _) = start_system(config).await;
 
     cmds[&1].send(ZoneCommand::PlayRadio(0)).await.unwrap();
-    tokio::time::sleep(Duration::from_secs(3)).await;
+    tokio::time::sleep(Duration::from_secs(5)).await;
 
     let s = store.read().await;
     let zone = s.zones.get(&1).unwrap();
@@ -479,7 +482,7 @@ async fn api_play_radio_and_check_state() {
         .await
         .unwrap();
     assert!(resp.status().is_success() || resp.status() == 204);
-    tokio::time::sleep(Duration::from_secs(3)).await;
+    tokio::time::sleep(Duration::from_secs(5)).await;
 
     // Check playback state
     let playback: String = reqwest::get(format!("{base}/api/v1/zones/1/playback"))

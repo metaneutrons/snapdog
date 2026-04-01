@@ -145,24 +145,32 @@ impl MqttBridge {
         state: state::SharedState,
     ) -> Result<()> {
         loop {
-            match self.eventloop.poll().await {
-                Ok(Event::Incoming(Packet::Publish(msg))) => {
-                    let topic = msg.topic.clone();
-                    let payload = String::from_utf8_lossy(&msg.payload).to_string();
-                    tracing::debug!(topic = %topic, payload = %payload, "MQTT message received");
+            self.poll_once(&zone_commands, &state).await;
+        }
+    }
 
-                    if let Err(e) = self
-                        .handle_command(&topic, &payload, &zone_commands, &state)
-                        .await
-                    {
-                        tracing::warn!(error = %e, topic = %topic, "Failed to handle MQTT command");
-                    }
+    /// Poll for a single MQTT event. Returns when one event is processed.
+    pub async fn poll_once(
+        &mut self,
+        zone_commands: &HashMap<usize, ZoneCommandSender>,
+        state: &state::SharedState,
+    ) {
+        match self.eventloop.poll().await {
+            Ok(Event::Incoming(Packet::Publish(msg))) => {
+                let topic = msg.topic.clone();
+                let payload = String::from_utf8_lossy(&msg.payload).to_string();
+                tracing::debug!(topic = %topic, payload = %payload, "MQTT message received");
+                if let Err(e) = self
+                    .handle_command(&topic, &payload, zone_commands, state)
+                    .await
+                {
+                    tracing::warn!(error = %e, topic = %topic, "Failed to handle MQTT command");
                 }
-                Ok(_) => {}
-                Err(e) => {
-                    tracing::warn!(error = %e, "MQTT connection error, retrying");
-                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-                }
+            }
+            Ok(_) => {}
+            Err(e) => {
+                tracing::warn!(error = %e, "MQTT connection error, retrying");
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
             }
         }
     }
