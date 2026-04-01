@@ -280,7 +280,7 @@ async fn icy_metadata_updates_title() {
 
     // DLF sends ICY metadata within a few seconds
     let mut got_icy = false;
-    for _ in 0..20 {
+    for _ in 0..30 {
         tokio::time::sleep(Duration::from_millis(500)).await;
         let s = store.read().await;
         if let Some(t) = s

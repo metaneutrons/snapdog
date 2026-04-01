@@ -141,12 +141,7 @@ async fn run(
                                 z.playback = PlaybackState::Playing;
                                 z.source = SourceType::Radio;
                                 z.radio_index = Some(idx);
-                                z.track = Some(TrackInfo {
-                                    title: radio.name.clone(), artist: "Radio".into(), album: String::new(),
-                                    album_artist: None, genre: None, year: None, track_number: None, disc_number: None,
-                                    duration_ms: 0, position_ms: 0, source: SourceType::Radio,
-                                    bitrate_kbps: None, content_type: None, sample_rate: None,
-                                });
+                                z.track = Some(radio_track_info(&radio.name));
                             }).await;
                             tracing::info!(zone = zone_index, radio = %radio.name, "Playing radio");
                             if let Some(cover_url) = &radio.cover {
