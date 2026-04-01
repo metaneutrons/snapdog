@@ -5,6 +5,7 @@
 
 mod health;
 mod routes;
+mod webui;
 pub mod ws;
 
 use std::collections::HashMap;
@@ -52,7 +53,8 @@ pub async fn serve(
         .nest("/api/v1/zones", routes::zones::router(state.clone()))
         .nest("/api/v1/clients", routes::clients::router(state.clone()))
         .nest("/api/v1/media", routes::media::router(state.clone()))
-        .nest("/api/v1/system", routes::system::router(state.clone()));
+        .nest("/api/v1/system", routes::system::router(state.clone()))
+        .fallback(webui::fallback);
 
     let listener = TcpListener::bind(format!("0.0.0.0:{port}")).await?;
     tracing::info!(port, "API server listening");

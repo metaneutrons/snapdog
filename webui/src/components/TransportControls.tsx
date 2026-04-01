@@ -8,6 +8,7 @@ import {
   NextIcon,
   PreviousIcon,
 } from "@hugeicons/core-free-icons";
+import { motion } from "framer-motion";
 import type { ZoneState } from "@/stores/useAppStore";
 import { Button } from "@/components/ui/button";
 
@@ -29,48 +30,56 @@ export function TransportControls({ zone, sendCommand }: TransportControlsProps)
   return (
     <div className="flex items-center justify-center gap-2">
       {/* Previous */}
-      <Button
-        variant="ghost"
-        size="icon"
-        disabled={isIdle || isAirPlay || isUrl || !hasNavigation}
-        onClick={() => cmd("previous")}
-        className="size-10 rounded-full"
-      >
-        <HugeiconsIcon icon={PreviousIcon} size={20} />
-      </Button>
+      <motion.div whileTap={{ scale: 0.9 }}>
+        <Button
+          variant="ghost"
+          size="icon"
+          disabled={isIdle || isAirPlay || isUrl || !hasNavigation}
+          onClick={() => cmd("previous")}
+          className="size-10 rounded-full"
+        >
+          <HugeiconsIcon icon={PreviousIcon} size={20} />
+        </Button>
+      </motion.div>
 
       {/* Play / Pause */}
-      <Button
-        variant="default"
-        size="icon"
-        disabled={isIdle || isAirPlay}
-        onClick={() => cmd(isPlaying ? "pause" : "play")}
-        className="size-12 rounded-full"
-      >
-        <HugeiconsIcon icon={isPlaying ? PauseIcon : PlayIcon} size={24} />
-      </Button>
+      <motion.div whileTap={{ scale: 0.9 }}>
+        <Button
+          variant="default"
+          size="icon"
+          disabled={isIdle || isAirPlay}
+          onClick={() => cmd(isPlaying ? "pause" : "play")}
+          className="size-12 rounded-full"
+        >
+          <HugeiconsIcon icon={isPlaying ? PauseIcon : PlayIcon} size={24} />
+        </Button>
+      </motion.div>
 
       {/* Stop */}
-      <Button
-        variant="ghost"
-        size="icon"
-        disabled={isIdle || isAirPlay}
-        onClick={() => cmd("stop")}
-        className="size-10 rounded-full"
-      >
-        <HugeiconsIcon icon={StopIcon} size={20} />
-      </Button>
+      <motion.div whileTap={{ scale: 0.9 }}>
+        <Button
+          variant="ghost"
+          size="icon"
+          disabled={isIdle || isAirPlay}
+          onClick={() => cmd("stop")}
+          className="size-10 rounded-full"
+        >
+          <HugeiconsIcon icon={StopIcon} size={20} />
+        </Button>
+      </motion.div>
 
       {/* Next */}
-      <Button
-        variant="ghost"
-        size="icon"
-        disabled={isIdle || isAirPlay || isUrl || !hasNavigation}
-        onClick={() => cmd("next")}
-        className="size-10 rounded-full"
-      >
-        <HugeiconsIcon icon={NextIcon} size={20} />
-      </Button>
+      <motion.div whileTap={{ scale: 0.9 }}>
+        <Button
+          variant="ghost"
+          size="icon"
+          disabled={isIdle || isAirPlay || isUrl || !hasNavigation}
+          onClick={() => cmd("next")}
+          className="size-10 rounded-full"
+        >
+          <HugeiconsIcon icon={NextIcon} size={20} />
+        </Button>
+      </motion.div>
     </div>
   );
 }
