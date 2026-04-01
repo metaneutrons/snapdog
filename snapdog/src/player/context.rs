@@ -34,28 +34,18 @@ pub struct ZonePlayerContext {
 /// Commands sent to the Snapcast manager task (runs on main thread because
 /// SnapcastConnection is !Send).
 #[derive(Debug)]
-#[allow(clippy::enum_variant_names)]
-pub enum SnapcastCmd {
-    SetGroupStream {
-        group_id: String,
-        stream_id: String,
-    },
-    SetGroupClients {
-        group_id: String,
-        client_ids: Vec<String>,
-    },
-    SetGroupName {
-        group_id: String,
-        name: String,
-    },
-    SetGroupVolume {
-        group_id: String,
-        percent: i32,
-    },
-    SetGroupMute {
-        group_id: String,
-        muted: bool,
-    },
+pub struct SnapcastCmd {
+    pub group_id: String,
+    pub action: SnapcastAction,
+}
+
+#[derive(Debug)]
+pub enum SnapcastAction {
+    Stream(String),
+    Clients(Vec<String>),
+    Name(String),
+    Volume(i32),
+    Mute(bool),
 }
 
 /// Stop the current decode task and clear the PCM receiver.
@@ -128,23 +118,23 @@ pub async fn setup_zone_group(zone_index: usize, ctx: &ZonePlayerContext) -> Opt
 
     let _ = ctx
         .snap_tx
-        .send(SnapcastCmd::SetGroupStream {
+        .send(SnapcastCmd {
             group_id: gid.clone(),
-            stream_id: zone_config.stream_name.clone(),
+            action: SnapcastAction::Stream(zone_config.stream_name.clone()),
         })
         .await;
     let _ = ctx
         .snap_tx
-        .send(SnapcastCmd::SetGroupClients {
+        .send(SnapcastCmd {
             group_id: gid.clone(),
-            client_ids: snap_client_ids.clone(),
+            action: SnapcastAction::Clients(snap_client_ids.clone()),
         })
         .await;
     let _ = ctx
         .snap_tx
-        .send(SnapcastCmd::SetGroupName {
+        .send(SnapcastCmd {
             group_id: gid.clone(),
-            name: zone_config.name.clone(),
+            action: SnapcastAction::Name(zone_config.name.clone()),
         })
         .await;
 

@@ -128,9 +128,10 @@ async fn set_mute(
     Path(idx): Path<usize>,
     Json(v): Json<bool>,
 ) -> impl IntoResponse {
-    let mut store = state.store.write().await;
-    let client = store.clients.get_mut(&idx).ok_or(not_found())?;
-    client.muted = v;
+    crate::state::update_client_and_notify(&state.store, idx, &state.notifications, |c| {
+        c.muted = v
+    })
+    .await;
     Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
 }
 
@@ -138,10 +139,12 @@ async fn toggle_mute(
     State(state): State<SharedState>,
     Path(idx): Path<usize>,
 ) -> impl IntoResponse {
-    let mut store = state.store.write().await;
-    let client = store.clients.get_mut(&idx).ok_or(not_found())?;
-    client.muted = !client.muted;
-    Ok::<_, StatusCode>(Json(client.muted))
+    let muted = read_client(&state, idx).await.is_some_and(|c| !c.muted);
+    crate::state::update_client_and_notify(&state.store, idx, &state.notifications, |c| {
+        c.muted = muted
+    })
+    .await;
+    Ok::<_, StatusCode>(Json(muted))
 }
 
 async fn get_latency(
@@ -159,9 +162,10 @@ async fn set_latency(
     Path(idx): Path<usize>,
     Json(v): Json<i32>,
 ) -> impl IntoResponse {
-    let mut store = state.store.write().await;
-    let client = store.clients.get_mut(&idx).ok_or(not_found())?;
-    client.latency_ms = v;
+    crate::state::update_client_and_notify(&state.store, idx, &state.notifications, |c| {
+        c.latency_ms = v
+    })
+    .await;
     Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
 }
 
@@ -177,9 +181,10 @@ async fn set_zone(
     Path(idx): Path<usize>,
     Json(v): Json<usize>,
 ) -> impl IntoResponse {
-    let mut store = state.store.write().await;
-    let client = store.clients.get_mut(&idx).ok_or(not_found())?;
-    client.zone_index = v;
+    crate::state::update_client_and_notify(&state.store, idx, &state.notifications, |c| {
+        c.zone_index = v
+    })
+    .await;
     tracing::info!(client = idx, zone = v, "Client zone changed");
     Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
 }
@@ -196,9 +201,8 @@ async fn set_name(
     Path(idx): Path<usize>,
     Json(v): Json<String>,
 ) -> impl IntoResponse {
-    let mut store = state.store.write().await;
-    let client = store.clients.get_mut(&idx).ok_or(not_found())?;
-    client.name = v;
+    crate::state::update_client_and_notify(&state.store, idx, &state.notifications, |c| c.name = v)
+        .await;
     Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
 }
 
