@@ -143,3 +143,5 @@ cargo clippy -- -D warnings    # Lint (deny all warnings)
 cargo fmt -- --check           # Format check
 docker compose -f docker-compose.dev.yml up  # Start test rig
 ```
+
+**IMPORTANT: Never push to remote without explicit user approval.** Commits are local only until the user says "push".
