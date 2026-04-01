@@ -34,7 +34,7 @@ pub struct RawConfig {
     pub radio: Vec<RawRadioConfig>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct SystemConfig {
     #[serde(default = "default_log_level")]
     pub log_level: String,
@@ -73,7 +73,7 @@ impl Default for AudioConfig {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct HttpConfig {
     #[serde(default = "default_http_port")]
     pub port: u16,
@@ -87,7 +87,7 @@ impl Default for HttpConfig {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct SnapcastConfig {
     #[serde(default = "default_snapcast_address")]
     pub address: String,
@@ -110,7 +110,7 @@ impl Default for SnapcastConfig {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct AirplayConfig {
     #[serde(default = "default_airplay_name")]
     pub name: String,
@@ -126,14 +126,14 @@ impl Default for AirplayConfig {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct SubsonicConfig {
     pub url: String,
     pub username: String,
     pub password: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct MqttConfig {
     pub broker: String,
     #[serde(default)]
@@ -144,7 +144,7 @@ pub struct MqttConfig {
     pub base_topic: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct KnxConfig {
     #[serde(default)]
     pub enabled: bool,
@@ -234,7 +234,7 @@ pub struct RawRadioConfig {
 // ── Resolved config (fully populated, no Option) ──────────────
 
 /// Fully resolved application configuration. All conventions applied.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AppConfig {
     pub system: SystemConfig,
     pub audio: AudioConfig,
@@ -249,7 +249,7 @@ pub struct AppConfig {
     pub radios: Vec<RadioConfig>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ZoneConfig {
     pub index: usize,
     pub name: String,
@@ -261,7 +261,7 @@ pub struct ZoneConfig {
     pub knx: ZoneKnxAddresses,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ZoneKnxAddresses {
     pub play: String,
     pub pause: String,
@@ -282,7 +282,7 @@ pub struct ZoneKnxAddresses {
     pub repeat_status: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ClientConfig {
     pub index: usize,
     pub name: String,
@@ -292,7 +292,7 @@ pub struct ClientConfig {
     pub knx: ClientKnxAddresses,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ClientKnxAddresses {
     pub volume: String,
     pub volume_status: String,
@@ -305,7 +305,7 @@ pub struct ClientKnxAddresses {
     pub connected_status: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RadioConfig {
     pub name: String,
     pub url: String,
