@@ -57,6 +57,7 @@ async fn run(
     let covers = &ctx.covers;
     let notify = &ctx.notify;
     let zone_config = &config.zones[zone_index - 1];
+    let audio_config = config.audio.clone(); // Cloned once, moved into decode tasks
 
     // Connect TCP to Snapcast source
     let mut tcp = snapcast::open_audio_source(zone_config.tcp_source_port).await?;
@@ -130,7 +131,7 @@ async fn run(
                                 }
                             });
                             let url = radio.url.clone();
-                            let ac = config.audio.clone();
+                            let ac = audio_config.clone();
                             current_decode = Some(tokio::spawn(async move {
                                 if let Err(e) = audio::decode_http_stream(url, tx, ac, Some(icy_tx)).await {
                                     tracing::error!(error = %e, "Radio decode failed");
@@ -183,7 +184,7 @@ async fn run(
                             let url = sub.stream_url(&track_id);
                             let (tx, rx) = audio::pcm_channel(64);
                             decode_rx = Some(rx);
-                            let ac = config.audio.clone();
+                            let ac = audio_config.clone();
                             current_decode = Some(tokio::spawn(async move {
                                 if let Err(e) = audio::decode_http_stream(url, tx, ac, None).await {
                                     tracing::error!(error = %e, "Subsonic track decode failed");
@@ -197,7 +198,7 @@ async fn run(
                         stop_decode(&mut current_decode, &mut decode_rx).await;
                         let (tx, rx) = audio::pcm_channel(64);
                         decode_rx = Some(rx);
-                        let ac = config.audio.clone();
+                        let ac = audio_config.clone();
                         let u = url.clone();
                         current_decode = Some(tokio::spawn(async move {
                             if let Err(e) = audio::decode_http_stream(u, tx, ac, None).await { tracing::error!(error = %e, "URL decode failed"); }
@@ -230,7 +231,7 @@ async fn run(
                                 let (tx, rx) = audio::pcm_channel(64);
                                 decode_rx = Some(rx);
                                 let url = radio.url.clone();
-                                let ac = config.audio.clone();
+                                let ac = audio_config.clone();
                                 current_decode = Some(tokio::spawn(async move {
                                     if let Err(e) = audio::decode_http_stream(url, tx, ac, None).await { tracing::error!(error = %e, "Radio decode failed"); }
                                 }));
@@ -313,7 +314,7 @@ async fn run(
                                 let url = sub.stream_url_with_offset(&tid, offset_secs);
                                 let (tx, rx) = audio::pcm_channel(64);
                                 decode_rx = Some(rx);
-                                let ac = config.audio.clone();
+                                let ac = audio_config.clone();
                                 current_decode = Some(tokio::spawn(async move {
                                     if let Err(e) = audio::decode_http_stream(url, tx, ac, None).await {
                                         tracing::error!(error = %e, "Seek decode failed");
@@ -348,7 +349,7 @@ async fn run(
                                     let url = sub.stream_url_with_offset(&tid, (pos_ms / 1000).max(0) as u64);
                                     let (tx, rx) = audio::pcm_channel(64);
                                     decode_rx = Some(rx);
-                                    let ac = config.audio.clone();
+                                    let ac = audio_config.clone();
                                     current_decode = Some(tokio::spawn(async move {
                                         if let Err(e) = audio::decode_http_stream(url, tx, ac, None).await {
                                             tracing::error!(error = %e, "Seek decode failed");
