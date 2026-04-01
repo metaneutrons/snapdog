@@ -18,7 +18,7 @@ port = 5555
 address = "localhost"
 jsonrpc_port = 1780
 streaming_port = 1704
-managed = true                         # snapdog starts snapserver
+managed = false  # snapserver runs in Docker
 
 [airplay]
 name = "SnapDog-Dev"
