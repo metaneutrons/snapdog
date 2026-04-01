@@ -5,6 +5,15 @@ import { useAppStore, type ZoneState } from "@/stores/useAppStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { api, zones } from "@/lib/api";
 import type { WsNotification } from "@/lib/types";
+import { NowPlaying } from "@/components/NowPlaying";
+import { TransportControls } from "@/components/TransportControls";
+import { VolumeSlider } from "@/components/VolumeSlider";
+import { SeekBar } from "@/components/SeekBar";
+import { ShuffleRepeat } from "@/components/ShuffleRepeat";
+import { RadioStations } from "@/components/RadioStations";
+import { PlaylistBrowser } from "@/components/PlaylistBrowser";
+import { ClientList } from "@/components/ClientList";
+import { ConnectionStatus } from "@/components/ConnectionStatus";
 
 // ── Zone Rail Item (tablet/desktop sidebar) ───────────────────
 
@@ -54,19 +63,21 @@ function ZoneRailItem({ zone, selected, onSelect }: {
   );
 }
 
-// ── Zone Detail Placeholder (until NowPlaying is built) ───────
+// ── Zone Detail — composes all control components ─────────────
 
-function ZoneDetail({ zone }: { zone: ZoneState }) {
+function ZoneDetail({ zone, sendCommand }: { zone: ZoneState; sendCommand: (zone: number, action: string, value?: string | number | boolean) => void }) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6">
-      <span className="text-4xl">{zone.icon || "🔊"}</span>
-      <h2 className="text-xl font-semibold">{zone.name}</h2>
-      <p className="text-sm text-muted-foreground">
-        {zone.track && zone.source !== "idle"
-          ? `${zone.track.artist} — ${zone.track.title}`
-          : "No audio playing"}
-      </p>
-      <p className="text-xs text-muted-foreground capitalize">{zone.playback}</p>
+    <div className="flex flex-1 flex-col items-center overflow-y-auto">
+      <NowPlaying zone={zone} />
+      <div className="w-full max-w-xs space-y-4 px-6 pb-6">
+        <SeekBar zone={zone} />
+        <TransportControls zone={zone} sendCommand={sendCommand} />
+        <ShuffleRepeat zone={zone} />
+        <RadioStations zone={zone} />
+        <VolumeSlider zone={zone} sendCommand={sendCommand} />
+        <ClientList zone={zone} />
+        <PlaylistBrowser zone={zone} />
+      </div>
     </div>
   );
 }
@@ -128,7 +139,7 @@ export default function Home() {
     [updateZone, updateZoneTrack, updateZoneProgress, updateClient],
   );
 
-  const { isConnected: wsConnected } = useWebSocket(handleNotification);
+  const { isConnected: wsConnected, sendCommand } = useWebSocket(handleNotification);
 
   useEffect(() => { setConnected(wsConnected); }, [wsConnected, setConnected]);
   useEffect(() => { loadAll(); }, [loadAll]);
@@ -149,6 +160,7 @@ export default function Home() {
 
   return (
     <div className="flex flex-1 h-full">
+      <ConnectionStatus />
       {/* ── Sidebar / Rail (hidden on mobile) ──────────────── */}
       <aside className="hidden md:flex flex-col border-r border-border bg-card md:w-60 xl:w-70 shrink-0">
         <div className="px-4 py-4 border-b border-border flex items-center justify-between">
@@ -193,7 +205,7 @@ export default function Home() {
         </div>
 
         {/* Zone detail */}
-        {currentZone && <ZoneDetail zone={currentZone} />}
+        {currentZone && <ZoneDetail zone={currentZone} sendCommand={sendCommand} />}
       </main>
     </div>
   );
