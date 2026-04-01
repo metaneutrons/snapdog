@@ -11,8 +11,18 @@ env:
   RUSTFLAGS: "-D warnings"
 
 jobs:
-  check:
-    name: Check
+  fmt:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  clippy:
+    name: Clippy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,20 +30,73 @@ jobs:
           submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
+          components: clippy
       - uses: Swatinem/rust-cache@v2
-
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libavahi-compat-libdnssd-dev
+      - run: cargo clippy --all-targets -- -D warnings
 
-      - name: Format check
-        run: cargo fmt --all -- --check
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libavahi-compat-libdnssd-dev
+      - run: cargo test --lib
 
-      - name: Clippy
-        run: cargo clippy --all-targets -- -D warnings
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      mqtt:
+        image: eclipse-mosquitto:2.0
+        ports:
+          - 1883:1883
+        options: >-
+          --health-cmd "mosquitto_sub -t '$$SYS/#' -C 1 -W 3 || true"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+      navidrome:
+        image: deluan/navidrome:latest
+        ports:
+          - 4533:4533
+        env:
+          ND_SCANSCHEDULE: "0"
+          ND_LOGLEVEL: error
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libavahi-compat-libdnssd-dev snapserver
+      - name: Create test env
+        run: |
+          cat > .env.test << EOF
+          SNAPDOG_TEST_SUBSONIC_URL=http://localhost:4533
+          SNAPDOG_TEST_SUBSONIC_USERNAME=admin
+          SNAPDOG_TEST_SUBSONIC_PASSWORD=admin
+          SNAPDOG_TEST_MQTT_BROKER=localhost:1883
+          SNAPDOG_TEST_MQTT_USERNAME=
+          SNAPDOG_TEST_MQTT_PASSWORD=
+          EOF
+      - name: Run integration tests
+        run: cargo test --test integration -- --test-threads=1
 
-      - name: Build
-        run: cargo build --release
-
-      - name: Test
-        run: cargo test --all
+  audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
