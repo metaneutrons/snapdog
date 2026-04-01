@@ -60,7 +60,7 @@ export function TransportControls({ zone, sendCommand }: TransportControlsProps)
         <Button
           variant="ghost"
           size="icon"
-          disabled={isIdle || isAirPlay}
+          disabled={isIdle}
           onClick={() => cmd("stop")}
           className="size-10 rounded-full"
         >

@@ -35,7 +35,7 @@ export function ShuffleRepeat({ zone }: ShuffleRepeatProps) {
         variant="ghost"
         size="icon"
         onClick={() => api.zones.toggleTrackRepeat(zone.index).catch(() => {})}
-        className={`size-8 rounded-full ${zone.trackRepeat ? "text-primary" : "text-muted-foreground"}`}
+        className={`size-8 rounded-full ${zone.track_repeat ? "text-primary" : "text-muted-foreground"}`}
       >
         <HugeiconsIcon icon={RepeatOneIcon} size={16} />
       </Button>

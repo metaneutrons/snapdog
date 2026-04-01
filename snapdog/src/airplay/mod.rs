@@ -11,6 +11,16 @@ mod ffi;
 use std::ffi::CString;
 use std::sync::Arc;
 
+/// Detect the MAC address of the primary network interface.
+/// Falls back to a locally-administered address if detection fails.
+fn detect_hwaddr() -> [u8; 6] {
+    mac_address::get_mac_address()
+        .ok()
+        .flatten()
+        .map(|mac| mac.bytes())
+        .unwrap_or([0x02, 0x42, 0xAA, 0xBB, 0xCC, 0x00])
+}
+
 use anyhow::{Context, Result};
 use tokio::sync::mpsc;
 
@@ -60,6 +70,7 @@ impl AirplayReceiver {
     #[tracing::instrument(skip(pcm_tx, event_tx))]
     pub fn start(
         config: &AirplayConfig,
+        zone_index: usize,
         pcm_tx: PcmSender,
         event_tx: AirplayEventSender,
     ) -> Result<Self> {
@@ -99,8 +110,10 @@ impl AirplayReceiver {
         // SAFETY: FFI call to vendored C library (libshairplay). Pointers validated above.
         unsafe { ffi::raop_set_log_level(raop, 6) };
 
-        let hwaddr: [u8; 6] = [0x02, 0x42, 0xAA, 0xBB, 0xCC, 0xDD];
-        let mut port: u16 = find_free_port(5000); // Start at 5000, find first free
+        let mut hwaddr = detect_hwaddr();
+        // Make last byte unique per zone
+        hwaddr[5] = hwaddr[5].wrapping_add(zone_index as u8);
+        let mut port: u16 = find_free_port(7000 + zone_index as u16); // Unique start per zone, avoid common AirPlay ports
         let password = config
             .password
             .as_deref()

@@ -20,6 +20,9 @@ export interface ZoneInfo {
   muted: boolean;
   playback: PlaybackState;
   source: SourceType;
+  shuffle: boolean;
+  repeat: boolean;
+  track_repeat: boolean;
 }
 
 export interface TrackMetadata {
@@ -70,6 +73,7 @@ export interface PlaylistInfo {
   name: string;
   song_count: number;
   duration: number;
+  cover_art: string | null;
 }
 
 export interface TrackInfo {
@@ -110,6 +114,9 @@ export interface WsZoneStateChanged {
   volume: number;
   muted: boolean;
   source: SourceType;
+  shuffle: boolean;
+  repeat: boolean;
+  track_repeat: boolean;
 }
 
 export interface WsZoneTrackChanged {

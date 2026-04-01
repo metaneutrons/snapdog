@@ -46,6 +46,9 @@ struct ZoneInfo {
     muted: bool,
     playback: String,
     source: String,
+    shuffle: bool,
+    repeat: bool,
+    track_repeat: bool,
 }
 
 pub fn router(state: SharedState) -> Router {
@@ -97,6 +100,8 @@ pub fn router(state: SharedState) -> Router {
         )
         .route("/{zone_index}/play/track", post(play_track))
         .route("/{zone_index}/play/url", post(play_url))
+        .route("/{zone_index}/play/radio/{station_index}", post(play_radio))
+        .route("/{zone_index}/play/playlist", post(play_subsonic_playlist))
         .route(
             "/{zone_index}/play/playlist/{playlist_index}/track",
             post(play_playlist_track),
@@ -155,6 +160,9 @@ async fn get_all(State(state): State<SharedState>) -> Json<Vec<ZoneInfo>> {
                     muted: zs.is_some_and(|s| s.muted),
                     playback: zs.map_or("stopped".into(), |s| s.playback.to_string()),
                     source: zs.map_or("idle".into(), |s| s.source.to_string()),
+                    shuffle: zs.is_some_and(|s| s.shuffle),
+                    repeat: zs.is_some_and(|s| s.repeat),
+                    track_repeat: zs.is_some_and(|s| s.track_repeat),
                 }
             })
             .collect(),
@@ -173,6 +181,9 @@ async fn get_zone(State(state): State<SharedState>, Path(idx): Path<usize>) -> i
         muted: zs.is_some_and(|s| s.muted),
         playback: zs.map_or("stopped".into(), |s| s.playback.to_string()),
         source: zs.map_or("idle".into(), |s| s.source.to_string()),
+        shuffle: zs.is_some_and(|s| s.shuffle),
+        repeat: zs.is_some_and(|s| s.repeat),
+        track_repeat: zs.is_some_and(|s| s.track_repeat),
     }))
 }
 
@@ -484,6 +495,32 @@ async fn play_url(
     Json(v): Json<String>,
 ) -> impl IntoResponse {
     send_cmd(&state, idx, ZoneCommand::PlayUrl(v)).await
+}
+async fn play_radio(
+    State(state): State<SharedState>,
+    Path((idx, station)): Path<(usize, usize)>,
+) -> impl IntoResponse {
+    send_cmd(&state, idx, ZoneCommand::PlayRadio(station)).await
+}
+
+#[derive(Deserialize)]
+struct PlayPlaylistRequest {
+    id: String,
+    #[serde(default)]
+    track: usize,
+}
+
+async fn play_subsonic_playlist(
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
+    Json(v): Json<PlayPlaylistRequest>,
+) -> impl IntoResponse {
+    send_cmd(
+        &state,
+        idx,
+        ZoneCommand::PlaySubsonicPlaylist(v.id, v.track),
+    )
+    .await
 }
 async fn play_playlist_track(
     State(state): State<SharedState>,

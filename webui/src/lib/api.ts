@@ -100,6 +100,9 @@ export const zones = {
   // Play specific content
   playTrack: (id: number, track: number) => post(`${Z}/${id}/play/track`, track),
   playUrl: (id: number, url: string) => post(`${Z}/${id}/play/url`, url),
+  playRadio: (id: number, station: number) => post(`${Z}/${id}/play/radio/${station}`),
+  playPlaylist: (id: number, playlistId: string, track?: number) =>
+    post(`${Z}/${id}/play/playlist`, { id: playlistId, track: track ?? 0 }),
   playPlaylistTrack: (zoneId: number, playlistId: number, track: number) =>
     post(`${Z}/${zoneId}/play/playlist/${playlistId}/track`, track),
 

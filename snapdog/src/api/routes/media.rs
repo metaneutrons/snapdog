@@ -19,12 +19,14 @@ struct PlaylistInfo {
     name: String,
     song_count: u32,
     duration: u64,
+    cover_art: Option<String>,
 }
 
 pub fn router(state: SharedState) -> Router {
     Router::new()
         .route("/playlists", get(get_playlists))
         .route("/playlists/{playlist_index}", get(get_playlist))
+        .route("/playlists/{playlist_index}/cover", get(get_playlist_cover))
         .route(
             "/playlists/{playlist_index}/tracks",
             get(get_playlist_tracks),
@@ -56,6 +58,7 @@ async fn get_playlists(State(state): State<SharedState>) -> impl IntoResponse {
                     name: p.name,
                     song_count: p.song_count,
                     duration: p.duration,
+                    cover_art: p.cover_art,
                 })
                 .collect::<Vec<_>>(),
         )),
@@ -81,6 +84,29 @@ async fn get_playlist(
             tracing::error!(error = %e, "Failed to fetch playlist");
             Err(StatusCode::BAD_GATEWAY)
         }
+    }
+}
+
+async fn get_playlist_cover(
+    State(state): State<SharedState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let sub = subsonic(&state)?;
+    match sub.get_cover_art(&id).await {
+        Ok(bytes) => {
+            let mime = if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+                "image/jpeg"
+            } else if bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
+                "image/png"
+            } else {
+                "image/octet-stream"
+            };
+            Ok((
+                [(axum::http::header::CONTENT_TYPE, mime.to_string())],
+                bytes,
+            ))
+        }
+        Err(_) => Err(StatusCode::NOT_FOUND),
     }
 }
 

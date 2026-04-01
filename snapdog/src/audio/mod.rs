@@ -69,6 +69,26 @@ pub async fn decode_http_stream(
         tracing::info!(content_type = %content_type, "Stream connected");
     }
 
+    // MP4/M4A containers need seeking — buffer entire response first
+    let needs_seek = content_type.contains("mp4") || content_type.contains("m4a");
+    if needs_seek {
+        let bytes = response
+            .bytes()
+            .await
+            .context("Failed to read MP4 stream body")?;
+        tracing::debug!(
+            size = bytes.len(),
+            "Buffered MP4 stream for seekable decode"
+        );
+        let cursor = std::io::Cursor::new(bytes.to_vec());
+        tokio::task::spawn_blocking(move || {
+            decode_to_pcm(cursor, &content_type, tx, &audio_config)
+        })
+        .await
+        .context("Decoder task panicked")??;
+        return Ok(());
+    }
+
     // Collect the async byte stream into a sync reader via a pipe
     let (mut pipe_tx, pipe_rx) = tokio::io::duplex(64 * 1024);
 
@@ -124,7 +144,8 @@ fn decode_to_pcm(
 ) -> Result<()> {
     let mut hint = Hint::new();
     match content_type {
-        t if t.contains("aac") || t.contains("mp4") => hint.with_extension("aac"),
+        t if t.contains("mp4") || t.contains("m4a") => hint.with_extension("m4a"),
+        t if t.contains("aac") => hint.with_extension("aac"),
         t if t.contains("mpeg") || t.contains("mp3") => hint.with_extension("mp3"),
         t if t.contains("flac") => hint.with_extension("flac"),
         t if t.contains("ogg") => hint.with_extension("ogg"),

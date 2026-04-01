@@ -108,6 +108,15 @@ impl SubsonicClient {
         Ok(bytes.to_vec())
     }
 
+    /// Get cover art URL (for external fetching).
+    pub fn cover_art_url(&self, cover_id: &str) -> String {
+        let (token, salt) = self.auth_token();
+        format!(
+            "{}/rest/getCoverArt?id={}&u={}&t={}&s={}&v={}&c={}",
+            self.base_url, cover_id, self.username, token, salt, API_VERSION, CLIENT_NAME
+        )
+    }
+
     /// Make an authenticated GET request to the Subsonic API.
     async fn get<T: for<'de> Deserialize<'de>>(
         &self,
@@ -184,6 +193,7 @@ struct PlaylistsContainer {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PlaylistEntry {
     pub id: String,
     pub name: String,
@@ -195,6 +205,7 @@ pub struct PlaylistEntry {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Playlist {
     pub id: String,
     pub name: String,
@@ -203,6 +214,7 @@ pub struct Playlist {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Track {
     pub id: String,
     pub title: String,
