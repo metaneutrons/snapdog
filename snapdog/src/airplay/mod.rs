@@ -83,6 +83,7 @@ impl AirplayReceiver {
         };
 
         let mut error: i32 = 0;
+        // SAFETY: FFI call to vendored C library (libshairplay). Pointers validated above.
         let raop = unsafe {
             ffi::raop_init(
                 1,
@@ -95,6 +96,7 @@ impl AirplayReceiver {
             anyhow::bail!("raop_init failed with error {error}");
         }
 
+        // SAFETY: FFI call to vendored C library (libshairplay). Pointers validated above.
         unsafe { ffi::raop_set_log_level(raop, 6) };
 
         let hwaddr: [u8; 6] = [0x02, 0x42, 0xAA, 0xBB, 0xCC, 0xDD];
@@ -115,6 +117,7 @@ impl AirplayReceiver {
             )
         };
         if ret < 0 {
+            // SAFETY: FFI call to vendored C library (libshairplay). Pointers validated above.
             unsafe { ffi::raop_destroy(raop) };
             anyhow::bail!("raop_start failed with error {ret}");
         }
@@ -122,6 +125,7 @@ impl AirplayReceiver {
         let mut dnssd_error: i32 = 0;
         let dnssd = unsafe { ffi::dnssd_init(&mut dnssd_error) };
         if dnssd.is_null() {
+            // SAFETY: FFI call to vendored C library (libshairplay). Pointers validated above.
             unsafe {
                 ffi::raop_stop(raop);
                 ffi::raop_destroy(raop);
@@ -131,6 +135,7 @@ impl AirplayReceiver {
 
         let name_c = CString::new(config.name.as_str()).context("Invalid AirPlay name")?;
         let has_password = i32::from(config.password.is_some());
+        // SAFETY: FFI call to vendored C library (libshairplay). Pointers validated above.
         unsafe {
             ffi::dnssd_register_raop(
                 dnssd,
@@ -151,6 +156,7 @@ impl AirplayReceiver {
     }
 
     pub fn is_running(&self) -> bool {
+        // SAFETY: FFI call to vendored C library (libshairplay). Pointers validated above.
         unsafe { ffi::raop_is_running(self.raop) != 0 }
     }
 }
@@ -158,6 +164,7 @@ impl AirplayReceiver {
 impl Drop for AirplayReceiver {
     fn drop(&mut self) {
         tracing::info!("Stopping AirPlay receiver");
+        // SAFETY: FFI call to vendored C library (libshairplay). Pointers validated above.
         unsafe {
             ffi::dnssd_unregister_raop(self.dnssd);
             ffi::dnssd_destroy(self.dnssd);
@@ -188,7 +195,9 @@ unsafe extern "C" fn cb_audio_process(
     if cls.is_null() || buffer.is_null() || buflen <= 0 {
         return;
     }
+    // SAFETY: cls pointer set in AirplayReceiver::start, guaranteed valid for receiver lifetime.
     let data = unsafe { &*(cls as *const CallbackData) };
+    // SAFETY: buffer and buflen provided by libshairplay, validated non-null above.
     let pcm = unsafe { std::slice::from_raw_parts(buffer as *const u8, buflen as usize) };
     let _ = data.pcm_tx.try_send(pcm.to_vec());
 }
@@ -196,6 +205,7 @@ unsafe extern "C" fn cb_audio_process(
 unsafe extern "C" fn cb_audio_destroy(cls: *mut std::ffi::c_void, _session: *mut std::ffi::c_void) {
     tracing::info!("AirPlay audio session ended");
     if !cls.is_null() {
+        // SAFETY: cls pointer set in AirplayReceiver::start, guaranteed valid for receiver lifetime.
         let data = unsafe { &*(cls as *const CallbackData) };
         let _ = data.event_tx.try_send(AirplayEvent::SessionEnded);
     }
@@ -218,6 +228,7 @@ unsafe extern "C" fn cb_audio_set_volume(
     };
     tracing::info!(raw = volume, percent, "AirPlay volume");
     if !cls.is_null() {
+        // SAFETY: cls pointer set in AirplayReceiver::start, guaranteed valid for receiver lifetime.
         let data = unsafe { &*(cls as *const CallbackData) };
         let _ = data.event_tx.try_send(AirplayEvent::Volume { percent });
     }
@@ -232,7 +243,9 @@ unsafe extern "C" fn cb_audio_set_metadata(
     if cls.is_null() || buffer.is_null() || buflen <= 0 {
         return;
     }
+    // SAFETY: cls pointer set in AirplayReceiver::start, guaranteed valid for receiver lifetime.
     let data = unsafe { &*(cls as *const CallbackData) };
+    // SAFETY: buffer and buflen provided by libshairplay, validated non-null above.
     let bytes = unsafe { std::slice::from_raw_parts(buffer as *const u8, buflen as usize) };
 
     // DMAP metadata — parse key fields
@@ -254,7 +267,9 @@ unsafe extern "C" fn cb_audio_set_coverart(
     if cls.is_null() || buffer.is_null() || buflen <= 0 {
         return;
     }
+    // SAFETY: cls pointer set in AirplayReceiver::start, guaranteed valid for receiver lifetime.
     let data = unsafe { &*(cls as *const CallbackData) };
+    // SAFETY: buffer and buflen provided by libshairplay, validated non-null above.
     let bytes = unsafe { std::slice::from_raw_parts(buffer as *const u8, buflen as usize) };
     tracing::info!(size = bytes.len(), "AirPlay cover art received");
     let _ = data.event_tx.try_send(AirplayEvent::CoverArt {
@@ -272,6 +287,7 @@ unsafe extern "C" fn cb_audio_set_progress(
     if cls.is_null() {
         return;
     }
+    // SAFETY: cls pointer set in AirplayReceiver::start, guaranteed valid for receiver lifetime.
     let data = unsafe { &*(cls as *const CallbackData) };
     // RTP timestamps at 44100 Hz
     let position_ms = ((curr - start) as u64 * 1000) / 44100;
