@@ -56,7 +56,7 @@ pub fn subsonic_track_info(track: &crate::subsonic::Track) -> TrackInfo {
     }
 }
 
-fn radio_track_info(name: &str) -> TrackInfo {
+pub fn radio_track_info(name: &str) -> TrackInfo {
     TrackInfo {
         title: name.to_string(),
         artist: "Radio".into(),

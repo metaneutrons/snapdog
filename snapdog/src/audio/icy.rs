@@ -123,7 +123,10 @@ pub fn icy_client() -> reqwest::Client {
     reqwest::Client::builder()
         .default_headers({
             let mut h = reqwest::header::HeaderMap::new();
-            h.insert("Icy-MetaData", "1".parse().unwrap());
+            h.insert(
+                "Icy-MetaData",
+                reqwest::header::HeaderValue::from_static("1"),
+            );
             h
         })
         .build()
