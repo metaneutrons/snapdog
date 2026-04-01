@@ -43,7 +43,6 @@ pub enum ZoneCommand {
 
 /// What the ZonePlayer is currently doing.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum ActiveSource {
     Idle,
     Radio {
@@ -57,8 +56,6 @@ pub enum ActiveSource {
     SubsonicTrack {
         track_id: String,
     },
-    Url {
-        url: String,
-    },
+    Url,
     AirPlay,
 }

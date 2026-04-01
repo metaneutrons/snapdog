@@ -153,8 +153,7 @@ struct SubsonicResponse<T> {
 struct SubsonicInner<T> {
     status: String,
     #[serde(flatten)]
-    #[allow(dead_code)]
-    data: Option<T>,
+    _data: Option<T>,
     error: Option<SubsonicError>,
     // Re-expose specific fields for typed access
     #[serde(default)]

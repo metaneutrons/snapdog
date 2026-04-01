@@ -202,7 +202,7 @@ async fn run(
                         current_decode = Some(tokio::spawn(async move {
                             if let Err(e) = audio::decode_http_stream(u, tx, ac, None).await { tracing::error!(error = %e, "URL decode failed"); }
                         }));
-                        source = ActiveSource::Url { url };
+                        source = ActiveSource::Url;
                         update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Playing; z.source = SourceType::Url; }).await;
                     }
                     ZoneCommand::SetTrack(track_idx) => {
