@@ -79,7 +79,7 @@ cover = "data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fww
 [[radio]]
 name = "MDR Kultur"
 url = "http://avw.mdr.de/streams/284310-0_aac_high.m3u"
-cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Logo_MDR_KULTUR_2016.png/320px-Logo_MDR_KULTUR_2016.png"
+cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/MDR_Kultur_Logo.svg/1280px-MDR_Kultur_Logo.svg.png"
 
 [[radio]]
 name = "NDR Info"
