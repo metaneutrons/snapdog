@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Image from "next/image";
 import type { ZoneState } from "@/stores/useAppStore";
 import { zones } from "@/lib/api";
 
@@ -51,34 +50,29 @@ export function NowPlaying({ zone }: { zone: ZoneState }) {
 
   if (isIdle) {
     return (
-      <div className="relative w-full aspect-square md:aspect-auto md:h-full rounded-2xl md:rounded-xl overflow-hidden shadow-lg">
+      <div className="relative w-full aspect-square rounded-2xl md:rounded-xl overflow-hidden shadow-lg">
         {fallback}
       </div>
     );
   }
 
   return (
-    <div className="relative w-full aspect-square md:aspect-auto md:h-full rounded-2xl md:rounded-xl overflow-hidden bg-muted shadow-lg shrink-0">
+    <div className="relative w-full aspect-square rounded-2xl md:rounded-xl overflow-hidden bg-muted shadow-lg shrink-0">
       {coverError ? fallback : (
         <>
-          <Image
-            key={`bg-${coverKey}`}
+          <img
+            key={`bg-${coverKey}-${coverVersion}`}
             src={coverUrl}
             alt=""
-            fill
-            className="object-cover scale-110 blur-2xl opacity-40"
+            className="absolute inset-0 w-full h-full object-cover scale-110 blur-2xl opacity-40"
             onError={() => setCoverError(true)}
-            unoptimized
           />
-          <Image
-            key={`fg-${coverKey}`}
+          <img
+            key={`fg-${coverKey}-${coverVersion}`}
             src={coverUrl}
             alt={`${track.title} cover`}
-            fill
-            className="object-cover"
+            className="absolute inset-0 w-full h-full object-cover"
             onError={() => setCoverError(true)}
-            priority
-            unoptimized
           />
         </>
       )}
