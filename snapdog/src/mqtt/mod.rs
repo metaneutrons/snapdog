@@ -225,7 +225,7 @@ impl MqttBridge {
             ["zones", idx, "playlist", "set"] => {
                 let index: usize = idx.parse()?;
                 let playlist: usize = payload.parse()?;
-                send_zone_cmd(zone_commands, index, ZoneCommand::SetPlaylist(playlist)).await;
+                send_zone_cmd(zone_commands, index, ZoneCommand::SetPlaylist(playlist, 0)).await;
             }
             ["zones", idx, "track", "set"] => {
                 let index: usize = idx.parse()?;

@@ -22,7 +22,7 @@ pub enum ZoneCommand {
     // ── Playlist navigation ───────────────────────────────────
     NextPlaylist,
     PreviousPlaylist,
-    SetPlaylist(usize),
+    SetPlaylist(usize, usize), // playlist_index, start_track
 
     // ── Seek ──────────────────────────────────────────────────
     Seek(i64),         // absolute position in ms
