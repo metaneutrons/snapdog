@@ -88,7 +88,9 @@ async fn run(
             zone_index,
             airplay_pcm_tx,
             airplay_event_tx,
-        ) {
+        )
+        .await
+        {
             Ok(r) => {
                 tracing::info!(zone = zone_index, name = %ap_config.name, "AirPlay receiver active");
                 Some(r)
