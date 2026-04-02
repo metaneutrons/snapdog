@@ -36,7 +36,10 @@ pub fn router(state: SharedState) -> Router {
             "/playlists/{playlist_index}/tracks/{track_index}",
             get(get_playlist_track),
         )
-        .route("/cover/{cover_id}", get(get_cover_art))
+        .route(
+            "/playlists/{playlist_index}/tracks/{track_index}/cover",
+            get(get_track_cover_art),
+        )
         .with_state(state)
 }
 
@@ -275,15 +278,54 @@ async fn get_playlist_track(
     }
 }
 
-/// Proxy endpoint for Subsonic cover art by cover_art ID.
-/// GET /api/v1/media/cover/{cover_id}
-async fn get_cover_art(
+/// Cover art for a specific track in a playlist.
+/// GET /api/v1/media/playlists/{playlist_index}/tracks/{track_index}/cover
+///
+/// For radio (playlist 0): fetches the station's cover from config URL.
+/// For Subsonic (playlist 1+): fetches via Subsonic getCoverArt API.
+async fn get_track_cover_art(
     State(state): State<SharedState>,
-    Path(cover_id): Path<String>,
-) -> impl IntoResponse {
-    let sub = subsonic(&state)?;
-    match sub.get_cover_art(&cover_id).await {
-        Ok(bytes) => {
+    Path((index, track_index)): Path<(usize, usize)>,
+) -> Result<([(axum::http::header::HeaderName, String); 2], Vec<u8>), StatusCode> {
+    match resolve_playlist(&state, index).await? {
+        ResolvedPlaylist::Radio => {
+            // Fetch cover from config URL
+            let radio = state
+                .config
+                .radios
+                .get(track_index)
+                .ok_or(StatusCode::NOT_FOUND)?;
+            let cover_url = radio.cover.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+            let (bytes, mime) = crate::state::cover::fetch_cover(cover_url)
+                .await
+                .ok_or(StatusCode::BAD_GATEWAY)?;
+            Ok((
+                [
+                    (axum::http::header::CONTENT_TYPE, mime),
+                    (
+                        axum::http::header::CACHE_CONTROL,
+                        "public, max-age=86400".to_string(),
+                    ),
+                ],
+                bytes,
+            ))
+        }
+        ResolvedPlaylist::Subsonic(_) => {
+            let id = resolve_subsonic_id(&state, index).await?;
+            let sub = subsonic(&state)?;
+            let playlist = sub
+                .get_playlist(&id)
+                .await
+                .map_err(|_| StatusCode::BAD_GATEWAY)?;
+            let track = playlist
+                .entry
+                .get(track_index)
+                .ok_or(StatusCode::NOT_FOUND)?;
+            let cover_id = track.cover_art.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+            let bytes = sub
+                .get_cover_art(cover_id)
+                .await
+                .map_err(|_| StatusCode::BAD_GATEWAY)?;
             let mime = if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
                 "image/jpeg"
             } else if bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
@@ -292,10 +334,15 @@ async fn get_cover_art(
                 "image/octet-stream"
             };
             Ok((
-                [(axum::http::header::CONTENT_TYPE, mime.to_string())],
+                [
+                    (axum::http::header::CONTENT_TYPE, mime.to_string()),
+                    (
+                        axum::http::header::CACHE_CONTROL,
+                        "public, max-age=86400".to_string(),
+                    ),
+                ],
                 bytes,
             ))
         }
-        Err(_) => Err(StatusCode::NOT_FOUND),
     }
 }
