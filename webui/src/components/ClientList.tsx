@@ -81,7 +81,7 @@ function ClientCard({ client, zoneList }: { client: ClientInfo; zoneList: { inde
 }
 
 export function ClientList({ zone }: { zone: ZoneState }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const clients = useAppStore((s) => s.clients);
   const zones = useAppStore((s) => s.zones);
 
@@ -92,34 +92,20 @@ export function ClientList({ zone }: { zone: ZoneState }) {
 
   return (
     <div className="w-full">
-      {/* Mobile/tablet: collapsible */}
-      <div className="xl:hidden">
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="w-full flex items-center justify-between px-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <span>{zoneClients.length} client{zoneClients.length !== 1 ? "s" : ""}</span>
-          <HugeiconsIcon icon={ArrowDown01Icon} size={12} className={`transition-transform ${expanded ? "rotate-180" : ""}`} />
-        </button>
-        {expanded && (
-          <div className="space-y-1 border-t border-border pt-1">
-            {zoneClients.map((c) => (
-              <ClientCard key={c.index} client={c} zoneList={zoneList} />
-            ))}
-          </div>
-        )}
-      </div>
-      {/* Desktop: always visible */}
-      <div className="hidden xl:block">
-        <div className="text-xs text-muted-foreground px-3 py-1.5">
-          {zoneClients.length} client{zoneClients.length !== 1 ? "s" : ""}
-        </div>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between px-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <span>{zoneClients.length} client{zoneClients.length !== 1 ? "s" : ""}</span>
+        <HugeiconsIcon icon={ArrowDown01Icon} size={12} className={`transition-transform ${expanded ? "rotate-180" : ""}`} />
+      </button>
+      {expanded && (
         <div className="space-y-1 border-t border-border pt-1">
           {zoneClients.map((c) => (
             <ClientCard key={c.index} client={c} zoneList={zoneList} />
           ))}
         </div>
-      </div>
+      )}
     </div>
   );
 }
