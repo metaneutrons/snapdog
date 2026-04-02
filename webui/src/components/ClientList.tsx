@@ -100,9 +100,11 @@ export function ClientList({ zone }: { zone: ZoneState }) {
         <HugeiconsIcon icon={ArrowDown01Icon} size={12} className={`transition-transform ${expanded ? "rotate-180" : ""}`} />
       </button>
       {expanded && (
-        <div className="space-y-1 border-t border-border pt-1">
+        <div className="flex flex-wrap gap-1 border-t border-border pt-1">
           {zoneClients.map((c) => (
-            <ClientCard key={c.index} client={c} zoneList={zoneList} />
+            <div key={c.index} className="min-w-48 flex-1">
+              <ClientCard client={c} zoneList={zoneList} />
+            </div>
           ))}
         </div>
       )}
