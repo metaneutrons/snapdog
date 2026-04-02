@@ -152,21 +152,11 @@ function TrackInfo({ zone }: { zone: ZoneState }) {
   const track = zone.track;
   const isIdle = zone.source === "idle" || !track;
 
-  if (isIdle) {
-    return (
-      <div className="text-center md:text-left py-1">
-        <p className="text-sm text-muted-foreground">No audio playing</p>
-      </div>
-    );
-  }
-
   return (
     <div className="text-center md:text-left space-y-0.5 w-full">
-      <Marquee className="text-base font-bold leading-snug">{track.title || "Unknown"}</Marquee>
-      <Marquee className="text-sm text-muted-foreground">{track.artist || "Unknown Artist"}</Marquee>
-      {track.album && (
-        <Marquee className="text-xs text-muted-foreground/70">{track.album}</Marquee>
-      )}
+      <Marquee className="text-base font-bold leading-snug">{isIdle ? "\u00A0" : (track.title || "Unknown")}</Marquee>
+      <Marquee className="text-sm text-muted-foreground">{isIdle ? "No audio playing" : (track.artist || "Unknown Artist")}</Marquee>
+      <Marquee className="text-xs text-muted-foreground/70">{isIdle ? "\u00A0" : (track.album || "\u00A0")}</Marquee>
     </div>
   );
 }
