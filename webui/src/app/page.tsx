@@ -148,6 +148,29 @@ function ZoneDropTarget({ zoneIndex, children }: { zoneIndex: number; children: 
   );
 }
 
+function TrackInfo({ zone }: { zone: ZoneState }) {
+  const track = zone.track;
+  const isIdle = zone.source === "idle" || !track;
+
+  if (isIdle) {
+    return (
+      <div className="text-center xl:text-left py-1">
+        <p className="text-sm text-muted-foreground">No audio playing</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="text-center xl:text-left space-y-0.5 w-full">
+      <h3 className="text-base font-bold leading-snug">{track.title || "Unknown"}</h3>
+      <p className="text-sm text-muted-foreground truncate">{track.artist || "Unknown Artist"}</p>
+      {track.album && (
+        <p className="text-xs text-muted-foreground/70 truncate">{track.album}</p>
+      )}
+    </div>
+  );
+}
+
 function ZoneDetail({ zone, sendCommand }: { zone: ZoneState; sendCommand: (zone: number, action: string, value?: string | number | boolean) => void }) {
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
@@ -159,6 +182,7 @@ function ZoneDetail({ zone, sendCommand }: { zone: ZoneState; sendCommand: (zone
             <NowPlaying zone={zone} />
           </div>
           <div className="space-y-3 xl:flex-1 xl:min-w-0">
+            <TrackInfo zone={zone} />
             <SeekBar zone={zone} />
             <TransportControls zone={zone} sendCommand={sendCommand} />
             <ShuffleRepeat zone={zone} />
