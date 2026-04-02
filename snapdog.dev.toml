@@ -104,7 +104,7 @@ cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/NDR_2_Logo.sv
 [[radio]]
 name = "NDR Info Spez."
 url = "http://www.ndr.de/resources/metadaten/audio/m3u/ndrinfo_spezial.m3u"
-cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/NDR_Info_Logo_2019.svg/1280px-NDR_Info_Logo_2019.svg.png"
+cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/3/33/NDR_Info_Spezial_Logo_2019.svg/1280px-NDR_Info_Spezial_Logo_2019.svg.png"
 
 [[radio]]
 name = "Swiss Jazz"
@@ -112,6 +112,11 @@ url = "https://stream.srg-ssr.ch/rsj/aacp_96.m3u"
 cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ad/Radio_Swiss_Jazz_Logo_2018.svg/1280px-Radio_Swiss_Jazz_Logo_2018.svg.png"
 
 # International stations
+[[radio]]
+name = "Loli Radio"
+url = "http://stream.lolliradio.net/lolli_soft.mp3"
+cover = "https://www.lolliradio.net/wp-content/uploads/2022/01/lolliradio-logo2022x1024.png"
+
 [[radio]]
 name = "80s80s"
 url = "https://streams.80s80s.de/web/mp3-192"
