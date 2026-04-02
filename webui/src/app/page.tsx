@@ -174,7 +174,7 @@ function TrackInfo({ zone }: { zone: ZoneState }) {
 function ZoneDetail({ zone, sendCommand }: { zone: ZoneState; sendCommand: (zone: number, action: string, value?: string | number | boolean) => void }) {
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
-      <div className="w-full max-w-xs mx-auto md:max-w-[660px] space-y-3 px-4 py-4 md:px-5 md:py-4">
+      <div className="w-full max-w-xs mx-auto md:max-w-[600px] space-y-3 px-4 py-4 md:px-5 md:py-4">
         <ZoneHeader zone={zone} />
         {/* Tablet+Desktop: horizontal layout for cover + controls */}
         <div className="md:flex md:gap-5 md:items-stretch">
@@ -352,7 +352,7 @@ export default function Home() {
         <div className="hidden xl:flex xl:flex-wrap xl:gap-4 xl:p-4 xl:justify-center flex-1 overflow-y-auto">
           {zoneList.map((z) => (
             <ZoneErrorBoundary key={z.index}>
-              <div className="w-full" style={{ minWidth: '480px', maxWidth: '660px', flex: '1 1 480px' }}>
+              <div className="w-full" style={{ minWidth: '480px', maxWidth: '600px', flex: '1 1 480px' }}>
                 <ZoneDropTarget zoneIndex={z.index}>
                   <ZoneDetail zone={z} sendCommand={sendCommand} />
                 </ZoneDropTarget>
