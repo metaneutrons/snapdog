@@ -59,7 +59,6 @@ pub struct ZoneState {
     pub playlist_name: Option<String>,
     pub playlist_track_index: Option<usize>,
     pub playlist_track_count: Option<usize>,
-    pub radio_index: Option<usize>,
     pub source: SourceType,
     pub snapcast_group_id: Option<String>,
 }
@@ -167,7 +166,6 @@ impl Store {
                         playlist_name: None,
                         playlist_track_index: None,
                         playlist_track_count: None,
-                        radio_index: None,
                         source: SourceType::Idle,
                         snapcast_group_id: None,
                     },
@@ -337,7 +335,6 @@ mod tests {
                 playlist_name: None,
                 playlist_track_index: None,
                 playlist_track_count: None,
-                radio_index: None,
                 source: SourceType::Idle,
                 snapcast_group_id: None,
             },
