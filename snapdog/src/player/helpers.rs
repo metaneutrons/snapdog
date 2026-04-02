@@ -140,7 +140,6 @@ pub async fn handle_next(ds: &mut DecodeState<'_>, ctx: &PlaybackCtx<'_>) {
                 .await;
                 *ds.source = ActiveSource::Radio { index: next };
                 update_and_notify(ctx.store, ctx.zone_index, ctx.notify, |z| {
-                    z.radio_index = Some(next);
                     z.playlist_index = Some(0);
                     z.playlist_track_index = Some(next);
                     z.track = Some(radio_track_info(&radio.name));
@@ -216,7 +215,6 @@ pub async fn handle_previous(ds: &mut DecodeState<'_>, ctx: &PlaybackCtx<'_>) {
                 .await;
                 *ds.source = ActiveSource::Radio { index: prev };
                 update_and_notify(ctx.store, ctx.zone_index, ctx.notify, |z| {
-                    z.radio_index = Some(prev);
                     z.playlist_index = Some(0);
                     z.playlist_track_index = Some(prev);
                     z.track = Some(radio_track_info(&radio.name));

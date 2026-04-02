@@ -360,7 +360,6 @@ async fn get_track_metadata(
         "sample_rate": zone.track.as_ref().and_then(|t| t.sample_rate),
         "source": zone.source.to_string(),
         "cover": format!("/api/v1/zones/{idx}/cover"),
-        "radio_index": zone.radio_index,
         "playlist_track_index": zone.playlist_track_index,
         "playlist_track_count": zone.playlist_track_count,
     })))

@@ -186,7 +186,6 @@ async fn run(
                                     start_radio_decode(&radio.url, config, &mut current_decode, &mut decode_rx, store, zone_index, notify).await;
                                     source = ActiveSource::Radio { index: track_idx };
                                     update_and_notify(store, zone_index, notify, |z| {
-                                        z.radio_index = Some(track_idx);
                                         z.playlist_index = Some(0);
                                         z.playlist_track_index = Some(track_idx);
                                         z.track = Some(radio_track_info(&radio.name));
@@ -225,7 +224,11 @@ async fn run(
                                 if let Err(e) = dacp.play_pause().await { tracing::warn!(error = %e, "DACP play_pause failed"); }
                             } else { tracing::debug!("No DACP client available for AirPlay control"); }
                         } else if matches!(source, ActiveSource::Idle) {
-                            let radio_idx = store.read().await.zones.get(&zone_index).and_then(|z| z.radio_index).unwrap_or(0);
+                            let z_state = store.read().await;
+                            let radio_idx = z_state.zones.get(&zone_index).and_then(|z| {
+                                if z.playlist_index == Some(0) { z.playlist_track_index } else { None }
+                            }).unwrap_or(0);
+                            drop(z_state);
                             if let Some(radio) = config.radios.get(radio_idx) {
                                 stop_decode(&mut current_decode, &mut decode_rx).await;
                                 let (tx, rx) = audio::pcm_channel(64);
@@ -310,7 +313,6 @@ async fn run(
                                 update_and_notify(store, zone_index, notify, |z| {
                                     z.playback = PlaybackState::Playing;
                                     z.source = SourceType::Radio;
-                                    z.radio_index = Some(radio_idx);
                                     z.playlist_index = Some(0);
                                     z.playlist_name = Some("Radio".into());
                                     z.playlist_track_index = Some(radio_idx);
