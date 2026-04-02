@@ -177,7 +177,7 @@ function ZoneDetail({ zone, sendCommand }: { zone: ZoneState; sendCommand: (zone
       <div className="w-full max-w-xs mx-auto xl:max-w-none space-y-3 px-4 py-4 xl:px-5 xl:py-4">
         <ZoneHeader zone={zone} />
         {/* Desktop: horizontal layout for cover + controls */}
-        <div className="xl:flex xl:gap-5 xl:items-start">
+        <div className="xl:flex xl:gap-5 xl:items-stretch">
           <div className="xl:w-56 xl:shrink-0">
             <NowPlaying zone={zone} />
           </div>
@@ -350,7 +350,7 @@ export default function Home() {
         </div>
 
         {/* Desktop: all zones in responsive grid (xl+) */}
-        <div className="hidden xl:grid xl:gap-4 xl:p-4 flex-1 overflow-y-auto" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))' }}>
+        <div className="hidden xl:grid xl:gap-4 xl:p-4 flex-1 overflow-y-auto" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(520px, 1fr))' }}>
           {zoneList.map((z) => (
             <ZoneErrorBoundary key={z.index}>
               <ZoneDropTarget zoneIndex={z.index}>
