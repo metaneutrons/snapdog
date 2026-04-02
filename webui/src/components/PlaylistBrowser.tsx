@@ -13,7 +13,7 @@ interface PlaylistBrowserProps {
 
 export function PlaylistBrowser({ zone }: PlaylistBrowserProps) {
   const [playlists, setPlaylists] = useState<PlaylistInfo[]>([]);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
   const [tracks, setTracks] = useState<TrackInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -24,7 +24,7 @@ export function PlaylistBrowser({ zone }: PlaylistBrowserProps) {
       .finally(() => setLoading(false));
   }, []);
 
-  const togglePlaylist = async (id: string) => {
+  const togglePlaylist = async (id: number) => {
     if (expandedId === id) {
       setExpandedId(null);
       return;
@@ -37,7 +37,7 @@ export function PlaylistBrowser({ zone }: PlaylistBrowserProps) {
     }
   };
 
-  const playTrack = (playlistId: string, trackIndex: number) => {
+  const playTrack = (playlistId: number, trackIndex: number) => {
     api.zones.playPlaylist(zone.index, playlistId, trackIndex).catch(() => {});
   };
 
@@ -69,7 +69,7 @@ export function PlaylistBrowser({ zone }: PlaylistBrowserProps) {
               <div className="size-8 rounded bg-primary/10 flex items-center justify-center shrink-0 overflow-hidden">
                 {pl.cover_art ? (
                   <img
-                    src={`/api/v1/media/playlists/${pl.cover_art}/cover`}
+                    src={`/api/v1/media/playlists/${pl.id}/cover`}
                     alt=""
                     className="size-full object-cover"
                     onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}

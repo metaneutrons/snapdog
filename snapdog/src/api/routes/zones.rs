@@ -498,7 +498,7 @@ async fn play_url(
 
 #[derive(Deserialize)]
 struct PlayPlaylistRequest {
-    id: String,
+    id: usize,
     #[serde(default)]
     track: usize,
 }
@@ -508,21 +508,12 @@ async fn play_subsonic_playlist(
     Path(idx): Path<usize>,
     Json(v): Json<PlayPlaylistRequest>,
 ) -> impl IntoResponse {
-    if v.id == "radio" {
-        // Unified model: "radio" playlist → SetPlaylist(0) to start radio, then SetTrack if needed
-        let _ = send_cmd(&state, idx, ZoneCommand::SetPlaylist(0)).await;
-        if v.track > 0 {
-            let _ = send_cmd(&state, idx, ZoneCommand::SetTrack(v.track)).await;
-        }
-        Ok(())
-    } else {
-        send_cmd(
-            &state,
-            idx,
-            ZoneCommand::PlaySubsonicPlaylist(v.id, v.track),
-        )
-        .await
+    // Unified model: SetPlaylist selects the playlist, then SetTrack if needed
+    let _ = send_cmd(&state, idx, ZoneCommand::SetPlaylist(v.id)).await;
+    if v.track > 0 {
+        let _ = send_cmd(&state, idx, ZoneCommand::SetTrack(v.track)).await;
     }
+    Ok::<_, StatusCode>(())
 }
 async fn play_playlist_track(
     State(state): State<SharedState>,

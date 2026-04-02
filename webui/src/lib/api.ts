@@ -100,8 +100,8 @@ export const zones = {
   // Play specific content
   playTrack: (id: number, track: number) => post(`${Z}/${id}/play/track`, track),
   playUrl: (id: number, url: string) => post(`${Z}/${id}/play/url`, url),
-  playPlaylist: (id: number, playlistId: string, track?: number) =>
-    post(`${Z}/${id}/play/playlist`, { id: playlistId, track: track ?? 0 }),
+  playPlaylist: (id: number, playlistIndex: number, track?: number) =>
+    post(`${Z}/${id}/play/playlist`, { id: playlistIndex, track: track ?? 0 }),
   playPlaylistTrack: (zoneId: number, playlistId: number, track: number) =>
     post(`${Z}/${zoneId}/play/playlist/${playlistId}/track`, track),
 
@@ -157,9 +157,9 @@ const M = "/api/v1/media";
 
 export const media = {
   playlists: () => get<PlaylistInfo[]>(`${M}/playlists`),
-  playlist: (id: string) => get<{ id: string; name: string; tracks: number }>(`${M}/playlists/${id}`),
-  tracks: (playlistId: string) => get<TrackInfo[]>(`${M}/playlists/${playlistId}/tracks`),
-  track: (playlistId: string, idx: number) => get<TrackInfo>(`${M}/playlists/${playlistId}/tracks/${idx}`),
+  playlist: (id: number) => get<{ id: number; name: string; tracks: number }>(`${M}/playlists/${id}`),
+  tracks: (playlistId: number) => get<TrackInfo[]>(`${M}/playlists/${playlistId}/tracks`),
+  track: (playlistId: number, idx: number) => get<TrackInfo>(`${M}/playlists/${playlistId}/tracks/${idx}`),
 };
 
 // ── System ────────────────────────────────────────────────────
