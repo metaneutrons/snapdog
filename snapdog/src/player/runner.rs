@@ -179,7 +179,32 @@ async fn run(
                         update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Playing; z.source = SourceType::Url; }).await;
                     }
                     ZoneCommand::SetTrack(track_idx) => {
-                        if let ActiveSource::SubsonicPlaylist { ref playlist_id, track_count, .. } = source {
+                        if let ActiveSource::Radio { .. } = source {
+                            if track_idx < config.radios.len() {
+                                if let Some(radio) = config.radios.get(track_idx) {
+                                    stop_decode(&mut current_decode, &mut decode_rx).await;
+                                    start_radio_decode(&radio.url, config, &mut current_decode, &mut decode_rx, store, zone_index, notify).await;
+                                    source = ActiveSource::Radio { index: track_idx };
+                                    update_and_notify(store, zone_index, notify, |z| {
+                                        z.radio_index = Some(track_idx);
+                                        z.playlist_index = Some(0);
+                                        z.playlist_track_index = Some(track_idx);
+                                        z.track = Some(radio_track_info(&radio.name));
+                                    }).await;
+                                    tracing::info!(zone = zone_index, radio = %radio.name, "Set radio station");
+                                    if let Some(cover_url) = &radio.cover {
+                                        let covers = covers.clone();
+                                        let url = cover_url.clone();
+                                        let zi = zone_index;
+                                        tokio::spawn(async move {
+                                            if let Some((bytes, mime)) = state::cover::fetch_cover(&url).await {
+                                                covers.write().await.set(zi, bytes, mime);
+                                            }
+                                        });
+                                    }
+                                }
+                            }
+                        } else if let ActiveSource::SubsonicPlaylist { ref playlist_id, track_count, .. } = source {
                             if track_idx < track_count {
                                 let pid = playlist_id.clone();
                                 stop_decode(&mut current_decode, &mut decode_rx).await;
