@@ -602,6 +602,6 @@ async fn get_cover(State(state): State<SharedState>, Path(idx): Path<usize>) -> 
             [(axum::http::header::CONTENT_TYPE, entry.mime.clone())],
             entry.bytes.clone(),
         )),
-        None => Err(StatusCode::NO_CONTENT),
+        None => Err(StatusCode::NOT_FOUND),
     }
 }

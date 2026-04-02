@@ -147,6 +147,16 @@ pub async fn handle_next(ds: &mut DecodeState<'_>, ctx: &PlaybackCtx<'_>) {
                 })
                 .await;
                 tracing::info!(zone = ctx.zone_index, radio = %radio.name, "Next radio station");
+                if let Some(cover_url) = &radio.cover {
+                    let covers = ctx.covers.clone();
+                    let url = cover_url.clone();
+                    let zi = ctx.zone_index;
+                    tokio::spawn(async move {
+                        if let Some((bytes, mime)) = state::cover::fetch_cover(&url).await {
+                            covers.write().await.set(zi, bytes, mime);
+                        }
+                    });
+                }
             }
         }
         ActiveSource::SubsonicPlaylist {
@@ -211,6 +221,16 @@ pub async fn handle_previous(ds: &mut DecodeState<'_>, ctx: &PlaybackCtx<'_>) {
                 })
                 .await;
                 tracing::info!(zone = ctx.zone_index, radio = %radio.name, "Previous radio station");
+                if let Some(cover_url) = &radio.cover {
+                    let covers = ctx.covers.clone();
+                    let url = cover_url.clone();
+                    let zi = ctx.zone_index;
+                    tokio::spawn(async move {
+                        if let Some((bytes, mime)) = state::cover::fetch_cover(&url).await {
+                            covers.write().await.set(zi, bytes, mime);
+                        }
+                    });
+                }
             }
         }
         ActiveSource::SubsonicPlaylist {
