@@ -270,7 +270,7 @@ export default function Home() {
     return (
       <div className="flex flex-1 h-full">
         {/* Skeleton sidebar */}
-        <aside className="hidden md:flex flex-col border-r border-border bg-card md:w-60 xl:w-70 shrink-0">
+        <aside className="hidden md:flex xl:hidden flex-col border-r border-border bg-card md:w-60 shrink-0">
           <div className="px-4 py-4 border-b border-border">
             <Skeleton className="h-5 w-24" />
           </div>

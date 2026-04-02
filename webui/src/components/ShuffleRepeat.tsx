@@ -11,13 +11,14 @@ interface ShuffleRepeatProps {
 }
 
 export function ShuffleRepeat({ zone }: ShuffleRepeatProps) {
-  if (zone.source !== "subsonic_playlist") return null;
+  const enabled = zone.source === "subsonic_playlist";
 
   return (
     <div className="flex items-center justify-center gap-1">
       <Button
         variant="ghost"
         size="icon"
+        disabled={!enabled}
         onClick={() => api.zones.toggleShuffle(zone.index).catch(() => {})}
         className={`size-8 rounded-full ${zone.shuffle ? "text-primary" : "text-muted-foreground"}`}
       >
@@ -26,6 +27,7 @@ export function ShuffleRepeat({ zone }: ShuffleRepeatProps) {
       <Button
         variant="ghost"
         size="icon"
+        disabled={!enabled}
         onClick={() => api.zones.toggleRepeat(zone.index).catch(() => {})}
         className={`size-8 rounded-full ${zone.repeat ? "text-primary" : "text-muted-foreground"}`}
       >
@@ -34,6 +36,7 @@ export function ShuffleRepeat({ zone }: ShuffleRepeatProps) {
       <Button
         variant="ghost"
         size="icon"
+        disabled={!enabled}
         onClick={() => api.zones.toggleTrackRepeat(zone.index).catch(() => {})}
         className={`size-8 rounded-full ${zone.track_repeat ? "text-primary" : "text-muted-foreground"}`}
       >

@@ -60,7 +60,15 @@ export function SeekBar({ zone }: { zone: ZoneState }) {
     [zone.index, canSeek],
   );
 
-  if (isIdle) return null;
+  if (isIdle) return (
+    <div className="w-full max-w-xs space-y-1">
+      <Slider value={[0]} max={1} step={1} disabled className="w-full" />
+      <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
+        <span>--:--</span>
+        <span>--:--</span>
+      </div>
+    </div>
+  );
 
   return (
     <div className="w-full max-w-xs space-y-1">
