@@ -338,15 +338,8 @@ async fn resolve_playlist_url(url: &str) -> Option<String> {
             tracing::info!(playlist = url, resolved = %r, "Resolved HLS master playlist");
         }
         return resolved;
-    } else if body.contains("#EXTINF")
-        && !body.lines().any(|l| {
-            let l = l.trim();
-            !l.is_empty()
-                && !l.starts_with('#')
-                && (l.starts_with("http://") || l.starts_with("https://"))
-        })
-    {
-        // HLS media playlist (segments only, no full URLs) — can't handle without HLS client
+    } else if body.contains("#EXT-X-TARGETDURATION") || body.contains("#EXT-X-MEDIA-SEQUENCE") {
+        // HLS media playlist (segment list) — can't handle without HLS client
         tracing::warn!(
             url,
             "HLS media playlist detected — SnapDog does not support HLS segment streaming"
