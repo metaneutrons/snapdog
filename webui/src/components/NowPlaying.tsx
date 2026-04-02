@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import type { ZoneState } from "@/stores/useAppStore";
 import { zones } from "@/lib/api";
@@ -18,15 +18,27 @@ export function NowPlaying({ zone }: { zone: ZoneState }) {
   const isIdle = zone.source === "idle" || !track;
   const sourceLabel = SOURCE_LABELS[zone.source];
   const coverKey = `${zone.index}-${track?.title}-${track?.artist}`;
-  const coverUrl = `${zones.coverUrl(zone.index)}?t=${encodeURIComponent(coverKey)}`;
+  const [coverVersion, setCoverVersion] = useState(0);
+  const coverUrl = `${zones.coverUrl(zone.index)}?v=${coverKey}-${coverVersion}`;
   const [coverError, setCoverError] = useState(false);
   const [lastKey, setLastKey] = useState(coverKey);
 
-  // Reset error state when track changes
+  // Reset error state and bump version when track changes
   if (coverKey !== lastKey) {
     setCoverError(false);
     setLastKey(coverKey);
+    setCoverVersion((v) => v + 1);
   }
+
+  // Retry cover art after a delay if it failed (cover may arrive after metadata)
+  useEffect(() => {
+    if (!coverError || isIdle) return;
+    const timer = setTimeout(() => {
+      setCoverError(false);
+      setCoverVersion((v) => v + 1);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [coverError, isIdle]);
 
   if (isIdle) {
     return (
