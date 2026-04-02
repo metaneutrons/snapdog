@@ -23,7 +23,7 @@ export function TransportControls({ zone, sendCommand }: TransportControlsProps)
   const isIdle = source === "idle";
   const isAirPlay = source === "airplay";
   const isUrl = source === "url";
-  const hasNavigation = source === "radio" || source === "subsonic_playlist";
+  const hasNavigation = source === "radio" || source === "subsonic_playlist" || isAirPlay;
 
   const cmd = (action: string) => sendCommand(index, action);
 
@@ -47,7 +47,7 @@ export function TransportControls({ zone, sendCommand }: TransportControlsProps)
         <Button
           variant="default"
           size="icon"
-          disabled={isIdle || isAirPlay}
+          disabled={isIdle}
           onClick={() => cmd(isPlaying ? "pause" : "play")}
           className="size-12 rounded-full"
         >
