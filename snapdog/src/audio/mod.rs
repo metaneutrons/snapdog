@@ -148,7 +148,8 @@ pub async fn decode_http_stream(
     }
 
     // Collect the async byte stream into a sync reader via a pipe
-    let (mut pipe_tx, pipe_rx) = tokio::io::duplex(64 * 1024);
+    // Small buffer to minimize delay when stream ends (faster EOF detection)
+    let (mut pipe_tx, pipe_rx) = tokio::io::duplex(8 * 1024);
 
     // Task: read HTTP chunks, strip ICY metadata, write audio to pipe
     let url_clone = url.clone();
@@ -169,7 +170,7 @@ pub async fn decode_http_stream(
                     }
                 }
                 Err(e) => {
-                    tracing::error!(error = %e, url = %url_clone, "Stream read error");
+                    tracing::warn!(error = %e, url = %url_clone, "Stream read error");
                     break;
                 }
             }
