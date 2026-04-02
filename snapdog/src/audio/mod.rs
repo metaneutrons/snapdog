@@ -41,6 +41,46 @@ enum ResolvedUrl {
     HlsMedia(String),
 }
 
+/// Default timeout for HTTP requests (connect + response).
+const HTTP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+/// Maximum retries for transient failures.
+const MAX_RETRIES: u32 = 3;
+/// Base delay between retries (doubles each attempt).
+const RETRY_BASE_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Build a reqwest client with User-Agent and timeout.
+fn http_client() -> Result<reqwest::Client> {
+    reqwest::Client::builder()
+        .user_agent("SnapDog/1.0")
+        .timeout(HTTP_TIMEOUT)
+        .build()
+        .context("Failed to build HTTP client")
+}
+
+/// Retry an async operation with exponential backoff.
+async fn with_retry<F, Fut, T>(label: &str, mut f: F) -> Result<T>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<T>>,
+{
+    let mut attempt = 0u32;
+    loop {
+        match f().await {
+            Ok(v) => return Ok(v),
+            Err(e) => {
+                attempt += 1;
+                if attempt > MAX_RETRIES {
+                    tracing::error!(error = %e, attempt, label, "Max retries exceeded");
+                    return Err(e);
+                }
+                let delay = RETRY_BASE_DELAY * 2u32.pow(attempt - 1);
+                tracing::warn!(error = %e, attempt, label, ?delay, "Retrying after error");
+                tokio::time::sleep(delay).await;
+            }
+        }
+    }
+}
+
 /// Returns an optional ICY metadata receiver for live title updates.
 #[tracing::instrument(skip(tx, audio_config, icy_meta_tx))]
 pub async fn decode_http_stream(
@@ -54,7 +94,7 @@ pub async fn decode_http_stream(
     let url = match resolved {
         Some(ResolvedUrl::Direct(u)) => u,
         Some(ResolvedUrl::HlsMedia(playlist_url)) => {
-            return decode_hls_stream(playlist_url, tx, audio_config).await;
+            return decode_hls_stream(playlist_url, tx, audio_config, icy_meta_tx).await;
         }
         None => url,
     };
@@ -162,15 +202,11 @@ async fn decode_hls_stream(
     playlist_url: String,
     tx: PcmSender,
     audio_config: AudioConfig,
+    icy_meta_tx: Option<tokio::sync::mpsc::Sender<icy::IcyMetadata>>,
 ) -> Result<()> {
-    let client = reqwest::Client::builder()
-        .user_agent("SnapDog/1.0")
-        .build()
-        .context("Failed to build HTTP client")?;
-
+    let client = http_client()?;
     let base_url = url::Url::parse(&playlist_url).context("Failed to parse HLS playlist URL")?;
-
-    let content_type = "audio/aac".to_string(); // HLS radio is typically AAC
+    let content_type = "audio/aac".to_string();
 
     let (mut pipe_tx, pipe_rx) = tokio::io::duplex(64 * 1024);
 
@@ -178,34 +214,52 @@ async fn decode_hls_stream(
         use tokio::io::AsyncWriteExt;
         let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
         let mut first_fetch = true;
+        let mut consecutive_failures = 0u32;
 
         loop {
-            let body = match client.get(&playlist_url).send().await {
-                Ok(resp) => match resp.error_for_status() {
-                    Ok(r) => match r.text().await {
-                        Ok(t) => t,
-                        Err(e) => {
-                            tracing::error!(error = %e, "HLS playlist read error");
-                            break;
-                        }
-                    },
+            // Fetch playlist with retry
+            let body = {
+                let c = client.clone();
+                let u = playlist_url.clone();
+                match with_retry("HLS playlist", || {
+                    let c = c.clone();
+                    let u = u.clone();
+                    async move {
+                        let resp = c.get(&u).send().await?.error_for_status()?;
+                        Ok(resp.text().await?)
+                    }
+                })
+                .await
+                {
+                    Ok(b) => b,
                     Err(e) => {
-                        tracing::error!(error = %e, "HLS playlist HTTP error");
+                        tracing::error!(error = %e, "HLS playlist fetch failed after retries");
                         break;
                     }
-                },
-                Err(e) => {
-                    tracing::error!(error = %e, "HLS playlist fetch error");
-                    break;
                 }
             };
 
-            let segments: Vec<String> = body
-                .lines()
-                .map(|l| l.trim())
-                .filter(|l| !l.is_empty() && !l.starts_with('#'))
-                .map(|l| resolve_relative(&base_url, l))
-                .collect();
+            // Detect encrypted HLS
+            if body.contains("#EXT-X-KEY") && !body.contains("METHOD=NONE") {
+                tracing::error!(url = %playlist_url, "Encrypted HLS detected (EXT-X-KEY) — not supported");
+                break;
+            }
+
+            // Parse segments with their #EXTINF metadata
+            let mut segments: Vec<(String, Option<String>)> = Vec::new();
+            let mut current_title: Option<String> = None;
+            for line in body.lines() {
+                let line = line.trim();
+                if let Some(extinf) = line.strip_prefix("#EXTINF:") {
+                    // #EXTINF:duration,title
+                    current_title = extinf
+                        .split_once(',')
+                        .map(|(_, t)| t.trim().to_string())
+                        .filter(|t| !t.is_empty());
+                } else if !line.is_empty() && !line.starts_with('#') {
+                    segments.push((resolve_relative(&base_url, line), current_title.take()));
+                }
+            }
 
             let target_duration: u64 = body
                 .lines()
@@ -217,31 +271,50 @@ async fn decode_hls_stream(
                 .unwrap_or(6);
 
             let is_live = !body.contains("#EXT-X-ENDLIST");
-
-            // For live streams on first fetch, skip to near the live edge
             let skip = if first_fetch && is_live && segments.len() > 3 {
                 segments.len() - 3
             } else {
                 0
             };
 
-            for seg_url in segments.iter().skip(skip) {
+            for (seg_url, title) in segments.iter().skip(skip) {
                 if !first_fetch && seen.contains(seg_url) {
                     continue;
                 }
                 seen.insert(seg_url.clone());
 
+                // Send metadata update if we have a title
+                if let (Some(title), Some(meta_tx)) = (title.as_ref(), &icy_meta_tx) {
+                    let _ = meta_tx.try_send(icy::IcyMetadata {
+                        title: Some(title.clone()),
+                        url: None,
+                    });
+                }
+
                 tracing::debug!(segment = %seg_url, "Downloading HLS segment");
-                match client.get(seg_url).send().await {
-                    Ok(resp) => match resp.bytes().await {
-                        Ok(bytes) => {
-                            if pipe_tx.write_all(&bytes).await.is_err() {
-                                return;
-                            }
+                let c = client.clone();
+                let u = seg_url.clone();
+                match with_retry("HLS segment", || {
+                    let c = c.clone();
+                    let u = u.clone();
+                    async move { Ok(c.get(&u).send().await?.error_for_status()?.bytes().await?) }
+                })
+                .await
+                {
+                    Ok(bytes) => {
+                        consecutive_failures = 0;
+                        if pipe_tx.write_all(&bytes).await.is_err() {
+                            return;
                         }
-                        Err(e) => tracing::warn!(error = %e, "HLS segment read error"),
-                    },
-                    Err(e) => tracing::warn!(error = %e, "HLS segment fetch error"),
+                    }
+                    Err(e) => {
+                        consecutive_failures += 1;
+                        tracing::warn!(error = %e, consecutive_failures, "HLS segment failed after retries");
+                        if consecutive_failures >= 5 {
+                            tracing::error!("Too many consecutive HLS failures");
+                            break;
+                        }
+                    }
                 }
             }
 
@@ -398,16 +471,17 @@ impl MediaSource for SyncReader {
 /// - Otherwise, do a HEAD request first to check Content-Type without downloading the body.
 /// - Handles relative URLs in playlists by resolving against the playlist's base URL.
 /// - For HLS master playlists (.m3u8 with #EXT-X-STREAM-INF), extracts the highest bitrate variant.
-/// - For HLS media playlists (segment lists), logs a warning — these need a proper HLS client.
+/// - For HLS media playlists (segment lists), routes to HLS segment streaming.
+///
+/// TODO: Support nested m3u resolution (m3u pointing to another m3u).
+/// TODO: Add option to skip HTTPS certificate verification for self-signed certs.
+/// TODO: Use final URL after redirects for extension-based detection (currently uses original URL).
 async fn resolve_playlist_url(url: &str) -> Option<ResolvedUrl> {
     let lower = url.to_lowercase();
     let ext_is_playlist =
         lower.ends_with(".m3u") || lower.ends_with(".m3u8") || lower.ends_with(".pls");
 
-    let client = reqwest::Client::builder()
-        .user_agent("SnapDog/1.0")
-        .build()
-        .ok()?;
+    let client = http_client().ok()?;
 
     // For non-playlist extensions, do a HEAD request first to avoid downloading audio data
     if !ext_is_playlist {
