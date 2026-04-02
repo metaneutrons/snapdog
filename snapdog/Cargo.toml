@@ -37,6 +37,7 @@ fastrand = { workspace = true }
 bytes = { workspace = true }
 rust-embed = "8"
 mac_address = "1"
+shairplay = { path = "../../shairplay" }
 
 [dev-dependencies]
 mockall = { workspace = true }
@@ -44,6 +45,3 @@ tempfile = { workspace = true }
 wiremock = { workspace = true }
 dotenvy = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
-
-[build-dependencies]
-cc = "1"
