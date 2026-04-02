@@ -269,7 +269,7 @@ async fn run(
                             handle_previous(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers }).await;
                         }
                     }
-                    ZoneCommand::NextPlaylist | ZoneCommand::PreviousPlaylist | ZoneCommand::SetPlaylist(_) => {
+                    ZoneCommand::NextPlaylist | ZoneCommand::PreviousPlaylist | ZoneCommand::SetPlaylist(..) => {
                         // Unified playlist model: index 0 = radio (from config), index 1+ = Subsonic playlists
                         let subsonic_playlists = if let Some(sub) = &subsonic {
                             sub.get_playlists().await.unwrap_or_default()
@@ -293,31 +293,31 @@ async fn run(
                             _ => 0,
                         };
 
-                        let target_unified = match cmd {
-                            ZoneCommand::NextPlaylist => (current_unified + 1) % total_count,
-                            ZoneCommand::PreviousPlaylist => if current_unified == 0 { total_count - 1 } else { current_unified - 1 },
-                            ZoneCommand::SetPlaylist(i) => i.min(total_count - 1),
+                        let (target_unified, start_track) = match cmd {
+                            ZoneCommand::NextPlaylist => ((current_unified + 1) % total_count, 0),
+                            ZoneCommand::PreviousPlaylist => (if current_unified == 0 { total_count - 1 } else { current_unified - 1 }, 0),
+                            ZoneCommand::SetPlaylist(i, t) => (i.min(total_count - 1), t),
                             _ => continue,
                         };
 
                         match config.resolve_playlist_index(target_unified, subsonic_playlists.len()) {
                             Some(crate::config::ResolvedPlaylist::Radio) => {
+                            let radio_idx = start_track.min(config.radios.len().saturating_sub(1));
                             stop_decode(&mut current_decode, &mut decode_rx).await;
-                            if let Some(radio) = config.radios.first() {
+                            if let Some(radio) = config.radios.get(radio_idx) {
                                 start_radio_decode(&radio.url, config, &mut current_decode, &mut decode_rx, store, zone_index, notify).await;
-                                source = ActiveSource::Radio { index: 0 };
+                                source = ActiveSource::Radio { index: radio_idx };
                                 update_and_notify(store, zone_index, notify, |z| {
                                     z.playback = PlaybackState::Playing;
                                     z.source = SourceType::Radio;
-                                    z.radio_index = Some(0);
+                                    z.radio_index = Some(radio_idx);
                                     z.playlist_index = Some(0);
                                     z.playlist_name = Some("Radio".into());
-                                    z.playlist_track_index = Some(0);
+                                    z.playlist_track_index = Some(radio_idx);
                                     z.playlist_track_count = Some(config.radios.len());
                                     z.track = Some(radio_track_info(&radio.name));
                                 }).await;
                                 tracing::info!(zone = zone_index, radio = %radio.name, "Playing radio via playlist 0");
-                                // Fetch cover synchronously to avoid race with a following SetTrack command
                                 if let Some(cover_url) = &radio.cover {
                                     if let Some((bytes, mime)) = state::cover::fetch_cover(cover_url).await {
                                         covers.write().await.set(zone_index, bytes, mime);
@@ -335,11 +335,12 @@ async fn run(
                                     tracing::info!(zone = zone_index, playlist = %pl.name, "Switching playlist");
                                     stop_decode(&mut current_decode, &mut decode_rx).await;
                                     if let Ok(playlist) = sub.get_playlist(&pl.id).await {
-                                        if let Some(track) = playlist.entry.first() {
+                                        let track_idx = start_track.min(playlist.entry.len().saturating_sub(1));
+                                        if let Some(track) = playlist.entry.get(track_idx) {
                                             start_subsonic_track_decode(sub, track, config, &mut current_decode, &mut decode_rx).await;
                                             source = ActiveSource::SubsonicPlaylist {
                                                 playlist_id: pl.id.clone(),
-                                                track_index: 0,
+                                                track_index: track_idx,
                                                 track_count: playlist.entry.len(),
                                             };
                                             update_and_notify(store, zone_index, notify, |z| {
@@ -347,7 +348,7 @@ async fn run(
                                                 z.source = SourceType::SubsonicPlaylist;
                                                 z.playlist_index = Some(target_unified);
                                                 z.playlist_name = Some(playlist.name.clone());
-                                                z.playlist_track_index = Some(0);
+                                                z.playlist_track_index = Some(track_idx);
                                                 z.playlist_track_count = Some(playlist.entry.len());
                                                 z.track = Some(subsonic_track_info(track));
                                             }).await;
