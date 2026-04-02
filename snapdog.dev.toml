@@ -68,9 +68,9 @@ icon = "🛏️"
 [[radio]]
 name = "Deutschlandfunk"
 url = "https://st01.sslstream.dlf.de/dlf/01/high/aac/stream.aac"
-cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/Deutschlandfunk_logo_2017.svg/320px-Deutschlandfunk_logo_2017.svg.png"
+cover = "https://placehold.co/300x300/198AFF/white?text=DLF"
 
 [[radio]]
 name = "DLF Kultur"
 url = "https://st02.sslstream.dlf.de/dlf/02/high/aac/stream.aac"
-cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/Deutschlandfunk_Kultur_logo_2017.svg/320px-Deutschlandfunk_Kultur_logo_2017.svg.png"
+cover = "https://placehold.co/300x300/ff6400/white?text=Kultur"
