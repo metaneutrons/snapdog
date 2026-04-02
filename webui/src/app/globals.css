@@ -139,3 +139,12 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+@keyframes marquee {
+  0%, 15% { transform: translateX(0); }
+  85%, 100% { transform: translateX(var(--marquee-offset, -50%)); }
+}
+
+@utility animate-marquee {
+  animation: marquee 8s ease-in-out infinite alternate;
+}

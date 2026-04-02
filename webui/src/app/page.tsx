@@ -13,6 +13,7 @@ import { SeekBar } from "@/components/SeekBar";
 import { ShuffleRepeat } from "@/components/ShuffleRepeat";
 import { PlaylistBrowser } from "@/components/PlaylistBrowser";
 import { ClientList } from "@/components/ClientList";
+import { Marquee } from "@/components/Marquee";
 import { ConnectionStatus } from "@/components/ConnectionStatus";
 
 // ── Error Boundary ────────────────────────────────────────────
@@ -161,10 +162,10 @@ function TrackInfo({ zone }: { zone: ZoneState }) {
 
   return (
     <div className="text-center xl:text-left space-y-0.5 w-full">
-      <h3 className="text-base font-bold leading-snug">{track.title || "Unknown"}</h3>
-      <p className="text-sm text-muted-foreground truncate">{track.artist || "Unknown Artist"}</p>
+      <Marquee className="text-base font-bold leading-snug">{track.title || "Unknown"}</Marquee>
+      <Marquee className="text-sm text-muted-foreground">{track.artist || "Unknown Artist"}</Marquee>
       {track.album && (
-        <p className="text-xs text-muted-foreground/70 truncate">{track.album}</p>
+        <Marquee className="text-xs text-muted-foreground/70">{track.album}</Marquee>
       )}
     </div>
   );
