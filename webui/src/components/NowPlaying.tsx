@@ -41,14 +41,14 @@ export function NowPlaying({ zone }: { zone: ZoneState }) {
 
   if (isIdle) {
     return (
-      <div className="relative w-full aspect-square rounded-2xl xl:rounded-xl overflow-hidden bg-muted shadow-lg flex items-center justify-center">
+      <div className="relative w-full aspect-square xl:aspect-auto xl:h-full rounded-2xl xl:rounded-xl overflow-hidden bg-muted shadow-lg flex items-center justify-center">
         <span className="text-5xl xl:text-3xl">{zone.icon || "🔊"}</span>
       </div>
     );
   }
 
   return (
-    <div className="relative w-full aspect-square rounded-2xl xl:rounded-xl overflow-hidden bg-muted shadow-lg shrink-0">
+    <div className="relative w-full aspect-square xl:aspect-auto xl:h-full rounded-2xl xl:rounded-xl overflow-hidden bg-muted shadow-lg shrink-0">
       {coverError ? (
         <div className="flex items-center justify-center size-full">
           <span className="text-5xl xl:text-3xl">{zone.icon || "🎵"}</span>
