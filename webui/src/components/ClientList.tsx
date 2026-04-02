@@ -13,7 +13,14 @@ function ClientCard({ client, zoneList }: { client: ClientInfo; zoneList: { inde
   const [showZoneSelect, setShowZoneSelect] = useState(false);
 
   return (
-    <div className="flex items-center gap-3 px-3 py-2">
+    <div
+      className="flex items-center gap-3 px-3 py-2 xl:cursor-grab xl:active:cursor-grabbing"
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData("application/x-snapdog-client", String(client.index));
+        e.dataTransfer.effectAllowed = "move";
+      }}
+    >
       <div className="relative shrink-0">
         <span className="text-lg">{client.icon || "🔊"}</span>
         <div className={`absolute -bottom-0.5 -right-0.5 size-2 rounded-full ${client.connected ? "bg-green-500" : "bg-destructive"}`} />
@@ -80,21 +87,35 @@ export function ClientList({ zone }: { zone: ZoneState }) {
   if (zoneClients.length === 0) return null;
 
   return (
-    <div className="w-full max-w-xs">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <span>{zoneClients.length} client{zoneClients.length !== 1 ? "s" : ""}</span>
-        <HugeiconsIcon icon={ArrowDown01Icon} size={12} className={`transition-transform ${expanded ? "rotate-180" : ""}`} />
-      </button>
-      {expanded && (
+    <div className="w-full">
+      {/* Mobile/tablet: collapsible */}
+      <div className="xl:hidden">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="w-full flex items-center justify-between px-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <span>{zoneClients.length} client{zoneClients.length !== 1 ? "s" : ""}</span>
+          <HugeiconsIcon icon={ArrowDown01Icon} size={12} className={`transition-transform ${expanded ? "rotate-180" : ""}`} />
+        </button>
+        {expanded && (
+          <div className="space-y-1 border-t border-border pt-1">
+            {zoneClients.map((c) => (
+              <ClientCard key={c.index} client={c} zoneList={zoneList} />
+            ))}
+          </div>
+        )}
+      </div>
+      {/* Desktop: always visible */}
+      <div className="hidden xl:block">
+        <div className="text-xs text-muted-foreground px-3 py-1.5">
+          {zoneClients.length} client{zoneClients.length !== 1 ? "s" : ""}
+        </div>
         <div className="space-y-1 border-t border-border pt-1">
           {zoneClients.map((c) => (
             <ClientCard key={c.index} client={c} zoneList={zoneList} />
           ))}
         </div>
-      )}
+      </div>
     </div>
   );
 }
