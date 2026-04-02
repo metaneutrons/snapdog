@@ -40,7 +40,7 @@ export interface TrackMetadata {
   content_type: string | null;
   sample_rate: number | null;
   source: string;
-  cover: string | null;
+  cover_url: string | null;
   playlist_index: number | null;
   playlist_track_index: number | null;
   playlist_track_count: number | null;

@@ -357,7 +357,7 @@ async fn get_track_metadata(
         "content_type": zone.track.as_ref().and_then(|t| t.content_type.as_deref()),
         "sample_rate": zone.track.as_ref().and_then(|t| t.sample_rate),
         "source": zone.source.to_string(),
-        "cover": zone.playlist_index.zip(zone.playlist_track_index).map(|(pi, ti)| format!("/api/v1/media/playlists/{pi}/tracks/{ti}/cover")),
+        "cover_url": zone.playlist_index.zip(zone.playlist_track_index).map(|(pi, ti)| format!("/api/v1/media/playlists/{pi}/tracks/{ti}/cover")),
         "playlist_index": zone.playlist_index,
         "playlist_track_index": zone.playlist_track_index,
         "playlist_track_count": zone.playlist_track_count,

@@ -51,7 +51,7 @@ function ZoneRailItem({ zone, selected, onSelect }: {
 }) {
   const [imgError, setImgError] = useState(false);
   const isPlaying = zone.playback === "playing";
-  const hasCover = zone.track?.cover && zone.source !== "idle" && !imgError;
+  const hasCover = zone.track?.cover_url && zone.source !== "idle" && !imgError;
   return (
     <button
       onClick={onSelect}
@@ -65,7 +65,7 @@ function ZoneRailItem({ zone, selected, onSelect }: {
       <div className="relative size-10 rounded-md bg-muted flex items-center justify-center overflow-hidden shrink-0">
         {hasCover ? (
           <img
-            src={zone.track!.cover!}
+            src={zone.track!.cover_url!}
             alt=""
             className="size-full object-cover"
             onError={() => setImgError(true)}
