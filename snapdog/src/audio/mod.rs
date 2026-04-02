@@ -41,6 +41,9 @@ pub async fn decode_http_stream(
     audio_config: AudioConfig,
     icy_meta_tx: Option<tokio::sync::mpsc::Sender<icy::IcyMetadata>>,
 ) -> Result<()> {
+    // Resolve playlist URLs (.m3u/.m3u8/.pls) to the actual stream URL
+    let url = resolve_playlist_url(&url).await.unwrap_or(url);
+
     // Use ICY-aware client to request metadata
     let client = icy::icy_client();
     let response = client
@@ -257,4 +260,65 @@ impl MediaSource for SyncReader {
     fn byte_len(&self) -> Option<u64> {
         None
     }
+}
+
+/// Resolve playlist URLs (.m3u/.m3u8/.pls) to the actual stream URL.
+/// Detects playlists by Content-Type first, then falls back to file extension.
+async fn resolve_playlist_url(url: &str) -> Option<String> {
+    // Quick check: skip obvious non-playlists by extension
+    let lower = url.to_lowercase();
+    let ext_hint = lower.ends_with(".m3u") || lower.ends_with(".m3u8") || lower.ends_with(".pls");
+
+    // If extension doesn't hint at playlist, do a HEAD request to check Content-Type
+    let response = reqwest::get(url).await.ok()?;
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_lowercase();
+
+    let is_m3u = content_type.contains("mpegurl")
+        || content_type.contains("x-mpegurl")
+        || content_type.contains("vnd.apple.mpegurl")
+        || lower.ends_with(".m3u")
+        || lower.ends_with(".m3u8");
+
+    let is_pls = content_type.contains("x-scpls")
+        || content_type.contains("scpls")
+        || lower.ends_with(".pls");
+
+    if !is_m3u && !is_pls {
+        return None;
+    }
+
+    tracing::debug!(url, content_type, "Resolving playlist");
+    let body = response.text().await.ok()?;
+
+    if is_pls {
+        // PLS format: INI-style, look for File1=URL
+        for line in body.lines() {
+            let line = line.trim();
+            if let Some(stream_url) = line
+                .strip_prefix("File1=")
+                .or_else(|| line.strip_prefix("file1="))
+            {
+                let resolved = stream_url.trim().to_string();
+                tracing::info!(playlist = url, %resolved, "Resolved PLS playlist");
+                return Some(resolved);
+            }
+        }
+    } else {
+        // M3U/M3U8: first non-empty, non-comment line
+        for line in body.lines() {
+            let line = line.trim();
+            if !line.is_empty() && !line.starts_with('#') {
+                tracing::info!(playlist = url, resolved = %line, "Resolved M3U playlist");
+                return Some(line.to_string());
+            }
+        }
+    }
+
+    tracing::warn!(url, "Playlist contained no stream URLs");
+    None
 }

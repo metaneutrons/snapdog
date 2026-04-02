@@ -193,14 +193,11 @@ async fn run(
                                     }).await;
                                     tracing::info!(zone = zone_index, radio = %radio.name, "Set radio station");
                                     if let Some(cover_url) = &radio.cover {
-                                        let covers = covers.clone();
-                                        let url = cover_url.clone();
-                                        let zi = zone_index;
-                                        tokio::spawn(async move {
-                                            if let Some((bytes, mime)) = state::cover::fetch_cover(&url).await {
-                                                covers.write().await.set(zi, bytes, mime);
-                                            }
-                                        });
+                                        if let Some((bytes, mime)) = state::cover::fetch_cover(cover_url).await {
+                                            covers.write().await.set(zone_index, bytes, mime);
+                                        } else {
+                                            covers.write().await.clear(zone_index);
+                                        }
                                     } else {
                                         covers.write().await.clear(zone_index);
                                     }
@@ -320,15 +317,13 @@ async fn run(
                                     z.track = Some(radio_track_info(&radio.name));
                                 }).await;
                                 tracing::info!(zone = zone_index, radio = %radio.name, "Playing radio via playlist 0");
+                                // Fetch cover synchronously to avoid race with a following SetTrack command
                                 if let Some(cover_url) = &radio.cover {
-                                    let covers = covers.clone();
-                                    let url = cover_url.clone();
-                                    let zi = zone_index;
-                                    tokio::spawn(async move {
-                                        if let Some((bytes, mime)) = state::cover::fetch_cover(&url).await {
-                                            covers.write().await.set(zi, bytes, mime);
-                                        }
-                                    });
+                                    if let Some((bytes, mime)) = state::cover::fetch_cover(cover_url).await {
+                                        covers.write().await.set(zone_index, bytes, mime);
+                                    } else {
+                                        covers.write().await.clear(zone_index);
+                                    }
                                 } else {
                                     covers.write().await.clear(zone_index);
                                 }
