@@ -147,9 +147,9 @@ pub async fn decode_http_stream(
         return Ok(());
     }
 
-    // Collect the async byte stream into a sync reader via a pipe
-    // Small buffer to minimize delay when stream ends (faster EOF detection)
-    let (mut pipe_tx, pipe_rx) = tokio::io::duplex(8 * 1024);
+    // Pipe buffer: ~4s of audio at 128kbps = 64KB.
+    // Provides smooth playback during brief network hiccups.
+    let (mut pipe_tx, pipe_rx) = tokio::io::duplex(64 * 1024);
 
     // Task: read HTTP chunks, strip ICY metadata, write audio to pipe
     let url_clone = url.clone();
@@ -175,6 +175,9 @@ pub async fn decode_http_stream(
                 }
             }
         }
+        // Explicitly shut down the pipe so the decoder sees EOF immediately
+        // instead of waiting to drain the remaining buffer.
+        let _ = pipe_tx.shutdown().await;
     });
 
     // Decode in blocking thread (symphonia is sync + CPU-bound)
