@@ -84,7 +84,7 @@ cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/MDR_Kultur_Lo
 [[radio]]
 name = "NDR Info"
 url = "http://www.ndr.de/resources/metadaten/audio/m3u/ndrinfo.m3u"
-cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f0/NDR_Info_Logo_2019.svg/257px-NDR_Info_Logo_2019.svg.png"
+cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/NDR_Info_Logo_2019.svg/1280px-NDR_Info_Logo_2019.svg.png"
 
 [[radio]]
 name = "NDR Kultur"
@@ -104,7 +104,7 @@ cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/NDR_2_Logo.sv
 [[radio]]
 name = "NDR Info Spez."
 url = "http://www.ndr.de/resources/metadaten/audio/m3u/ndrinfo_spezial.m3u"
-cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f0/NDR_Info_Logo_2019.svg/257px-NDR_Info_Logo_2019.svg.png"
+cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/NDR_Info_Logo_2019.svg/1280px-NDR_Info_Logo_2019.svg.png"
 
 [[radio]]
 name = "NDR 90.3"
