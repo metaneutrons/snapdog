@@ -7,7 +7,6 @@
 #[derive(Debug)]
 pub enum ZoneCommand {
     // ── Source selection ───────────────────────────────────────
-    PlayRadio(usize),
     PlaySubsonicPlaylist(String, usize), // playlist_id, start_track
     PlaySubsonicTrack(String),           // track_id
     PlayUrl(String),

@@ -119,52 +119,6 @@ async fn run(
         tokio::select! {
             Some(cmd) = commands.recv() => {
                 match cmd {
-                    ZoneCommand::PlayRadio(idx) => {
-                        stop_decode(&mut current_decode, &mut decode_rx).await;
-                        if let Some(radio) = config.radios.get(idx) {
-                            let (tx, rx) = audio::pcm_channel(64);
-                            decode_rx = Some(rx);
-                            let (icy_tx, mut icy_rx) = mpsc::channel::<audio::icy::IcyMetadata>(4);
-                            let icy_store = store.clone();
-                            let icy_notify = notify.clone();
-                            let icy_zone = zone_index;
-                            tokio::spawn(async move {
-                                while let Some(meta) = icy_rx.recv().await {
-                                    if let Some(title) = meta.title {
-                                        tracing::info!(zone = icy_zone, title = %title, "ICY title update");
-                                        update_and_notify(&icy_store, icy_zone, &icy_notify, |z| {
-                                            if let Some(ref mut track) = z.track { track.title = title.clone(); }
-                                        }).await;
-                                    }
-                                }
-                            });
-                            let url = radio.url.clone();
-                            let ac = audio_config.clone();
-                            current_decode = Some(tokio::spawn(async move {
-                                if let Err(e) = audio::decode_http_stream(url, tx, ac, Some(icy_tx)).await {
-                                    tracing::error!(error = %e, "Radio decode failed");
-                                }
-                            }));
-                            source = ActiveSource::Radio { index: idx };
-                            update_and_notify(store, zone_index, notify, |z| {
-                                z.playback = PlaybackState::Playing;
-                                z.source = SourceType::Radio;
-                                z.radio_index = Some(idx);
-                                z.track = Some(radio_track_info(&radio.name));
-                            }).await;
-                            tracing::info!(zone = zone_index, radio = %radio.name, "Playing radio");
-                            if let Some(cover_url) = &radio.cover {
-                                let covers = covers.clone();
-                                let url = cover_url.clone();
-                                let zi = zone_index;
-                                tokio::spawn(async move {
-                                    if let Some((bytes, mime)) = state::cover::fetch_cover(&url).await {
-                                        covers.write().await.set(zi, bytes, mime);
-                                    }
-                                });
-                            }
-                        }
-                    }
                     ZoneCommand::PlaySubsonicPlaylist(playlist_id, track_idx) => {
                         stop_decode(&mut current_decode, &mut decode_rx).await;
                         if let Some(sub) = &subsonic {
@@ -292,25 +246,69 @@ async fn run(
                         }
                     }
                     ZoneCommand::NextPlaylist | ZoneCommand::PreviousPlaylist | ZoneCommand::SetPlaylist(_) => {
-                        if let Some(sub) = &subsonic {
-                            match sub.get_playlists().await {
-                                Ok(playlists) if !playlists.is_empty() => {
-                                    let current_pl_id = match &source {
-                                        ActiveSource::SubsonicPlaylist { playlist_id, .. } => Some(playlist_id.clone()),
-                                        _ => None,
-                                    };
-                                    let current_idx = current_pl_id.as_ref()
-                                        .and_then(|id| playlists.iter().position(|p| &p.id == id))
-                                        .unwrap_or(0);
+                        // Unified playlist model: index 0 = radio (from config), index 1+ = Subsonic playlists
+                        let has_radio = !config.radios.is_empty();
+                        let subsonic_playlists = if let Some(sub) = &subsonic {
+                            sub.get_playlists().await.unwrap_or_default()
+                        } else {
+                            vec![]
+                        };
+                        let total_count = if has_radio { 1 } else { 0 } + subsonic_playlists.len();
+                        if total_count == 0 {
+                            tracing::warn!(zone = zone_index, "No playlists available");
+                            continue;
+                        }
 
-                                    let target_idx = match cmd {
-                                        ZoneCommand::NextPlaylist => (current_idx + 1) % playlists.len(),
-                                        ZoneCommand::PreviousPlaylist => if current_idx == 0 { playlists.len() - 1 } else { current_idx - 1 },
-                                        ZoneCommand::SetPlaylist(i) => i.min(playlists.len() - 1),
-                                        _ => continue,
-                                    };
+                        // Determine current unified index
+                        let current_unified = match &source {
+                            ActiveSource::Radio { .. } => 0,
+                            ActiveSource::SubsonicPlaylist { playlist_id, .. } => {
+                                let sub_idx = subsonic_playlists.iter().position(|p| p.id == *playlist_id).unwrap_or(0);
+                                if has_radio { sub_idx + 1 } else { sub_idx }
+                            }
+                            _ => 0,
+                        };
 
-                                    let pl = &playlists[target_idx];
+                        let target_unified = match cmd {
+                            ZoneCommand::NextPlaylist => (current_unified + 1) % total_count,
+                            ZoneCommand::PreviousPlaylist => if current_unified == 0 { total_count - 1 } else { current_unified - 1 },
+                            ZoneCommand::SetPlaylist(i) => i.min(total_count - 1),
+                            _ => continue,
+                        };
+
+                        // Is target the radio playlist?
+                        if has_radio && target_unified == 0 {
+                            stop_decode(&mut current_decode, &mut decode_rx).await;
+                            if let Some(radio) = config.radios.first() {
+                                start_radio_decode(&radio.url, config, &mut current_decode, &mut decode_rx, store, zone_index, notify).await;
+                                source = ActiveSource::Radio { index: 0 };
+                                update_and_notify(store, zone_index, notify, |z| {
+                                    z.playback = PlaybackState::Playing;
+                                    z.source = SourceType::Radio;
+                                    z.radio_index = Some(0);
+                                    z.playlist_index = Some(0);
+                                    z.playlist_name = Some("Radio".into());
+                                    z.playlist_track_index = Some(0);
+                                    z.playlist_track_count = Some(config.radios.len());
+                                    z.track = Some(radio_track_info(&radio.name));
+                                }).await;
+                                tracing::info!(zone = zone_index, radio = %radio.name, "Playing radio via playlist 0");
+                                if let Some(cover_url) = &radio.cover {
+                                    let covers = covers.clone();
+                                    let url = cover_url.clone();
+                                    let zi = zone_index;
+                                    tokio::spawn(async move {
+                                        if let Some((bytes, mime)) = state::cover::fetch_cover(&url).await {
+                                            covers.write().await.set(zi, bytes, mime);
+                                        }
+                                    });
+                                }
+                            }
+                        } else {
+                            // Subsonic playlist
+                            let sub_idx = if has_radio { target_unified - 1 } else { target_unified };
+                            if let Some(sub) = &subsonic {
+                                if let Some(pl) = subsonic_playlists.get(sub_idx) {
                                     tracing::info!(zone = zone_index, playlist = %pl.name, "Switching playlist");
                                     stop_decode(&mut current_decode, &mut decode_rx).await;
                                     if let Ok(playlist) = sub.get_playlist(&pl.id).await {
@@ -324,7 +322,7 @@ async fn run(
                                             update_and_notify(store, zone_index, notify, |z| {
                                                 z.playback = PlaybackState::Playing;
                                                 z.source = SourceType::SubsonicPlaylist;
-                                                z.playlist_index = Some(target_idx);
+                                                z.playlist_index = Some(target_unified);
                                                 z.playlist_name = Some(playlist.name.clone());
                                                 z.playlist_track_index = Some(0);
                                                 z.playlist_track_count = Some(playlist.entry.len());
@@ -333,8 +331,6 @@ async fn run(
                                         }
                                     }
                                 }
-                                Ok(_) => tracing::warn!(zone = zone_index, "No playlists available"),
-                                Err(e) => tracing::error!(error = %e, "Failed to fetch playlists"),
                             }
                         }
                     }

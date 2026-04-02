@@ -86,18 +86,37 @@ pub fn radio_track_info(name: &str) -> TrackInfo {
     }
 }
 
-async fn start_radio_decode(
+pub async fn start_radio_decode(
     url: &str,
     config: &AppConfig,
     current_decode: &mut Option<JoinHandle<()>>,
     decode_rx: &mut Option<mpsc::Receiver<Vec<u8>>>,
+    store: &state::SharedState,
+    zone_index: usize,
+    notify: &NotifySender,
 ) {
     let (tx, rx) = audio::pcm_channel(64);
     *decode_rx = Some(rx);
+    let (icy_tx, mut icy_rx) = mpsc::channel::<audio::icy::IcyMetadata>(4);
+    let icy_store = store.clone();
+    let icy_notify = notify.clone();
+    tokio::spawn(async move {
+        while let Some(meta) = icy_rx.recv().await {
+            if let Some(title) = meta.title {
+                tracing::info!(zone = zone_index, title = %title, "ICY title update");
+                update_and_notify(&icy_store, zone_index, &icy_notify, |z| {
+                    if let Some(ref mut track) = z.track {
+                        track.title = title.clone();
+                    }
+                })
+                .await;
+            }
+        }
+    });
     let url = url.to_string();
     let ac = config.audio.clone();
     *current_decode = Some(tokio::spawn(async move {
-        if let Err(e) = audio::decode_http_stream(url, tx, ac, None).await {
+        if let Err(e) = audio::decode_http_stream(url, tx, ac, Some(icy_tx)).await {
             tracing::error!(error = %e, "Radio decode failed");
         }
     }));
@@ -109,10 +128,21 @@ pub async fn handle_next(ds: &mut DecodeState<'_>, ctx: &PlaybackCtx<'_>) {
             let next = (index + 1) % ctx.config.radios.len();
             stop_decode(ds.current_decode, ds.decode_rx).await;
             if let Some(radio) = ctx.config.radios.get(next) {
-                start_radio_decode(&radio.url, ctx.config, ds.current_decode, ds.decode_rx).await;
+                start_radio_decode(
+                    &radio.url,
+                    ctx.config,
+                    ds.current_decode,
+                    ds.decode_rx,
+                    ctx.store,
+                    ctx.zone_index,
+                    ctx.notify,
+                )
+                .await;
                 *ds.source = ActiveSource::Radio { index: next };
                 update_and_notify(ctx.store, ctx.zone_index, ctx.notify, |z| {
                     z.radio_index = Some(next);
+                    z.playlist_index = Some(0);
+                    z.playlist_track_index = Some(next);
                     z.track = Some(radio_track_info(&radio.name));
                 })
                 .await;
@@ -162,10 +192,21 @@ pub async fn handle_previous(ds: &mut DecodeState<'_>, ctx: &PlaybackCtx<'_>) {
             };
             stop_decode(ds.current_decode, ds.decode_rx).await;
             if let Some(radio) = ctx.config.radios.get(prev) {
-                start_radio_decode(&radio.url, ctx.config, ds.current_decode, ds.decode_rx).await;
+                start_radio_decode(
+                    &radio.url,
+                    ctx.config,
+                    ds.current_decode,
+                    ds.decode_rx,
+                    ctx.store,
+                    ctx.zone_index,
+                    ctx.notify,
+                )
+                .await;
                 *ds.source = ActiveSource::Radio { index: prev };
                 update_and_notify(ctx.store, ctx.zone_index, ctx.notify, |z| {
                     z.radio_index = Some(prev);
+                    z.playlist_index = Some(0);
+                    z.playlist_track_index = Some(prev);
                     z.track = Some(radio_track_info(&radio.name));
                 })
                 .await;
@@ -219,7 +260,16 @@ pub async fn handle_track_complete(ds: &mut DecodeState<'_>, ctx: &PlaybackCtx<'
         ActiveSource::Radio { index } => {
             tracing::warn!(zone = ctx.zone_index, "Radio stream ended, restarting");
             if let Some(radio) = ctx.config.radios.get(index) {
-                start_radio_decode(&radio.url, ctx.config, ds.current_decode, ds.decode_rx).await;
+                start_radio_decode(
+                    &radio.url,
+                    ctx.config,
+                    ds.current_decode,
+                    ds.decode_rx,
+                    ctx.store,
+                    ctx.zone_index,
+                    ctx.notify,
+                )
+                .await;
             }
         }
         ActiveSource::AirPlay => {
