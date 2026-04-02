@@ -121,7 +121,7 @@ function ZoneDetail({ zone, sendCommand }: { zone: ZoneState; sendCommand: (zone
     <div className="flex flex-1 flex-col overflow-y-auto">
       <div className="w-full max-w-xs mx-auto xl:max-w-none space-y-3 px-4 py-4 xl:px-5 xl:py-4">
         <ZoneHeader zone={zone} />
-        {/* Desktop: horizontal layout */}
+        {/* Desktop: horizontal layout for cover + controls */}
         <div className="xl:flex xl:gap-5 xl:items-start">
           <div className="xl:w-40 xl:shrink-0">
             <NowPlaying zone={zone} />
@@ -133,9 +133,10 @@ function ZoneDetail({ zone, sendCommand }: { zone: ZoneState; sendCommand: (zone
             <RadioStations zone={zone} />
             <VolumeSlider zone={zone} sendCommand={sendCommand} />
             <ClientList zone={zone} />
-            <PlaylistBrowser zone={zone} />
           </div>
         </div>
+        {/* Full-width below the horizontal row */}
+        <PlaylistBrowser zone={zone} />
       </div>
     </div>
   );
