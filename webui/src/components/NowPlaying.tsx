@@ -3,14 +3,6 @@
 import { useState } from "react";
 import type { ZoneState } from "@/stores/useAppStore";
 
-const SOURCE_LABELS: Record<string, string> = {
-  radio: "Radio",
-  subsonic_playlist: "Subsonic",
-  subsonic_track: "Subsonic",
-  airplay: "AirPlay",
-  url: "URL",
-};
-
 export function NowPlaying({ zone }: { zone: ZoneState }) {
   const track = zone.track;
   const isIdle = zone.source === "idle" || !track;

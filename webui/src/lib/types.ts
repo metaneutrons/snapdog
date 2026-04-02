@@ -83,7 +83,6 @@ export interface TrackInfo {
   album: string;
   duration: number;
   track: number;
-  cover_art: string | null;
 }
 
 // ── System ────────────────────────────────────────────────────
