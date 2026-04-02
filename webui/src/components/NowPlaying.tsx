@@ -71,7 +71,7 @@ export function NowPlaying({ zone }: { zone: ZoneState }) {
             key={`fg-${coverKey}-${coverVersion}`}
             src={coverUrl}
             alt={`${track.title} cover`}
-            className="absolute inset-0 w-full h-full object-cover"
+            className="absolute inset-0 w-full h-full object-contain"
             onError={() => setCoverError(true)}
           />
         </>

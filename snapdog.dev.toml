@@ -94,7 +94,7 @@ cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/NDR_Kultur_Lo
 [[radio]]
 name = "NDR 1"
 url = "http://www.ndr.de/resources/metadaten/audio/m3u/ndr1niedersachsen.m3u"
-cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/NDR_1_Niedersachsen_Logo_2019.svg/257px-NDR_1_Niedersachsen_Logo_2019.svg.png"
+cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/6/67/NDR_1_Niedersachsen_Logo.svg/1280px-NDR_1_Niedersachsen_Logo.svg.png"
 
 [[radio]]
 name = "NDR 2"
