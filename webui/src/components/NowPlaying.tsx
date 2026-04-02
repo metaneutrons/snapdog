@@ -16,7 +16,10 @@ const SOURCE_LABELS: Record<string, string> = {
 export function NowPlaying({ zone }: { zone: ZoneState }) {
   const track = zone.track;
   const isIdle = zone.source === "idle" || !track;
-  const coverKey = `${zone.index}-${track?.title}-${track?.artist}`;
+  const isRadio = zone.source === "radio";
+  const coverKey = isRadio
+    ? `${zone.index}-${track?.title}`
+    : `${zone.index}-${track?.title}-${track?.artist}`;
   const [coverVersion, setCoverVersion] = useState(0);
   const coverUrl = `${zones.coverUrl(zone.index)}?v=${coverKey}-${coverVersion}`;
   const [coverError, setCoverError] = useState(false);
