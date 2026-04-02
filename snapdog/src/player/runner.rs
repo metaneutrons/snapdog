@@ -201,6 +201,8 @@ async fn run(
                                                 covers.write().await.set(zi, bytes, mime);
                                             }
                                         });
+                                    } else {
+                                        covers.write().await.clear(zone_index);
                                     }
                                 }
                             }
@@ -327,6 +329,8 @@ async fn run(
                                             covers.write().await.set(zi, bytes, mime);
                                         }
                                     });
+                                } else {
+                                    covers.write().await.clear(zone_index);
                                 }
                             }
                         }

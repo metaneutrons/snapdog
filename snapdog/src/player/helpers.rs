@@ -156,6 +156,8 @@ pub async fn handle_next(ds: &mut DecodeState<'_>, ctx: &PlaybackCtx<'_>) {
                             covers.write().await.set(zi, bytes, mime);
                         }
                     });
+                } else {
+                    ctx.covers.write().await.clear(ctx.zone_index);
                 }
             }
         }
@@ -230,6 +232,8 @@ pub async fn handle_previous(ds: &mut DecodeState<'_>, ctx: &PlaybackCtx<'_>) {
                             covers.write().await.set(zi, bytes, mime);
                         }
                     });
+                } else {
+                    ctx.covers.write().await.clear(ctx.zone_index);
                 }
             }
         }
