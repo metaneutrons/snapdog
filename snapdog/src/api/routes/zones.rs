@@ -508,10 +508,31 @@ async fn play_subsonic_playlist(
     Path(idx): Path<usize>,
     Json(v): Json<PlayPlaylistRequest>,
 ) -> impl IntoResponse {
-    // Unified model: SetPlaylist selects the playlist, then SetTrack if needed
-    let _ = send_cmd(&state, idx, ZoneCommand::SetPlaylist(v.id)).await;
-    if v.track > 0 {
-        let _ = send_cmd(&state, idx, ZoneCommand::SetTrack(v.track)).await;
+    // For radio playlists with a specific track, check if already in radio mode
+    let has_radio = !state.config.radios.is_empty();
+    if has_radio && v.id == 0 && v.track > 0 {
+        // Check if the zone is already playing radio
+        let already_radio = state
+            .store
+            .read()
+            .await
+            .zones
+            .get(&idx)
+            .is_some_and(|z| z.source == crate::state::SourceType::Radio);
+        if already_radio {
+            // Already in radio mode — just switch track, skip SetPlaylist
+            let _ = send_cmd(&state, idx, ZoneCommand::SetTrack(v.track)).await;
+        } else {
+            // Not in radio mode — SetPlaylist to enter radio, then SetTrack
+            let _ = send_cmd(&state, idx, ZoneCommand::SetPlaylist(v.id)).await;
+            let _ = send_cmd(&state, idx, ZoneCommand::SetTrack(v.track)).await;
+        }
+    } else {
+        // Non-radio or track 0: normal flow
+        let _ = send_cmd(&state, idx, ZoneCommand::SetPlaylist(v.id)).await;
+        if v.track > 0 {
+            let _ = send_cmd(&state, idx, ZoneCommand::SetTrack(v.track)).await;
+        }
     }
     Ok::<_, StatusCode>(())
 }
