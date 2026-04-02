@@ -106,6 +106,7 @@ async fn run(
     let mut current_decode: Option<JoinHandle<()>> = None;
     let mut decode_rx: Option<mpsc::Receiver<Vec<u8>>> = None;
     let mut source = ActiveSource::Idle;
+    let mut dacp_client: Option<shairplay::dacp::DacpClient> = None;
     let mut resampler = audio::resample::Resampling::new(
         config.audio.sample_rate,
         config.audio.sample_rate,
@@ -241,7 +242,9 @@ async fn run(
                         }
                     }
                     ZoneCommand::Play => {
-                        if matches!(source, ActiveSource::Idle) {
+                        if matches!(source, ActiveSource::AirPlay) {
+                            if let Some(ref dacp) = dacp_client { let _ = dacp.play_pause().await; }
+                        } else if matches!(source, ActiveSource::Idle) {
                             let radio_idx = store.read().await.zones.get(&zone_index).and_then(|z| z.radio_index).unwrap_or(0);
                             if let Some(radio) = config.radios.get(radio_idx) {
                                 stop_decode(&mut current_decode, &mut decode_rx).await;
@@ -258,16 +261,32 @@ async fn run(
                         }
                     }
                     ZoneCommand::Pause => {
-                        stop_decode(&mut current_decode, &mut decode_rx).await;
-                        update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Paused; }).await;
+                        if matches!(source, ActiveSource::AirPlay) {
+                            if let Some(ref dacp) = dacp_client { let _ = dacp.play_pause().await; }
+                        } else {
+                            stop_decode(&mut current_decode, &mut decode_rx).await;
+                            update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Paused; }).await;
+                        }
                     }
                     ZoneCommand::Stop => {
                         stop_decode(&mut current_decode, &mut decode_rx).await;
                         source = ActiveSource::Idle;
                         update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Stopped; z.source = SourceType::Idle; z.track = None; }).await;
                     }
-                    ZoneCommand::Next => { handle_next(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers }).await; }
-                    ZoneCommand::Previous => { handle_previous(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers }).await; }
+                    ZoneCommand::Next => {
+                        if matches!(source, ActiveSource::AirPlay) {
+                            if let Some(ref dacp) = dacp_client { let _ = dacp.next().await; }
+                        } else {
+                            handle_next(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers }).await;
+                        }
+                    }
+                    ZoneCommand::Previous => {
+                        if matches!(source, ActiveSource::AirPlay) {
+                            if let Some(ref dacp) = dacp_client { let _ = dacp.prev().await; }
+                        } else {
+                            handle_previous(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers }).await;
+                        }
+                    }
                     ZoneCommand::NextPlaylist | ZoneCommand::PreviousPlaylist | ZoneCommand::SetPlaylist(_) => {
                         if let Some(sub) = &subsonic {
                             match sub.get_playlists().await {
@@ -451,8 +470,12 @@ async fn run(
                             let _ = ctx.snap_tx.send(SnapcastCmd { group_id: gid.clone(), action: SnapcastAction::Volume(percent) }).await;
                         }
                     }
+                    AirplayEvent::RemoteAvailable { client } => {
+                        dacp_client = Some(client);
+                    }
                     AirplayEvent::SessionEnded => {
                         source = ActiveSource::Idle;
+                        dacp_client = None;
                         covers.write().await.clear(zone_index);
                         update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Stopped; z.source = SourceType::Idle; z.track = None; }).await;
                     }

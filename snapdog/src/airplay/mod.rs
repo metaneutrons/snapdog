@@ -6,9 +6,11 @@
 //! Implements [`shairplay::AudioHandler`] / [`shairplay::AudioSession`] to bridge
 //! decoded PCM audio and metadata into the SnapDog ZonePlayer channels.
 
+use std::net::IpAddr;
 use std::sync::Arc;
 
 use anyhow::Result;
+use shairplay::dacp::DacpClient;
 use shairplay::{AudioFormat, AudioHandler, AudioSession, RaopServer};
 use tokio::sync::mpsc;
 
@@ -34,6 +36,9 @@ pub enum AirplayEvent {
     },
     Volume {
         percent: i32,
+    },
+    RemoteAvailable {
+        client: DacpClient,
     },
     SessionEnded,
 }
@@ -159,6 +164,20 @@ impl AudioSession for BridgeSession {
             position_ms,
             duration_ms,
         });
+    }
+
+    fn audio_remote_control_id(&mut self, dacp_id: &str, active_remote: &str, remote_addr: &[u8]) {
+        let ip = match remote_addr.len() {
+            4 => IpAddr::from(<[u8; 4]>::try_from(remote_addr).unwrap()),
+            16 => IpAddr::from(<[u8; 16]>::try_from(remote_addr).unwrap()),
+            _ => return,
+        };
+        let mut client = DacpClient::new(dacp_id, active_remote);
+        client.discover_from_remote(ip);
+        tracing::info!(%ip, dacp_id, "DACP remote control available");
+        let _ = self
+            .event_tx
+            .try_send(AirplayEvent::RemoteAvailable { client });
     }
 }
 
