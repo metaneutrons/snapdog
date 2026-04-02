@@ -14,7 +14,7 @@ const SOURCE_LABELS: Record<string, string> = {
 export function NowPlaying({ zone }: { zone: ZoneState }) {
   const track = zone.track;
   const isIdle = zone.source === "idle" || !track;
-  const coverUrl = track?.cover || null;
+  const coverUrl = track?.cover_url || null;
   const [coverError, setCoverError] = useState(false);
   const [lastCover, setLastCover] = useState(coverUrl);
 
