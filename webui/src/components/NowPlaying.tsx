@@ -53,7 +53,7 @@ export function NowPlaying({ zone }: { zone: ZoneState }) {
   return (
     <div className="flex flex-col items-center gap-5">
       {/* Cover art with blurred background */}
-      <div className="relative w-full max-w-xs aspect-square rounded-2xl overflow-hidden bg-muted shadow-lg shrink-0">
+      <div className="relative w-full aspect-square rounded-2xl xl:rounded-xl overflow-hidden bg-muted shadow-lg shrink-0">
         {coverError ? (
           <div className="flex items-center justify-center size-full">
             <span className="text-6xl">{zone.icon || "🎵"}</span>
