@@ -62,7 +62,7 @@ export function VolumeSlider({ zone, sendCommand }: VolumeSliderProps) {
   }, [zone.index, sendCommand]);
 
   return (
-    <div className="flex items-center gap-3 w-full max-w-xs">
+    <div className="flex items-center gap-3 w-full md:max-w-xs">
       <Button
         variant="ghost"
         size="icon"
