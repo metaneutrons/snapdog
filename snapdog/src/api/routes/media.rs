@@ -36,6 +36,7 @@ pub fn router(state: SharedState) -> Router {
             "/playlists/{playlist_index}/tracks/{track_index}",
             get(get_playlist_track),
         )
+        .route("/cover/{cover_id}", get(get_cover_art))
         .with_state(state)
 }
 
@@ -218,6 +219,7 @@ async fn get_playlist_tracks(
                                 "album": t.album,
                                 "duration": t.duration,
                                 "track": t.track,
+                                "cover_art": t.cover_art,
                             })
                         })
                         .collect::<Vec<_>>(),
@@ -263,11 +265,37 @@ async fn get_playlist_track(
                         "album": t.album,
                         "duration": t.duration,
                         "track": t.track,
+                        "cover_art": t.cover_art,
                     }))),
                     None => Err(StatusCode::NOT_FOUND),
                 },
                 Err(_) => Err(StatusCode::BAD_GATEWAY),
             }
         }
+    }
+}
+
+/// Proxy endpoint for Subsonic cover art by cover_art ID.
+/// GET /api/v1/media/cover/{cover_id}
+async fn get_cover_art(
+    State(state): State<SharedState>,
+    Path(cover_id): Path<String>,
+) -> impl IntoResponse {
+    let sub = subsonic(&state)?;
+    match sub.get_cover_art(&cover_id).await {
+        Ok(bytes) => {
+            let mime = if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+                "image/jpeg"
+            } else if bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
+                "image/png"
+            } else {
+                "image/octet-stream"
+            };
+            Ok((
+                [(axum::http::header::CONTENT_TYPE, mime.to_string())],
+                bytes,
+            ))
+        }
+        Err(_) => Err(StatusCode::NOT_FOUND),
     }
 }
