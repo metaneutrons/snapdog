@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { VolumeLowIcon, VolumeMute02Icon, ArrowDown01Icon } from "@hugeicons/core-free-icons";
+import { VolumeLowIcon, VolumeMute02Icon, ArrowDown01Icon, DragDropVerticalIcon } from "@hugeicons/core-free-icons";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
@@ -14,13 +14,17 @@ function ClientCard({ client, zoneList }: { client: ClientInfo; zoneList: { inde
 
   return (
     <div
-      className="flex items-center gap-3 px-3 py-2 xl:cursor-grab xl:active:cursor-grabbing"
+      className="flex items-center gap-2 px-2 py-2 rounded-lg bg-muted/50 shadow-inner xl:cursor-grab xl:active:cursor-grabbing xl:active:opacity-60 xl:hover:bg-muted/80 transition-all"
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData("application/x-snapdog-client", String(client.index));
         e.dataTransfer.effectAllowed = "move";
       }}
     >
+      {/* Drag handle */}
+      <div className="hidden xl:flex shrink-0 text-muted-foreground/40">
+        <HugeiconsIcon icon={DragDropVerticalIcon} size={14} />
+      </div>
       <div className="relative shrink-0">
         <span className="text-lg">{client.icon || "🔊"}</span>
         <div className={`absolute -bottom-0.5 -right-0.5 size-2 rounded-full ${client.connected ? "bg-green-500" : "bg-destructive"}`} />
