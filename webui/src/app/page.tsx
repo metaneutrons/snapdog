@@ -138,7 +138,7 @@ function ZoneDropTarget({ zoneIndex, children }: { zoneIndex: number; children: 
 
   return (
     <div
-      className={`border rounded-xl bg-card overflow-hidden transition-colors max-w-2xl ${dragOver ? "border-primary border-2" : "border-border"}`}
+      className={`border rounded-xl bg-card overflow-hidden transition-colors ${dragOver ? "border-primary border-2" : "border-border"}`}
       onDragOver={handleDragOver}
       onDragLeave={() => setDragOver(false)}
       onDrop={handleDrop}
@@ -181,7 +181,7 @@ function ZoneDetail({ zone, sendCommand }: { zone: ZoneState; sendCommand: (zone
           <div className="xl:w-56 xl:shrink-0">
             <NowPlaying zone={zone} />
           </div>
-          <div className="space-y-3 xl:flex-1 xl:min-w-0">
+          <div className="space-y-3 xl:flex-1 xl:min-w-0 xl:max-w-sm">
             <TrackInfo zone={zone} />
             <SeekBar zone={zone} />
             <TransportControls zone={zone} sendCommand={sendCommand} />
