@@ -24,19 +24,28 @@ export function SeekBar({ zone }: { zone: ZoneState }) {
   const [dragging, setDragging] = useState(false);
   const lastServerRef = useRef(serverPosition);
 
-  // Sync from server when position changes externally
+  const trackKey = `${track?.title}-${track?.artist}`;
+  const lastTrackRef = useRef(trackKey);
+
+  // Sync from server when position changes externally, or reset on track change
   useEffect(() => {
-    if (!dragging && serverPosition !== lastServerRef.current) {
+    if (trackKey !== lastTrackRef.current) {
+      setLocalPosition(0);
+      lastTrackRef.current = trackKey;
+      lastServerRef.current = 0;
+    } else if (!dragging && serverPosition !== lastServerRef.current) {
       setLocalPosition(serverPosition);
       lastServerRef.current = serverPosition;
     }
-  }, [serverPosition, dragging]);
+  }, [serverPosition, dragging, trackKey]);
+
+  const isEndless = duration === 0 && !isIdle && isPlaying;
 
   // Client-side interpolation: tick forward every 250ms while playing
   useEffect(() => {
     if (!isPlaying || dragging || isIdle) return;
     const interval = setInterval(() => {
-      setLocalPosition((prev) => Math.min(prev + 250, duration));
+      setLocalPosition((prev) => duration > 0 ? Math.min(prev + 250, duration) : prev + 250);
     }, 250);
     return () => clearInterval(interval);
   }, [isPlaying, dragging, isIdle, duration]);
@@ -73,8 +82,8 @@ export function SeekBar({ zone }: { zone: ZoneState }) {
   return (
     <div className="w-full md:max-w-xs space-y-1">
       <Slider
-        value={[localPosition]}
-        max={duration || 1}
+        value={isEndless ? [0] : [localPosition]}
+        max={isEndless ? 1 : (duration || 1)}
         step={1000}
         onValueChange={handleSeek}
         onValueCommit={handleSeekCommit}
@@ -83,7 +92,7 @@ export function SeekBar({ zone }: { zone: ZoneState }) {
       />
       <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
         <span>{formatTime(localPosition)}</span>
-        <span>{duration > 0 ? formatTime(duration) : "--:--"}</span>
+        <span>{duration > 0 ? formatTime(duration) : "∞"}</span>
       </div>
     </div>
   );
