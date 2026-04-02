@@ -41,55 +41,41 @@ export function NowPlaying({ zone }: { zone: ZoneState }) {
 
   if (isIdle) {
     return (
-      <div className="flex flex-col items-center justify-center gap-2">
-        <div className="relative w-full aspect-square rounded-2xl xl:rounded-xl overflow-hidden bg-muted shadow-lg flex items-center justify-center">
-          <span className="text-5xl xl:text-3xl">{zone.icon || "🔊"}</span>
-        </div>
+      <div className="relative w-full aspect-square rounded-2xl xl:rounded-xl overflow-hidden bg-muted shadow-lg flex items-center justify-center">
+        <span className="text-5xl xl:text-3xl">{zone.icon || "🔊"}</span>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col items-center gap-3">
-      {/* Cover art with blurred background */}
-      <div className="relative w-full aspect-square rounded-2xl xl:rounded-xl overflow-hidden bg-muted shadow-lg shrink-0">
-        {coverError ? (
-          <div className="flex items-center justify-center size-full">
-            <span className="text-5xl xl:text-3xl">{zone.icon || "🎵"}</span>
-          </div>
-        ) : (
-          <>
-            <Image
-              key={`bg-${coverKey}`}
-              src={coverUrl}
-              alt=""
-              fill
-              className="object-cover scale-110 blur-2xl opacity-40"
-              onError={() => setCoverError(true)}
-              unoptimized
-            />
-            <Image
-              key={`fg-${coverKey}`}
-              src={coverUrl}
-              alt={`${track.title} cover`}
-              fill
-              className="object-cover"
-              onError={() => setCoverError(true)}
-              priority
-              unoptimized
-            />
-          </>
-        )}
-      </div>
-
-      {/* Metadata */}
-      <div className="text-center xl:text-left space-y-0.5 w-full">
-        <h3 className="text-base font-bold leading-snug">{track.title || "Unknown"}</h3>
-        <p className="text-sm text-muted-foreground truncate">{track.artist || "Unknown Artist"}</p>
-        {track.album && (
-          <p className="text-xs text-muted-foreground/70 truncate">{track.album}</p>
-        )}
-      </div>
+    <div className="relative w-full aspect-square rounded-2xl xl:rounded-xl overflow-hidden bg-muted shadow-lg shrink-0">
+      {coverError ? (
+        <div className="flex items-center justify-center size-full">
+          <span className="text-5xl xl:text-3xl">{zone.icon || "🎵"}</span>
+        </div>
+      ) : (
+        <>
+          <Image
+            key={`bg-${coverKey}`}
+            src={coverUrl}
+            alt=""
+            fill
+            className="object-cover scale-110 blur-2xl opacity-40"
+            onError={() => setCoverError(true)}
+            unoptimized
+          />
+          <Image
+            key={`fg-${coverKey}`}
+            src={coverUrl}
+            alt={`${track.title} cover`}
+            fill
+            className="object-cover"
+            onError={() => setCoverError(true)}
+            priority
+            unoptimized
+          />
+        </>
+      )}
     </div>
   );
 }
