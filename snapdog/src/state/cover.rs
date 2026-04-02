@@ -75,7 +75,11 @@ fn detect_mime(bytes: &[u8]) -> &'static str {
 
 /// Fetch cover art from a URL, returning (bytes, mime).
 pub async fn fetch_cover(url: &str) -> Option<(Vec<u8>, String)> {
-    let resp = reqwest::get(url).await.ok()?.error_for_status().ok()?;
+    let client = reqwest::Client::builder()
+        .user_agent("SnapDog/1.0")
+        .build()
+        .ok()?;
+    let resp = client.get(url).send().await.ok()?.error_for_status().ok()?;
     let mime = resp
         .headers()
         .get("content-type")
