@@ -81,7 +81,7 @@ export function PlaylistBrowser({ zone }: PlaylistBrowserProps) {
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium truncate">{pl.name}</div>
                 <div className="text-xs text-muted-foreground">
-                  {pl.song_count} tracks · {formatDuration(Number(pl.duration))}
+                  {pl.song_count} tracks{Number(pl.duration) > 0 ? ` · ${formatDuration(Number(pl.duration))}` : ""}
                 </div>
               </div>
             </button>
