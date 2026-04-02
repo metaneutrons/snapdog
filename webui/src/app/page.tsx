@@ -175,7 +175,7 @@ function ZoneDetail({ zone, sendCommand }: { zone: ZoneState; sendCommand: (zone
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       <div className="w-full max-w-[calc(100%-2rem)] mx-auto md:max-w-[600px] space-y-3 px-4 py-4 md:px-5 md:py-4">
-        <ZoneHeader zone={zone} />
+        <div className="hidden md:block"><ZoneHeader zone={zone} /></div>
         {/* Tablet+Desktop: horizontal layout for cover + controls */}
         <div className="md:flex md:gap-5 md:items-stretch">
           <div className="md:w-56 md:shrink-0">
