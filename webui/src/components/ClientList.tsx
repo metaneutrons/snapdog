@@ -14,7 +14,7 @@ function ClientCard({ client, zoneList }: { client: ClientInfo; zoneList: { inde
 
   return (
     <div
-      className="flex items-center gap-2 px-2 py-2 rounded-lg bg-muted/50 shadow-inner xl:cursor-grab xl:active:cursor-grabbing xl:active:opacity-60 xl:hover:bg-muted/80 transition-all"
+      className="flex items-center gap-2 px-2 py-2 rounded-lg bg-muted shadow-[inset_0_2px_4px_rgba(0,0,0,0.15)] border border-border/50 xl:cursor-grab xl:active:cursor-grabbing xl:active:opacity-50 xl:active:shadow-lg xl:hover:border-primary/30 transition-all"
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData("application/x-snapdog-client", String(client.index));
