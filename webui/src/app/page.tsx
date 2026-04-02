@@ -350,12 +350,14 @@ export default function Home() {
         </div>
 
         {/* Desktop: all zones in responsive grid (xl+) */}
-        <div className="hidden xl:grid xl:gap-4 xl:p-4 flex-1 overflow-y-auto justify-center" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(480px, 1fr))' }}>
+        <div className="hidden xl:flex xl:flex-wrap xl:gap-4 xl:p-4 xl:justify-center flex-1 overflow-y-auto">
           {zoneList.map((z) => (
             <ZoneErrorBoundary key={z.index}>
-            <ZoneDropTarget zoneIndex={z.index}>
-                <ZoneDetail zone={z} sendCommand={sendCommand} />
-              </ZoneDropTarget>
+              <div className="w-full" style={{ minWidth: '480px', maxWidth: '680px', flex: '1 1 480px' }}>
+                <ZoneDropTarget zoneIndex={z.index}>
+                  <ZoneDetail zone={z} sendCommand={sendCommand} />
+                </ZoneDropTarget>
+              </div>
             </ZoneErrorBoundary>
           ))}
         </div>
