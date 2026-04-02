@@ -17,7 +17,7 @@ use super::helpers::*;
 use super::helpers::{DecodeState, PlaybackCtx};
 use crate::audio;
 use crate::snapcast;
-use crate::state::{self, PlaybackState, SourceType, TrackInfo};
+use crate::state::{PlaybackState, SourceType, TrackInfo};
 use crate::subsonic::SubsonicClient;
 
 /// Spawn a ZonePlayer task for each configured zone. Returns command senders.
@@ -136,16 +136,6 @@ async fn run(
                                         z.playlist_track_count = Some(track_count);
                                         z.track = Some(subsonic_track_info(track));
                                     }).await;
-                                    // Fetch cover art
-                                    if let Some(ref cover_id) = track.cover_art {
-                                        let covers = covers.clone();
-                                        let url = sub.cover_art_url(cover_id);
-                                        tokio::spawn(async move {
-                                            if let Some((bytes, mime)) = state::cover::fetch_cover(&url).await {
-                                                covers.write().await.set(zone_index, bytes, mime);
-                                            }
-                                        });
-                                    }
                                 }
                             }
                         }
@@ -191,15 +181,6 @@ async fn run(
                                         z.track = Some(radio_track_info(&radio.name));
                                     }).await;
                                     tracing::info!(zone = zone_index, radio = %radio.name, "Set radio station");
-                                    if let Some(cover_url) = &radio.cover {
-                                        if let Some((bytes, mime)) = state::cover::fetch_cover(cover_url).await {
-                                            covers.write().await.set(zone_index, bytes, mime);
-                                        } else {
-                                            covers.write().await.clear(zone_index);
-                                        }
-                                    } else {
-                                        covers.write().await.clear(zone_index);
-                                    }
                                 }
                             }
                         } else if let ActiveSource::SubsonicPlaylist { ref playlist_id, track_count, .. } = source {
@@ -262,14 +243,14 @@ async fn run(
                         if matches!(source, ActiveSource::AirPlay) {
                             if let Some(ref dacp) = dacp_client { let _ = dacp.next().await; }
                         } else {
-                            handle_next(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers }).await;
+                            handle_next(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify }).await;
                         }
                     }
                     ZoneCommand::Previous => {
                         if matches!(source, ActiveSource::AirPlay) {
                             if let Some(ref dacp) = dacp_client { let _ = dacp.prev().await; }
                         } else {
-                            handle_previous(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers }).await;
+                            handle_previous(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify }).await;
                         }
                     }
                     ZoneCommand::NextPlaylist | ZoneCommand::PreviousPlaylist | ZoneCommand::SetPlaylist(..) => {
@@ -320,15 +301,6 @@ async fn run(
                                     z.track = Some(radio_track_info(&radio.name));
                                 }).await;
                                 tracing::info!(zone = zone_index, radio = %radio.name, "Playing radio via playlist 0");
-                                if let Some(cover_url) = &radio.cover {
-                                    if let Some((bytes, mime)) = state::cover::fetch_cover(cover_url).await {
-                                        covers.write().await.set(zone_index, bytes, mime);
-                                    } else {
-                                        covers.write().await.clear(zone_index);
-                                    }
-                                } else {
-                                    covers.write().await.clear(zone_index);
-                                }
                             }
                         }
                             Some(crate::config::ResolvedPlaylist::Subsonic(sub_idx)) => {
@@ -466,7 +438,7 @@ async fn run(
                     None => {
                         current_decode = None;
                         decode_rx = None;
-                        handle_track_complete(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers }).await;
+                        handle_track_complete(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify }).await;
                     }
                 }
             }
