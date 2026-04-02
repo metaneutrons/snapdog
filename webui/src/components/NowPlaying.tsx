@@ -44,7 +44,7 @@ export function NowPlaying({ zone }: { zone: ZoneState }) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-12">
         <span className="text-5xl">{zone.icon || "🔊"}</span>
-        <h2 className="text-xl font-semibold">{zone.name}</h2>
+        <h2 className="text-lg font-semibold">{zone.name}</h2>
         <p className="text-sm text-muted-foreground">No audio playing</p>
       </div>
     );
@@ -84,7 +84,8 @@ export function NowPlaying({ zone }: { zone: ZoneState }) {
       </div>
 
       {/* Metadata */}
-      <div className="text-center space-y-1 max-w-xs w-full">
+      <div className="text-center space-y-1 w-full">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{zone.name}</p>
         <div className="flex items-center justify-center gap-2">
           <h3 className="text-lg font-semibold truncate">{track.title || "Unknown"}</h3>
           {sourceLabel && (

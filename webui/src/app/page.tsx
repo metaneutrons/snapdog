@@ -95,15 +95,22 @@ function ZoneRailItem({ zone, selected, onSelect }: {
 function ZoneDetail({ zone, sendCommand }: { zone: ZoneState; sendCommand: (zone: number, action: string, value?: string | number | boolean) => void }) {
   return (
     <div className="flex flex-1 flex-col items-center overflow-y-auto">
-      <div className="w-full max-w-xs space-y-4 px-6 py-6">
-        <NowPlaying zone={zone} />
-        <SeekBar zone={zone} />
-        <TransportControls zone={zone} sendCommand={sendCommand} />
-        <ShuffleRepeat zone={zone} />
-        <RadioStations zone={zone} />
-        <VolumeSlider zone={zone} sendCommand={sendCommand} />
-        <ClientList zone={zone} />
-        <PlaylistBrowser zone={zone} />
+      <div className="w-full max-w-xs xl:max-w-none space-y-4 px-6 py-6">
+        {/* Desktop: horizontal layout */}
+        <div className="xl:flex xl:gap-6 xl:items-start">
+          <div className="xl:shrink-0">
+            <NowPlaying zone={zone} />
+          </div>
+          <div className="space-y-4 xl:flex-1 xl:min-w-0">
+            <SeekBar zone={zone} />
+            <TransportControls zone={zone} sendCommand={sendCommand} />
+            <ShuffleRepeat zone={zone} />
+            <RadioStations zone={zone} />
+            <VolumeSlider zone={zone} sendCommand={sendCommand} />
+            <ClientList zone={zone} />
+            <PlaylistBrowser zone={zone} />
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -211,8 +218,8 @@ export default function Home() {
   return (
     <div className="flex flex-1 h-full">
       <ConnectionStatus />
-      {/* ── Sidebar / Rail (hidden on mobile) ──────────────── */}
-      <aside className="hidden md:flex flex-col border-r border-border bg-card md:w-60 xl:w-70 shrink-0">
+      {/* ── Sidebar / Rail (tablet only) ──────────────────── */}
+      <aside className="hidden md:flex xl:hidden flex-col border-r border-border bg-card md:w-60 shrink-0">
         <div className="px-4 py-4 border-b border-border flex items-center justify-between">
           <h1 className="text-base font-semibold">SnapDog</h1>
           <div className={`size-2 rounded-full ${isConnected ? "bg-green-500" : "bg-destructive"}`} />
@@ -231,8 +238,14 @@ export default function Home() {
 
       {/* ── Main content ───────────────────────────────────── */}
       <main className="flex flex-1 flex-col min-w-0">
-        {/* Mobile header (visible only on mobile) */}
+        {/* Mobile header */}
         <header className="flex md:hidden items-center justify-between px-4 py-3 border-b border-border">
+          <h1 className="text-base font-semibold">SnapDog</h1>
+          <div className={`size-2 rounded-full ${isConnected ? "bg-green-500" : "bg-destructive"}`} />
+        </header>
+
+        {/* Desktop header (xl+) */}
+        <header className="hidden xl:flex items-center justify-between px-6 py-3 border-b border-border">
           <h1 className="text-base font-semibold">SnapDog</h1>
           <div className={`size-2 rounded-full ${isConnected ? "bg-green-500" : "bg-destructive"}`} />
         </header>
@@ -254,12 +267,25 @@ export default function Home() {
           ))}
         </div>
 
-        {/* Zone detail */}
-        {currentZone && (
-          <ZoneErrorBoundary>
-            <ZoneDetail zone={currentZone} sendCommand={sendCommand} />
-          </ZoneErrorBoundary>
-        )}
+        {/* Desktop: all zones in grid (xl+) */}
+        <div className="hidden xl:grid xl:grid-cols-2 xl:gap-4 xl:p-4 flex-1 overflow-y-auto">
+          {zoneList.map((z) => (
+            <ZoneErrorBoundary key={z.index}>
+              <div className="border border-border rounded-xl bg-card overflow-hidden">
+                <ZoneDetail zone={z} sendCommand={sendCommand} />
+              </div>
+            </ZoneErrorBoundary>
+          ))}
+        </div>
+
+        {/* Mobile/Tablet: single selected zone */}
+        <div className="xl:hidden flex-1">
+          {currentZone && (
+            <ZoneErrorBoundary>
+              <ZoneDetail zone={currentZone} sendCommand={sendCommand} />
+            </ZoneErrorBoundary>
+          )}
+        </div>
       </main>
     </div>
   );
