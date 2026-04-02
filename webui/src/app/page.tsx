@@ -138,7 +138,7 @@ function ZoneDropTarget({ zoneIndex, children }: { zoneIndex: number; children: 
 
   return (
     <div
-      className={`border rounded-xl bg-card overflow-hidden transition-colors ${dragOver ? "border-primary border-2" : "border-border"}`}
+      className={`border rounded-xl bg-card overflow-hidden transition-colors max-w-2xl ${dragOver ? "border-primary border-2" : "border-border"}`}
       onDragOver={handleDragOver}
       onDragLeave={() => setDragOver(false)}
       onDrop={handleDrop}
@@ -350,10 +350,10 @@ export default function Home() {
         </div>
 
         {/* Desktop: all zones in responsive grid (xl+) */}
-        <div className="hidden xl:grid xl:gap-4 xl:p-4 flex-1 overflow-y-auto" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(520px, 1fr))' }}>
+        <div className="hidden xl:grid xl:gap-4 xl:p-4 flex-1 overflow-y-auto justify-center" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(480px, 1fr))' }}>
           {zoneList.map((z) => (
             <ZoneErrorBoundary key={z.index}>
-              <ZoneDropTarget zoneIndex={z.index}>
+            <ZoneDropTarget zoneIndex={z.index}>
                 <ZoneDetail zone={z} sendCommand={sendCommand} />
               </ZoneDropTarget>
             </ZoneErrorBoundary>
