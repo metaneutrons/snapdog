@@ -33,6 +33,14 @@ pub fn pcm_channel(buffer: usize) -> (PcmSender, PcmReceiver) {
 
 /// Decode an HTTP audio stream to PCM and send chunks to the provided sender.
 /// Runs until the stream ends or the sender is dropped.
+/// Result of resolving a playlist URL.
+enum ResolvedUrl {
+    /// A direct stream URL (or resolved from m3u/pls).
+    Direct(String),
+    /// An HLS media playlist URL that needs segment-by-segment downloading.
+    HlsMedia(String),
+}
+
 /// Returns an optional ICY metadata receiver for live title updates.
 #[tracing::instrument(skip(tx, audio_config, icy_meta_tx))]
 pub async fn decode_http_stream(
@@ -42,7 +50,14 @@ pub async fn decode_http_stream(
     icy_meta_tx: Option<tokio::sync::mpsc::Sender<icy::IcyMetadata>>,
 ) -> Result<()> {
     // Resolve playlist URLs (.m3u/.m3u8/.pls) to the actual stream URL
-    let url = resolve_playlist_url(&url).await.unwrap_or(url);
+    let resolved = resolve_playlist_url(&url).await;
+    let url = match resolved {
+        Some(ResolvedUrl::Direct(u)) => u,
+        Some(ResolvedUrl::HlsMedia(playlist_url)) => {
+            return decode_hls_stream(playlist_url, tx, audio_config).await;
+        }
+        None => url,
+    };
 
     // Use ICY-aware client to request metadata
     let client = icy::icy_client();
@@ -133,6 +148,120 @@ pub async fn decode_http_stream(
         result = decode_task => {
             result.context("Decoder task panicked")??;
         }
+    }
+
+    Ok(())
+}
+
+/// Decode an HLS media playlist by downloading segments sequentially and feeding them to symphonia.
+///
+/// HLS segments (.ts, .aac) are designed to be concatenated, so we download them one by one
+/// and write the bytes through a pipe to the symphonia decoder. For live streams, we re-fetch
+/// the playlist periodically to discover new segments.
+async fn decode_hls_stream(
+    playlist_url: String,
+    tx: PcmSender,
+    audio_config: AudioConfig,
+) -> Result<()> {
+    let client = reqwest::Client::builder()
+        .user_agent("SnapDog/1.0")
+        .build()
+        .context("Failed to build HTTP client")?;
+
+    let base_url = url::Url::parse(&playlist_url).context("Failed to parse HLS playlist URL")?;
+
+    let content_type = "audio/aac".to_string(); // HLS radio is typically AAC
+
+    let (mut pipe_tx, pipe_rx) = tokio::io::duplex(64 * 1024);
+
+    let hls_task = tokio::spawn(async move {
+        use tokio::io::AsyncWriteExt;
+        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut first_fetch = true;
+
+        loop {
+            let body = match client.get(&playlist_url).send().await {
+                Ok(resp) => match resp.error_for_status() {
+                    Ok(r) => match r.text().await {
+                        Ok(t) => t,
+                        Err(e) => {
+                            tracing::error!(error = %e, "HLS playlist read error");
+                            break;
+                        }
+                    },
+                    Err(e) => {
+                        tracing::error!(error = %e, "HLS playlist HTTP error");
+                        break;
+                    }
+                },
+                Err(e) => {
+                    tracing::error!(error = %e, "HLS playlist fetch error");
+                    break;
+                }
+            };
+
+            let segments: Vec<String> = body
+                .lines()
+                .map(|l| l.trim())
+                .filter(|l| !l.is_empty() && !l.starts_with('#'))
+                .map(|l| resolve_relative(&base_url, l))
+                .collect();
+
+            let target_duration: u64 = body
+                .lines()
+                .find_map(|l| {
+                    l.trim()
+                        .strip_prefix("#EXT-X-TARGETDURATION:")
+                        .and_then(|v| v.trim().parse().ok())
+                })
+                .unwrap_or(6);
+
+            let is_live = !body.contains("#EXT-X-ENDLIST");
+
+            // For live streams on first fetch, skip to near the live edge
+            let skip = if first_fetch && is_live && segments.len() > 3 {
+                segments.len() - 3
+            } else {
+                0
+            };
+
+            for seg_url in segments.iter().skip(skip) {
+                if !first_fetch && seen.contains(seg_url) {
+                    continue;
+                }
+                seen.insert(seg_url.clone());
+
+                tracing::debug!(segment = %seg_url, "Downloading HLS segment");
+                match client.get(seg_url).send().await {
+                    Ok(resp) => match resp.bytes().await {
+                        Ok(bytes) => {
+                            if pipe_tx.write_all(&bytes).await.is_err() {
+                                return;
+                            }
+                        }
+                        Err(e) => tracing::warn!(error = %e, "HLS segment read error"),
+                    },
+                    Err(e) => tracing::warn!(error = %e, "HLS segment fetch error"),
+                }
+            }
+
+            first_fetch = false;
+            if !is_live {
+                tracing::debug!("HLS VOD playlist complete");
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(target_duration / 2)).await;
+        }
+    });
+
+    let decode_task = tokio::task::spawn_blocking(move || {
+        let reader = SyncReader(tokio::runtime::Handle::current(), pipe_rx);
+        decode_to_pcm(reader, &content_type, tx, &audio_config)
+    });
+
+    tokio::select! {
+        _ = hls_task => tracing::debug!("HLS stream ended"),
+        result = decode_task => { result.context("HLS decoder panicked")??; }
     }
 
     Ok(())
@@ -270,7 +399,7 @@ impl MediaSource for SyncReader {
 /// - Handles relative URLs in playlists by resolving against the playlist's base URL.
 /// - For HLS master playlists (.m3u8 with #EXT-X-STREAM-INF), extracts the highest bitrate variant.
 /// - For HLS media playlists (segment lists), logs a warning — these need a proper HLS client.
-async fn resolve_playlist_url(url: &str) -> Option<String> {
+async fn resolve_playlist_url(url: &str) -> Option<ResolvedUrl> {
     let lower = url.to_lowercase();
     let ext_is_playlist =
         lower.ends_with(".m3u") || lower.ends_with(".m3u8") || lower.ends_with(".pls");
@@ -328,23 +457,21 @@ async fn resolve_playlist_url(url: &str) -> Option<String> {
             {
                 let resolved = resolve_relative(&base_url, stream_url.trim());
                 tracing::info!(playlist = url, %resolved, "Resolved PLS playlist");
-                return Some(resolved);
+                return Some(ResolvedUrl::Direct(resolved));
             }
         }
     } else if body.contains("#EXT-X-STREAM-INF") {
-        // HLS master playlist — extract highest bitrate variant
-        let resolved = resolve_hls_master(&base_url, &body);
-        if let Some(ref r) = resolved {
-            tracing::info!(playlist = url, resolved = %r, "Resolved HLS master playlist");
+        // HLS master playlist — extract highest bitrate variant, then check if it's a media playlist
+        if let Some(variant_url) = resolve_hls_master(&base_url, &body) {
+            tracing::info!(playlist = url, resolved = %variant_url, "Resolved HLS master playlist");
+            // Recursively resolve the variant — it might be a media playlist
+            return Box::pin(resolve_playlist_url(&variant_url)).await;
         }
-        return resolved;
-    } else if body.contains("#EXT-X-TARGETDURATION") || body.contains("#EXT-X-MEDIA-SEQUENCE") {
-        // HLS media playlist (segment list) — can't handle without HLS client
-        tracing::warn!(
-            url,
-            "HLS media playlist detected — SnapDog does not support HLS segment streaming"
-        );
         return None;
+    } else if body.contains("#EXT-X-TARGETDURATION") || body.contains("#EXT-X-MEDIA-SEQUENCE") {
+        // HLS media playlist — route to HLS segment streaming
+        tracing::info!(url, "HLS media playlist detected — using segment streaming");
+        return Some(ResolvedUrl::HlsMedia(url.to_string()));
     } else {
         // M3U: first non-empty, non-comment line
         for line in body.lines() {
@@ -352,7 +479,7 @@ async fn resolve_playlist_url(url: &str) -> Option<String> {
             if !line.is_empty() && !line.starts_with('#') {
                 let resolved = resolve_relative(&base_url, line);
                 tracing::info!(playlist = url, %resolved, "Resolved M3U playlist");
-                return Some(resolved);
+                return Some(ResolvedUrl::Direct(resolved));
             }
         }
     }
