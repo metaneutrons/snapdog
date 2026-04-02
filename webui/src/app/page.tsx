@@ -188,10 +188,10 @@ function ZoneDetail({ zone, sendCommand }: { zone: ZoneState; sendCommand: (zone
             <ShuffleRepeat zone={zone} />
             <RadioStations zone={zone} />
             <VolumeSlider zone={zone} sendCommand={sendCommand} />
-            <ClientList zone={zone} />
           </div>
         </div>
         {/* Full-width below the horizontal row */}
+        <ClientList zone={zone} />
         <PlaylistBrowser zone={zone} />
       </div>
     </div>
