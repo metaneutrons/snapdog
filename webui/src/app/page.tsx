@@ -94,14 +94,14 @@ function ZoneRailItem({ zone, selected, onSelect }: {
 
 function ZoneDetail({ zone, sendCommand }: { zone: ZoneState; sendCommand: (zone: number, action: string, value?: string | number | boolean) => void }) {
   return (
-    <div className="flex flex-1 flex-col items-center overflow-y-auto">
-      <div className="w-full max-w-xs xl:max-w-none space-y-4 px-6 py-6">
+    <div className="flex flex-1 flex-col overflow-y-auto">
+      <div className="w-full max-w-xs mx-auto xl:max-w-none space-y-4 px-4 py-4 xl:px-5 xl:py-5">
         {/* Desktop: horizontal layout */}
-        <div className="xl:flex xl:gap-6 xl:items-start">
-          <div className="xl:shrink-0">
+        <div className="xl:flex xl:gap-5 xl:items-start">
+          <div className="xl:w-40 xl:shrink-0">
             <NowPlaying zone={zone} />
           </div>
-          <div className="space-y-4 xl:flex-1 xl:min-w-0">
+          <div className="space-y-3 xl:flex-1 xl:min-w-0">
             <SeekBar zone={zone} />
             <TransportControls zone={zone} sendCommand={sendCommand} />
             <ShuffleRepeat zone={zone} />
@@ -267,8 +267,8 @@ export default function Home() {
           ))}
         </div>
 
-        {/* Desktop: all zones in grid (xl+) */}
-        <div className="hidden xl:grid xl:grid-cols-2 xl:gap-4 xl:p-4 flex-1 overflow-y-auto">
+        {/* Desktop: all zones in responsive grid (xl+) */}
+        <div className="hidden xl:grid xl:gap-4 xl:p-4 flex-1 overflow-y-auto" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))' }}>
           {zoneList.map((z) => (
             <ZoneErrorBoundary key={z.index}>
               <div className="border border-border rounded-xl bg-card overflow-hidden">
