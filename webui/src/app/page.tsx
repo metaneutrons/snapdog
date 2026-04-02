@@ -154,14 +154,14 @@ function TrackInfo({ zone }: { zone: ZoneState }) {
 
   if (isIdle) {
     return (
-      <div className="text-center xl:text-left py-1">
+      <div className="text-center md:text-left py-1">
         <p className="text-sm text-muted-foreground">No audio playing</p>
       </div>
     );
   }
 
   return (
-    <div className="text-center xl:text-left space-y-0.5 w-full">
+    <div className="text-center md:text-left space-y-0.5 w-full">
       <Marquee className="text-base font-bold leading-snug">{track.title || "Unknown"}</Marquee>
       <Marquee className="text-sm text-muted-foreground">{track.artist || "Unknown Artist"}</Marquee>
       {track.album && (
@@ -174,14 +174,14 @@ function TrackInfo({ zone }: { zone: ZoneState }) {
 function ZoneDetail({ zone, sendCommand }: { zone: ZoneState; sendCommand: (zone: number, action: string, value?: string | number | boolean) => void }) {
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
-      <div className="w-full max-w-xs mx-auto xl:max-w-none space-y-3 px-4 py-4 xl:px-5 xl:py-4">
+      <div className="w-full max-w-xs mx-auto md:max-w-2xl space-y-3 px-4 py-4 md:px-5 md:py-4">
         <ZoneHeader zone={zone} />
-        {/* Desktop: horizontal layout for cover + controls */}
-        <div className="xl:flex xl:gap-5 xl:items-stretch">
-          <div className="xl:w-56 xl:shrink-0">
+        {/* Tablet+Desktop: horizontal layout for cover + controls */}
+        <div className="md:flex md:gap-5 md:items-stretch">
+          <div className="md:w-56 md:shrink-0">
             <NowPlaying zone={zone} />
           </div>
-          <div className="space-y-3 xl:flex-1 xl:min-w-0 xl:max-w-sm">
+          <div className="space-y-3 md:flex-1 md:min-w-0 md:max-w-sm">
             <TrackInfo zone={zone} />
             <SeekBar zone={zone} />
             <TransportControls zone={zone} sendCommand={sendCommand} />
