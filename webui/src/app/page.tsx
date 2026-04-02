@@ -181,7 +181,7 @@ function ZoneDetail({ zone, sendCommand }: { zone: ZoneState; sendCommand: (zone
           <div className="md:w-56 md:shrink-0">
             <NowPlaying zone={zone} />
           </div>
-          <div className="space-y-3 md:flex-1 md:min-w-0 md:max-w-sm">
+          <div className="space-y-3 md:flex-1 md:min-w-0 md:max-w-sm md:min-h-56 md:justify-between">
             <TrackInfo zone={zone} />
             <SeekBar zone={zone} />
             <TransportControls zone={zone} sendCommand={sendCommand} />
