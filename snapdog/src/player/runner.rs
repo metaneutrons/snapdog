@@ -243,7 +243,9 @@ async fn run(
                     }
                     ZoneCommand::Play => {
                         if matches!(source, ActiveSource::AirPlay) {
-                            if let Some(ref dacp) = dacp_client { let _ = dacp.play_pause().await; }
+                            if let Some(ref dacp) = dacp_client {
+                                if let Err(e) = dacp.play_pause().await { tracing::warn!(error = %e, "DACP play_pause failed"); }
+                            } else { tracing::debug!("No DACP client available for AirPlay control"); }
                         } else if matches!(source, ActiveSource::Idle) {
                             let radio_idx = store.read().await.zones.get(&zone_index).and_then(|z| z.radio_index).unwrap_or(0);
                             if let Some(radio) = config.radios.get(radio_idx) {
@@ -262,7 +264,9 @@ async fn run(
                     }
                     ZoneCommand::Pause => {
                         if matches!(source, ActiveSource::AirPlay) {
-                            if let Some(ref dacp) = dacp_client { let _ = dacp.play_pause().await; }
+                            if let Some(ref dacp) = dacp_client {
+                                if let Err(e) = dacp.play_pause().await { tracing::warn!(error = %e, "DACP play_pause failed"); }
+                            } else { tracing::debug!("No DACP client available for AirPlay control"); }
                         } else {
                             stop_decode(&mut current_decode, &mut decode_rx).await;
                             update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Paused; }).await;
