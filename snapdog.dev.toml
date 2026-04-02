@@ -78,39 +78,49 @@ cover = "https://placehold.co/300x300/ff6400/white?text=Kultur"
 [[radio]]
 name = "MDR Kultur"
 url = "http://avw.mdr.de/streams/284310-0_aac_high.m3u"
+cover = "https://placehold.co/300x300/00305e/white?text=MDR"
 
 [[radio]]
 name = "NDR Info"
 url = "http://www.ndr.de/resources/metadaten/audio/m3u/ndrinfo.m3u"
+cover = "https://placehold.co/300x300/003d7d/white?text=NDR+Info"
 
 [[radio]]
 name = "NDR Kultur"
 url = "http://www.ndr.de/resources/metadaten/audio/m3u/ndrkultur.m3u"
+cover = "https://placehold.co/300x300/003d7d/white?text=NDR+Kultur"
 
 [[radio]]
 name = "NDR 1"
 url = "http://www.ndr.de/resources/metadaten/audio/m3u/ndr1niedersachsen.m3u"
+cover = "https://placehold.co/300x300/003d7d/white?text=NDR+1"
 
 [[radio]]
 name = "NDR 2"
 url = "http://www.ndr.de/resources/metadaten/audio/m3u/ndr2.m3u"
+cover = "https://placehold.co/300x300/003d7d/white?text=NDR+2"
 
 [[radio]]
 name = "NDR Info Spez."
 url = "http://www.ndr.de/resources/metadaten/audio/m3u/ndrinfo_spezial.m3u"
+cover = "https://placehold.co/300x300/003d7d/white?text=NDR+Spez"
 
 [[radio]]
 name = "NDR 90.3"
 url = "http://www.ndr.de/resources/metadaten/audio/m3u/ndr903.m3u"
+cover = "https://placehold.co/300x300/003d7d/white?text=NDR+90.3"
 
 [[radio]]
 name = "Swiss Pop"
 url = "https://stream.srg-ssr.ch/rsp/aacp_96.m3u"
+cover = "https://placehold.co/300x300/e30613/white?text=Swiss+Pop"
 
 [[radio]]
 name = "Swiss Classic"
 url = "https://stream.srg-ssr.ch/rsc_de/aacp_96.m3u"
+cover = "https://placehold.co/300x300/e30613/white?text=Swiss+Classic"
 
 [[radio]]
 name = "Swiss Jazz"
 url = "https://stream.srg-ssr.ch/rsj/aacp_96.m3u"
+cover = "https://placehold.co/300x300/e30613/white?text=Swiss+Jazz"
