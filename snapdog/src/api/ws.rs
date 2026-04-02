@@ -31,10 +31,6 @@ impl WsCommand {
             "stop" => Some(ZoneCommand::Stop),
             "next" => Some(ZoneCommand::Next),
             "previous" => Some(ZoneCommand::Previous),
-            "play_radio" => self
-                .value
-                .as_u64()
-                .map(|i| ZoneCommand::PlayRadio(i as usize)),
             "play_url" => self
                 .value
                 .as_str()

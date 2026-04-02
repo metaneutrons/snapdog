@@ -11,7 +11,6 @@ import { TransportControls } from "@/components/TransportControls";
 import { VolumeSlider } from "@/components/VolumeSlider";
 import { SeekBar } from "@/components/SeekBar";
 import { ShuffleRepeat } from "@/components/ShuffleRepeat";
-import { RadioStations } from "@/components/RadioStations";
 import { PlaylistBrowser } from "@/components/PlaylistBrowser";
 import { ClientList } from "@/components/ClientList";
 import { ConnectionStatus } from "@/components/ConnectionStatus";
@@ -186,7 +185,6 @@ function ZoneDetail({ zone, sendCommand }: { zone: ZoneState; sendCommand: (zone
             <SeekBar zone={zone} />
             <TransportControls zone={zone} sendCommand={sendCommand} />
             <ShuffleRepeat zone={zone} />
-            <RadioStations zone={zone} />
             <VolumeSlider zone={zone} sendCommand={sendCommand} />
           </div>
         </div>

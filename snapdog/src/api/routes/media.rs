@@ -48,25 +48,33 @@ fn subsonic(state: &SharedState) -> Result<SubsonicClient, StatusCode> {
 }
 
 async fn get_playlists(State(state): State<SharedState>) -> impl IntoResponse {
-    let sub = subsonic(&state)?;
-    match sub.get_playlists().await {
-        Ok(playlists) => Ok(Json(
-            playlists
-                .into_iter()
-                .map(|p| PlaylistInfo {
-                    id: p.id,
-                    name: p.name,
-                    song_count: p.song_count,
-                    duration: p.duration,
-                    cover_art: p.cover_art,
-                })
-                .collect::<Vec<_>>(),
-        )),
-        Err(e) => {
-            tracing::error!(error = %e, "Failed to fetch playlists");
-            Err(StatusCode::BAD_GATEWAY)
+    let mut result: Vec<PlaylistInfo> = Vec::new();
+
+    // Playlist 0: Radio stations (from config)
+    if !state.config.radios.is_empty() {
+        result.push(PlaylistInfo {
+            id: "radio".into(),
+            name: "Radio".into(),
+            song_count: state.config.radios.len() as u32,
+            duration: 0,
+            cover_art: None,
+        });
+    }
+
+    // Playlist 1+: Subsonic playlists
+    if let Ok(sub) = subsonic(&state) {
+        if let Ok(playlists) = sub.get_playlists().await {
+            result.extend(playlists.into_iter().map(|p| PlaylistInfo {
+                id: p.id,
+                name: p.name,
+                song_count: p.song_count,
+                duration: p.duration,
+                cover_art: p.cover_art,
+            }));
         }
     }
+
+    Ok::<_, StatusCode>(Json(result))
 }
 
 async fn get_playlist(
