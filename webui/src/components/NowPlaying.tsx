@@ -20,7 +20,7 @@ export function NowPlaying({ zone }: { zone: ZoneState }) {
   const coverKey = isRadio
     ? `${zone.index}-${track?.title}`
     : `${zone.index}-${track?.title}-${track?.artist}`;
-  const [coverVersion, setCoverVersion] = useState(0);
+  const [coverVersion, setCoverVersion] = useState(Date.now);
   const coverUrl = `${zones.coverUrl(zone.index)}?v=${coverKey}-${coverVersion}`;
   const [coverError, setCoverError] = useState(false);
   const [lastKey, setLastKey] = useState(coverKey);
@@ -29,7 +29,7 @@ export function NowPlaying({ zone }: { zone: ZoneState }) {
   if (coverKey !== lastKey) {
     setCoverError(false);
     setLastKey(coverKey);
-    setCoverVersion((v) => v + 1);
+    setCoverVersion(Date.now);
   }
 
   // Retry cover art after a delay if it failed (cover may arrive after metadata)
@@ -37,7 +37,7 @@ export function NowPlaying({ zone }: { zone: ZoneState }) {
     if (!coverError || isIdle) return;
     const timer = setTimeout(() => {
       setCoverError(false);
-      setCoverVersion((v) => v + 1);
+      setCoverVersion(Date.now);
     }, 1500);
     return () => clearTimeout(timer);
   }, [coverError, isIdle]);

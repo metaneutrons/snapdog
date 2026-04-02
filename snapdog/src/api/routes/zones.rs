@@ -599,7 +599,10 @@ async fn get_cover(State(state): State<SharedState>, Path(idx): Path<usize>) -> 
     let cache = state.covers.read().await;
     match cache.get(idx) {
         Some(entry) => Ok((
-            [(axum::http::header::CONTENT_TYPE, entry.mime.clone())],
+            [
+                (axum::http::header::CONTENT_TYPE, entry.mime.clone()),
+                (axum::http::header::CACHE_CONTROL, "no-cache".to_string()),
+            ],
             entry.bytes.clone(),
         )),
         None => Err(StatusCode::NOT_FOUND),
