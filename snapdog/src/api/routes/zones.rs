@@ -79,7 +79,6 @@ pub fn router(state: SharedState) -> Router {
         .route("/{zone_index}/track/title", get(get_track_title))
         .route("/{zone_index}/track/artist", get(get_track_artist))
         .route("/{zone_index}/track/album", get(get_track_album))
-        .route("/{zone_index}/track/cover", get(get_track_cover))
         .route("/{zone_index}/track/duration", get(get_track_duration))
         .route(
             "/{zone_index}/track/position",
@@ -112,7 +111,6 @@ pub fn router(state: SharedState) -> Router {
         .route("/{zone_index}/playlist/info", get(get_playlist_info))
         .route("/{zone_index}/playlist/count", get(get_playlist_count))
         .route("/{zone_index}/clients", get(get_clients))
-        .route("/{zone_index}/cover", get(get_cover))
         .with_state(state)
 }
 
@@ -359,7 +357,8 @@ async fn get_track_metadata(
         "content_type": zone.track.as_ref().and_then(|t| t.content_type.as_deref()),
         "sample_rate": zone.track.as_ref().and_then(|t| t.sample_rate),
         "source": zone.source.to_string(),
-        "cover": format!("/api/v1/zones/{idx}/cover"),
+        "cover": zone.playlist_index.zip(zone.playlist_track_index).map(|(pi, ti)| format!("/api/v1/media/playlists/{pi}/tracks/{ti}/cover")),
+        "playlist_index": zone.playlist_index,
         "playlist_track_index": zone.playlist_track_index,
         "playlist_track_count": zone.playlist_track_count,
     })))
@@ -389,15 +388,6 @@ async fn get_track_album(
     read_zone(&state, idx)
         .await
         .map(|z| Json(z.track.map_or(String::new(), |t| t.album)))
-        .ok_or(zone_not_found())
-}
-async fn get_track_cover(
-    State(state): State<SharedState>,
-    Path(idx): Path<usize>,
-) -> impl IntoResponse {
-    read_zone(&state, idx)
-        .await
-        .map(|_| Json(format!("/api/v1/zones/{idx}/cover")))
         .ok_or(zone_not_found())
 }
 async fn get_track_duration(
@@ -589,18 +579,4 @@ async fn get_clients(State(state): State<SharedState>, Path(idx): Path<usize>) -
             })
             .collect(),
     )
-}
-
-async fn get_cover(State(state): State<SharedState>, Path(idx): Path<usize>) -> impl IntoResponse {
-    let cache = state.covers.read().await;
-    match cache.get(idx) {
-        Some(entry) => Ok((
-            [
-                (axum::http::header::CONTENT_TYPE, entry.mime.clone()),
-                (axum::http::header::CACHE_CONTROL, "no-cache".to_string()),
-            ],
-            entry.bytes.clone(),
-        )),
-        None => Err(StatusCode::NOT_FOUND),
-    }
 }

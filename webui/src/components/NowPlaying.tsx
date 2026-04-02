@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import type { ZoneState } from "@/stores/useAppStore";
-import { zones } from "@/lib/api";
 
 const SOURCE_LABELS: Record<string, string> = {
   radio: "Radio",
@@ -15,31 +14,15 @@ const SOURCE_LABELS: Record<string, string> = {
 export function NowPlaying({ zone }: { zone: ZoneState }) {
   const track = zone.track;
   const isIdle = zone.source === "idle" || !track;
-  const isRadio = zone.source === "radio";
-  const coverKey = isRadio
-    ? `${zone.index}-${track?.title}`
-    : `${zone.index}-${track?.title}-${track?.artist}`;
-  const [coverVersion, setCoverVersion] = useState(Date.now);
-  const coverUrl = `${zones.coverUrl(zone.index)}?v=${coverKey}-${coverVersion}`;
+  const coverUrl = track?.cover || null;
   const [coverError, setCoverError] = useState(false);
-  const [lastKey, setLastKey] = useState(coverKey);
+  const [lastCover, setLastCover] = useState(coverUrl);
 
-  // Reset error state and bump version when track changes
-  if (coverKey !== lastKey) {
+  // Reset error state when cover URL changes
+  if (coverUrl !== lastCover) {
     setCoverError(false);
-    setLastKey(coverKey);
-    setCoverVersion(Date.now);
+    setLastCover(coverUrl);
   }
-
-  // Retry cover art after a delay if it failed (cover may arrive after metadata)
-  useEffect(() => {
-    if (!coverError || isIdle) return;
-    const timer = setTimeout(() => {
-      setCoverError(false);
-      setCoverVersion(Date.now);
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, [coverError, isIdle]);
 
   const fallback = (
     <div className="flex flex-col items-center justify-center size-full bg-gradient-to-br from-muted to-muted/60">
@@ -48,7 +31,7 @@ export function NowPlaying({ zone }: { zone: ZoneState }) {
     </div>
   );
 
-  if (isIdle) {
+  if (isIdle || !coverUrl) {
     return (
       <div className="relative w-full aspect-square rounded-2xl md:rounded-xl overflow-hidden shadow-lg">
         {fallback}
@@ -61,14 +44,14 @@ export function NowPlaying({ zone }: { zone: ZoneState }) {
       {coverError ? fallback : (
         <>
           <img
-            key={`bg-${coverKey}-${coverVersion}`}
+            key={`bg-${coverUrl}`}
             src={coverUrl}
             alt=""
             className="absolute inset-0 w-full h-full object-cover scale-110 blur-2xl opacity-40"
             onError={() => setCoverError(true)}
           />
           <img
-            key={`fg-${coverKey}-${coverVersion}`}
+            key={`fg-${coverUrl}`}
             src={coverUrl}
             alt={`${track.title} cover`}
             className="absolute inset-0 w-full h-full object-contain"

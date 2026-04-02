@@ -118,8 +118,6 @@ export const zones = {
   getPlayback: (id: number) => get<string>(`${Z}/${id}/playback`),
   getClients: (id: number) => get<number[]>(`${Z}/${id}/clients`),
 
-  // Cover art URL (not a fetch — returns the URL string for <img>)
-  coverUrl: (id: number) => `${BASE}${Z}/${id}/cover`,
 };
 
 // ── Clients ───────────────────────────────────────────────────
