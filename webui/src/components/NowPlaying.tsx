@@ -16,7 +16,6 @@ const SOURCE_LABELS: Record<string, string> = {
 export function NowPlaying({ zone }: { zone: ZoneState }) {
   const track = zone.track;
   const isIdle = zone.source === "idle" || !track;
-  const sourceLabel = SOURCE_LABELS[zone.source];
   const coverKey = `${zone.index}-${track?.title}-${track?.artist}`;
   const [coverVersion, setCoverVersion] = useState(0);
   const coverUrl = `${zones.coverUrl(zone.index)}?v=${coverKey}-${coverVersion}`;
@@ -42,21 +41,21 @@ export function NowPlaying({ zone }: { zone: ZoneState }) {
 
   if (isIdle) {
     return (
-      <div className="flex flex-col items-center justify-center gap-3 py-12">
-        <span className="text-5xl">{zone.icon || "🔊"}</span>
-        <h2 className="text-lg font-semibold">{zone.name}</h2>
-        <p className="text-sm text-muted-foreground">No audio playing</p>
+      <div className="flex flex-col items-center justify-center gap-2">
+        <div className="relative w-full aspect-square rounded-2xl xl:rounded-xl overflow-hidden bg-muted shadow-lg flex items-center justify-center">
+          <span className="text-5xl xl:text-3xl">{zone.icon || "🔊"}</span>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col items-center gap-5">
+    <div className="flex flex-col items-center gap-3">
       {/* Cover art with blurred background */}
       <div className="relative w-full aspect-square rounded-2xl xl:rounded-xl overflow-hidden bg-muted shadow-lg shrink-0">
         {coverError ? (
           <div className="flex items-center justify-center size-full">
-            <span className="text-6xl">{zone.icon || "🎵"}</span>
+            <span className="text-5xl xl:text-3xl">{zone.icon || "🎵"}</span>
           </div>
         ) : (
           <>
@@ -84,19 +83,11 @@ export function NowPlaying({ zone }: { zone: ZoneState }) {
       </div>
 
       {/* Metadata */}
-      <div className="text-center space-y-1 w-full">
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{zone.name}</p>
-        <div className="flex items-center justify-center gap-2">
-          <h3 className="text-lg font-semibold truncate">{track.title || "Unknown"}</h3>
-          {sourceLabel && (
-            <span className="shrink-0 text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
-              {sourceLabel}
-            </span>
-          )}
-        </div>
-        <p className="text-sm text-muted-foreground truncate">{track.artist || "Unknown Artist"}</p>
+      <div className="text-center xl:text-left space-y-0.5 w-full">
+        <h3 className="text-sm font-semibold">{track.title || "Unknown"}</h3>
+        <p className="text-xs text-muted-foreground truncate">{track.artist || "Unknown Artist"}</p>
         {track.album && (
-          <p className="text-xs text-muted-foreground/70 truncate">{track.album}</p>
+          <p className="text-[10px] text-muted-foreground/70 truncate">{track.album}</p>
         )}
       </div>
     </div>

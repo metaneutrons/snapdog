@@ -56,7 +56,7 @@ export function PlaylistBrowser({ zone }: PlaylistBrowserProps) {
   };
 
   return (
-    <div className="w-full space-y-1">
+    <div className="w-full space-y-1 xl:max-h-48 xl:overflow-y-auto">
       {playlists.map((pl) => (
         <div key={pl.id}>
           <div className={`flex items-center gap-1 rounded-lg transition-colors ${

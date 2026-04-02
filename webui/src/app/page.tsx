@@ -92,10 +92,35 @@ function ZoneRailItem({ zone, selected, onSelect }: {
 
 // ── Zone Detail — composes all control components ─────────────
 
+const SOURCE_LABELS: Record<string, string> = {
+  radio: "Radio",
+  subsonic_playlist: "Subsonic",
+  subsonic_track: "Subsonic",
+  airplay: "AirPlay",
+  url: "URL",
+};
+
+function ZoneHeader({ zone }: { zone: ZoneState }) {
+  const sourceLabel = SOURCE_LABELS[zone.source];
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <h2 className="text-sm font-semibold truncate">{zone.name}</h2>
+      {sourceLabel ? (
+        <span className="shrink-0 text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
+          {sourceLabel}
+        </span>
+      ) : (
+        <span className="shrink-0 text-[10px] text-muted-foreground">Idle</span>
+      )}
+    </div>
+  );
+}
+
 function ZoneDetail({ zone, sendCommand }: { zone: ZoneState; sendCommand: (zone: number, action: string, value?: string | number | boolean) => void }) {
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
-      <div className="w-full max-w-xs mx-auto xl:max-w-none space-y-4 px-4 py-4 xl:px-5 xl:py-5">
+      <div className="w-full max-w-xs mx-auto xl:max-w-none space-y-3 px-4 py-4 xl:px-5 xl:py-4">
+        <ZoneHeader zone={zone} />
         {/* Desktop: horizontal layout */}
         <div className="xl:flex xl:gap-5 xl:items-start">
           <div className="xl:w-40 xl:shrink-0">
