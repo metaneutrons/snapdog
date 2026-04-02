@@ -50,6 +50,24 @@ impl CoverCache {
 }
 
 /// Detect MIME type from magic bytes.
+
+/// Simple percent-decoding for data: URI payloads.
+fn percent_decode_bytes(input: &str) -> Vec<u8> {
+    let mut out = Vec::with_capacity(input.len());
+    let mut chars = input.bytes();
+    while let Some(b) = chars.next() {
+        if b == b'%' {
+            let hi = chars.next().and_then(|c| (c as char).to_digit(16));
+            let lo = chars.next().and_then(|c| (c as char).to_digit(16));
+            if let (Some(h), Some(l)) = (hi, lo) {
+                out.push((h * 16 + l) as u8);
+            }
+        } else {
+            out.push(b);
+        }
+    }
+    out
+}
 fn detect_mime(bytes: &[u8]) -> &'static str {
     match bytes {
         [0xFF, 0xD8, 0xFF, ..] => "image/jpeg",
@@ -75,6 +93,18 @@ fn detect_mime(bytes: &[u8]) -> &'static str {
 
 /// Fetch cover art from a URL, returning (bytes, mime).
 pub async fn fetch_cover(url: &str) -> Option<(Vec<u8>, String)> {
+    // Handle data: URIs (e.g. data:image/svg+xml;charset=US-ASCII,%3Csvg...)
+    if let Some(rest) = url.strip_prefix("data:") {
+        let (header, data) = rest.split_once(',')?;
+        let mime = header
+            .split(';')
+            .next()
+            .unwrap_or("application/octet-stream")
+            .to_string();
+        let bytes = percent_decode_bytes(data);
+        return Some((bytes, mime));
+    }
+
     let client = reqwest::Client::builder()
         .user_agent("SnapDog/1.0")
         .build()

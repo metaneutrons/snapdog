@@ -65,62 +65,75 @@ mac = "02:42:ac:11:00:12"
 zone = "1st Floor"
 icon = "🛏️"
 
+# German public radio stations
 [[radio]]
 name = "Deutschlandfunk"
 url = "https://st01.sslstream.dlf.de/dlf/01/high/aac/stream.aac"
-cover = "https://placehold.co/300x300/198AFF/white?text=DLF"
+cover = "data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2272%22%20height%3D%2272%22%20fill%3D%22none%22%20viewBox%3D%220%200%2072%2072%22%3E%3Crect%20width%3D%2272%22%20height%3D%2271.998%22%20fill%3D%22%23198AFF%22%20rx%3D%222.8%22%2F%3E%3Cpath%20fill%3D%22%23fff%22%20d%3D%22M59.0409%2031.8969H15.8403V41.1881H59.0409V31.8969ZM15.8403%2027.2031H54.967V21.216H15.8403V27.2031ZM15.8403%2016.9585H44.2502V12.9609H15.8403V16.9585ZM52.2316%2045.8849H15.8374V51.3643H52.2316V45.8849ZM44.248%2059.0426H15.8374V55.6189H44.248V59.0426Z%22%2F%3E%3C%2Fsvg%3E"
 
 [[radio]]
 name = "DLF Kultur"
 url = "https://st02.sslstream.dlf.de/dlf/02/high/aac/stream.aac"
-cover = "https://placehold.co/300x300/ff6400/white?text=Kultur"
+cover = "data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2272%22%20height%3D%2272%22%20fill%3D%22none%22%20viewBox%3D%220%200%2072%2072%22%3E%3Crect%20width%3D%2272%22%20height%3D%2271.998%22%20fill%3D%22%23ff6400%22%20rx%3D%222.8%22%2F%3E%3Cpath%20fill%3D%22%23fff%22%20d%3D%22M59.0409%2031.8969H15.8403V41.1881H59.0409V31.8969ZM15.8403%2027.2031H54.967V21.216H15.8403V27.2031ZM15.8403%2016.9585H44.2502V12.9609H15.8403V16.9585ZM52.2316%2045.8849H15.8374V51.3643H52.2316V45.8849ZM44.248%2059.0426H15.8374V55.6189H44.248V59.0426Z%22%2F%3E%3C%2Fsvg%3E"
 
 [[radio]]
 name = "MDR Kultur"
 url = "http://avw.mdr.de/streams/284310-0_aac_high.m3u"
-cover = "https://placehold.co/300x300/00305e/white?text=MDR"
+cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Logo_MDR_KULTUR_2016.png/320px-Logo_MDR_KULTUR_2016.png"
 
 [[radio]]
 name = "NDR Info"
 url = "http://www.ndr.de/resources/metadaten/audio/m3u/ndrinfo.m3u"
-cover = "https://placehold.co/300x300/003d7d/white?text=NDR+Info"
+cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f0/NDR_Info_Logo_2019.svg/257px-NDR_Info_Logo_2019.svg.png"
 
 [[radio]]
 name = "NDR Kultur"
 url = "http://www.ndr.de/resources/metadaten/audio/m3u/ndrkultur.m3u"
-cover = "https://placehold.co/300x300/003d7d/white?text=NDR+Kultur"
+cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/NDR_Kultur_Logo_2019.svg/257px-NDR_Kultur_Logo_2019.svg.png"
 
 [[radio]]
 name = "NDR 1"
 url = "http://www.ndr.de/resources/metadaten/audio/m3u/ndr1niedersachsen.m3u"
-cover = "https://placehold.co/300x300/003d7d/white?text=NDR+1"
+cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/NDR_1_Niedersachsen_Logo_2019.svg/257px-NDR_1_Niedersachsen_Logo_2019.svg.png"
 
 [[radio]]
 name = "NDR 2"
 url = "http://www.ndr.de/resources/metadaten/audio/m3u/ndr2.m3u"
-cover = "https://placehold.co/300x300/003d7d/white?text=NDR+2"
+cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1f/NDR_2_Logo_2019.svg/257px-NDR_2_Logo_2019.svg.png"
 
 [[radio]]
 name = "NDR Info Spez."
 url = "http://www.ndr.de/resources/metadaten/audio/m3u/ndrinfo_spezial.m3u"
-cover = "https://placehold.co/300x300/003d7d/white?text=NDR+Spez"
+cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f0/NDR_Info_Logo_2019.svg/257px-NDR_Info_Logo_2019.svg.png"
 
 [[radio]]
 name = "NDR 90.3"
 url = "http://www.ndr.de/resources/metadaten/audio/m3u/ndr903.m3u"
-cover = "https://placehold.co/300x300/003d7d/white?text=NDR+90.3"
+cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/NDR_90%2C3_Logo_2019.svg/257px-NDR_90%2C3_Logo_2019.svg.png"
 
+# Swiss radio stations
 [[radio]]
 name = "Swiss Pop"
 url = "https://stream.srg-ssr.ch/rsp/aacp_96.m3u"
-cover = "https://placehold.co/300x300/e30613/white?text=Swiss+Pop"
+cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/Radio_Swiss_Pop_Logo_2018.svg/281px-Radio_Swiss_Pop_Logo_2018.svg.png"
 
 [[radio]]
 name = "Swiss Classic"
 url = "https://stream.srg-ssr.ch/rsc_de/aacp_96.m3u"
-cover = "https://placehold.co/300x300/e30613/white?text=Swiss+Classic"
+cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f4/Radio_Swiss_Classic_Logo_2018.svg/281px-Radio_Swiss_Classic_Logo_2018.svg.png"
 
 [[radio]]
 name = "Swiss Jazz"
 url = "https://stream.srg-ssr.ch/rsj/aacp_96.m3u"
-cover = "https://placehold.co/300x300/e30613/white?text=Swiss+Jazz"
+cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c4/Radio_Swiss_Jazz_Logo_2018.svg/281px-Radio_Swiss_Jazz_Logo_2018.svg.png"
+
+# International stations
+[[radio]]
+name = "Loli Radio"
+url = "http://stream.lolliradio.net/lolli_soft.mp3"
+cover = "https://www.lolliradio.net/images/logo.png"
+
+[[radio]]
+name = "80s80s"
+url = "https://streams.80s80s.de/web/mp3-192"
+cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4a/80s80s_Logo_2015.svg/320px-80s80s_Logo_2015.svg.png"
