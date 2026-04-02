@@ -39,21 +39,24 @@ export function NowPlaying({ zone }: { zone: ZoneState }) {
     return () => clearTimeout(timer);
   }, [coverError, isIdle]);
 
+  const fallback = (
+    <div className="flex flex-col items-center justify-center size-full bg-gradient-to-br from-muted to-muted/60">
+      <span className="text-6xl xl:text-4xl mb-2 drop-shadow-md">{zone.icon || "🎵"}</span>
+      <span className="text-xs font-medium text-muted-foreground/60 tracking-wider uppercase">{zone.name}</span>
+    </div>
+  );
+
   if (isIdle) {
     return (
-      <div className="relative w-full aspect-square xl:aspect-auto xl:h-full rounded-2xl xl:rounded-xl overflow-hidden bg-muted shadow-lg flex items-center justify-center">
-        <span className="text-5xl xl:text-3xl">{zone.icon || "🔊"}</span>
+      <div className="relative w-full aspect-square xl:aspect-auto xl:h-full rounded-2xl xl:rounded-xl overflow-hidden shadow-lg">
+        {fallback}
       </div>
     );
   }
 
   return (
     <div className="relative w-full aspect-square xl:aspect-auto xl:h-full rounded-2xl xl:rounded-xl overflow-hidden bg-muted shadow-lg shrink-0">
-      {coverError ? (
-        <div className="flex items-center justify-center size-full">
-          <span className="text-5xl xl:text-3xl">{zone.icon || "🎵"}</span>
-        </div>
-      ) : (
+      {coverError ? fallback : (
         <>
           <Image
             key={`bg-${coverKey}`}
