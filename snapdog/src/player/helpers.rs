@@ -106,7 +106,7 @@ pub async fn start_radio_decode(
                 tracing::info!(zone = zone_index, title = %title, "ICY title update");
                 update_and_notify(&icy_store, zone_index, &icy_notify, |z| {
                     if let Some(ref mut track) = z.track {
-                        track.title = title.clone();
+                        track.artist = title.clone();
                     }
                 })
                 .await;
