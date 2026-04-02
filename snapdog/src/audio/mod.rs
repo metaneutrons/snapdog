@@ -267,7 +267,7 @@ impl MediaSource for SyncReader {
 async fn resolve_playlist_url(url: &str) -> Option<String> {
     // Quick check: skip obvious non-playlists by extension
     let lower = url.to_lowercase();
-    let ext_hint = lower.ends_with(".m3u") || lower.ends_with(".m3u8") || lower.ends_with(".pls");
+    let _ext_hint = lower.ends_with(".m3u") || lower.ends_with(".m3u8") || lower.ends_with(".pls");
 
     // If extension doesn't hint at playlist, do a HEAD request to check Content-Type
     let response = reqwest::get(url).await.ok()?;
