@@ -69,7 +69,7 @@ export interface ClientInfo {
 // ── Media (Subsonic) ──────────────────────────────────────────
 
 export interface PlaylistInfo {
-  id: string;
+  id: number;
   name: string;
   song_count: number;
   duration: number;
