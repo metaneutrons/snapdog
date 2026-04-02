@@ -102,9 +102,18 @@ export function PlaylistBrowser({ zone }: PlaylistBrowserProps) {
                   onClick={() => playTrack(pl.id, i)}
                   className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-muted transition-colors group"
                 >
-                  <span className="text-xs text-muted-foreground w-5 text-right tabular-nums">
-                    {t.track || i + 1}
-                  </span>
+                  <div className="size-8 rounded bg-primary/10 flex items-center justify-center shrink-0 overflow-hidden">
+                    {t.cover_art ? (
+                      <img
+                        src={`/api/v1/media/cover/${t.cover_art}`}
+                        alt=""
+                        className="size-full object-cover"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                      />
+                    ) : (
+                      <span className="text-xs text-muted-foreground tabular-nums">{t.track || i + 1}</span>
+                    )}
+                  </div>
                   <div className="min-w-0 flex-1">
                     <div className="text-sm truncate">{t.title}</div>
                     <div className="text-xs text-muted-foreground truncate">{t.artist}</div>
