@@ -29,6 +29,7 @@ rubato = { workspace = true }
 rumqttc = { workspace = true }
 knxkit = { workspace = true }
 reqwest = { workspace = true }
+url = { workspace = true }
 futures-util = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }

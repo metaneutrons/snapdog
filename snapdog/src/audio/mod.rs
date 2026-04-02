@@ -263,14 +263,44 @@ impl MediaSource for SyncReader {
 }
 
 /// Resolve playlist URLs (.m3u/.m3u8/.pls) to the actual stream URL.
-/// Detects playlists by Content-Type first, then falls back to file extension.
+///
+/// Strategy:
+/// - If the URL has a playlist extension (.m3u/.m3u8/.pls), fetch it directly.
+/// - Otherwise, do a HEAD request first to check Content-Type without downloading the body.
+/// - Handles relative URLs in playlists by resolving against the playlist's base URL.
+/// - For HLS master playlists (.m3u8 with #EXT-X-STREAM-INF), extracts the highest bitrate variant.
+/// - For HLS media playlists (segment lists), logs a warning — these need a proper HLS client.
 async fn resolve_playlist_url(url: &str) -> Option<String> {
-    // Quick check: skip obvious non-playlists by extension
     let lower = url.to_lowercase();
-    let _ext_hint = lower.ends_with(".m3u") || lower.ends_with(".m3u8") || lower.ends_with(".pls");
+    let ext_is_playlist =
+        lower.ends_with(".m3u") || lower.ends_with(".m3u8") || lower.ends_with(".pls");
 
-    // If extension doesn't hint at playlist, do a HEAD request to check Content-Type
-    let response = reqwest::get(url).await.ok()?;
+    let client = reqwest::Client::builder()
+        .user_agent("SnapDog/1.0")
+        .build()
+        .ok()?;
+
+    // For non-playlist extensions, do a HEAD request first to avoid downloading audio data
+    if !ext_is_playlist {
+        let head = client.head(url).send().await.ok()?;
+        let ct = head
+            .headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .to_lowercase();
+        let ct_is_playlist = ct.contains("mpegurl")
+            || ct.contains("x-mpegurl")
+            || ct.contains("vnd.apple.mpegurl")
+            || ct.contains("x-scpls")
+            || ct.contains("scpls");
+        if !ct_is_playlist {
+            return None; // Not a playlist — caller should use the original URL directly
+        }
+    }
+
+    // Fetch the playlist body
+    let response = client.get(url).send().await.ok()?.error_for_status().ok()?;
     let content_type = response
         .headers()
         .get("content-type")
@@ -278,22 +308,15 @@ async fn resolve_playlist_url(url: &str) -> Option<String> {
         .unwrap_or("")
         .to_lowercase();
 
-    let is_m3u = content_type.contains("mpegurl")
-        || content_type.contains("x-mpegurl")
-        || content_type.contains("vnd.apple.mpegurl")
-        || lower.ends_with(".m3u")
-        || lower.ends_with(".m3u8");
-
     let is_pls = content_type.contains("x-scpls")
         || content_type.contains("scpls")
         || lower.ends_with(".pls");
 
-    if !is_m3u && !is_pls {
-        return None;
-    }
-
     tracing::debug!(url, content_type, "Resolving playlist");
     let body = response.text().await.ok()?;
+
+    // Parse the playlist base URL for resolving relative paths
+    let base_url = url::Url::parse(url).ok()?;
 
     if is_pls {
         // PLS format: INI-style, look for File1=URL
@@ -303,22 +326,91 @@ async fn resolve_playlist_url(url: &str) -> Option<String> {
                 .strip_prefix("File1=")
                 .or_else(|| line.strip_prefix("file1="))
             {
-                let resolved = stream_url.trim().to_string();
+                let resolved = resolve_relative(&base_url, stream_url.trim());
                 tracing::info!(playlist = url, %resolved, "Resolved PLS playlist");
                 return Some(resolved);
             }
         }
+    } else if body.contains("#EXT-X-STREAM-INF") {
+        // HLS master playlist — extract highest bitrate variant
+        let resolved = resolve_hls_master(&base_url, &body);
+        if let Some(ref r) = resolved {
+            tracing::info!(playlist = url, resolved = %r, "Resolved HLS master playlist");
+        }
+        return resolved;
+    } else if body.contains("#EXTINF")
+        && !body.lines().any(|l| {
+            let l = l.trim();
+            !l.is_empty()
+                && !l.starts_with('#')
+                && (l.starts_with("http://") || l.starts_with("https://"))
+        })
+    {
+        // HLS media playlist (segments only, no full URLs) — can't handle without HLS client
+        tracing::warn!(
+            url,
+            "HLS media playlist detected — SnapDog does not support HLS segment streaming"
+        );
+        return None;
     } else {
-        // M3U/M3U8: first non-empty, non-comment line
+        // M3U: first non-empty, non-comment line
         for line in body.lines() {
             let line = line.trim();
             if !line.is_empty() && !line.starts_with('#') {
-                tracing::info!(playlist = url, resolved = %line, "Resolved M3U playlist");
-                return Some(line.to_string());
+                let resolved = resolve_relative(&base_url, line);
+                tracing::info!(playlist = url, %resolved, "Resolved M3U playlist");
+                return Some(resolved);
             }
         }
     }
 
     tracing::warn!(url, "Playlist contained no stream URLs");
     None
+}
+
+/// Resolve a potentially relative URL against a base URL.
+fn resolve_relative(base: &url::Url, target: &str) -> String {
+    if target.starts_with("http://") || target.starts_with("https://") {
+        target.to_string()
+    } else {
+        base.join(target)
+            .map(|u| u.to_string())
+            .unwrap_or_else(|_| target.to_string())
+    }
+}
+
+/// Extract the highest bitrate variant URL from an HLS master playlist.
+fn resolve_hls_master(base: &url::Url, body: &str) -> Option<String> {
+    let mut best_bandwidth: u64 = 0;
+    let mut best_url: Option<String> = None;
+    let mut next_is_url = false;
+
+    for line in body.lines() {
+        let line = line.trim();
+        if line.starts_with("#EXT-X-STREAM-INF") {
+            // Parse BANDWIDTH=nnn from the tag
+            if let Some(bw_str) = line.split(',').find_map(|attr| {
+                let attr = attr.trim();
+                attr.strip_prefix("BANDWIDTH=")
+                    .or_else(|| attr.strip_prefix("#EXT-X-STREAM-INF:BANDWIDTH="))
+            }) {
+                if let Ok(bw) = bw_str.trim().parse::<u64>() {
+                    if bw > best_bandwidth {
+                        best_bandwidth = bw;
+                        next_is_url = true;
+                        continue;
+                    }
+                }
+            }
+            next_is_url = true;
+        } else if next_is_url && !line.is_empty() && !line.starts_with('#') {
+            if best_bandwidth > 0 || best_url.is_none() {
+                best_url = Some(resolve_relative(base, line));
+            }
+            next_is_url = false;
+            best_bandwidth = 0; // Reset so we only update on higher bandwidth
+        }
+    }
+
+    best_url
 }
