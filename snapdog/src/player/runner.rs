@@ -247,19 +247,19 @@ async fn run(
                     }
                     ZoneCommand::NextPlaylist | ZoneCommand::PreviousPlaylist | ZoneCommand::SetPlaylist(_) => {
                         // Unified playlist model: index 0 = radio (from config), index 1+ = Subsonic playlists
-                        let has_radio = !config.radios.is_empty();
                         let subsonic_playlists = if let Some(sub) = &subsonic {
                             sub.get_playlists().await.unwrap_or_default()
                         } else {
                             vec![]
                         };
-                        let total_count = if has_radio { 1 } else { 0 } + subsonic_playlists.len();
+                        let total_count = config.unified_playlist_count(subsonic_playlists.len());
                         if total_count == 0 {
                             tracing::warn!(zone = zone_index, "No playlists available");
                             continue;
                         }
 
                         // Determine current unified index
+                        let has_radio = config.has_radio_playlist();
                         let current_unified = match &source {
                             ActiveSource::Radio { .. } => 0,
                             ActiveSource::SubsonicPlaylist { playlist_id, .. } => {
@@ -276,8 +276,8 @@ async fn run(
                             _ => continue,
                         };
 
-                        // Is target the radio playlist?
-                        if has_radio && target_unified == 0 {
+                        match config.resolve_playlist_index(target_unified, subsonic_playlists.len()) {
+                            Some(crate::config::ResolvedPlaylist::Radio) => {
                             stop_decode(&mut current_decode, &mut decode_rx).await;
                             if let Some(radio) = config.radios.first() {
                                 start_radio_decode(&radio.url, config, &mut current_decode, &mut decode_rx, store, zone_index, notify).await;
@@ -304,9 +304,8 @@ async fn run(
                                     });
                                 }
                             }
-                        } else {
-                            // Subsonic playlist
-                            let sub_idx = if has_radio { target_unified - 1 } else { target_unified };
+                        }
+                            Some(crate::config::ResolvedPlaylist::Subsonic(sub_idx)) => {
                             if let Some(sub) = &subsonic {
                                 if let Some(pl) = subsonic_playlists.get(sub_idx) {
                                     tracing::info!(zone = zone_index, playlist = %pl.name, "Switching playlist");
@@ -332,6 +331,8 @@ async fn run(
                                     }
                                 }
                             }
+                        }
+                            _ => {}
                         }
                     }
                     ZoneCommand::Seek(pos_ms) => {

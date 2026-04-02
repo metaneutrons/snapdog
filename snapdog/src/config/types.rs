@@ -249,6 +249,46 @@ pub struct AppConfig {
     pub radios: Vec<RadioConfig>,
 }
 
+/// Result of resolving a unified playlist index.
+#[derive(Debug, Clone)]
+pub enum ResolvedPlaylist {
+    /// Index 0 when radios are configured.
+    Radio,
+    /// A Subsonic playlist, with its position in the Subsonic list.
+    Subsonic(usize),
+}
+
+impl AppConfig {
+    /// Whether the radio "playlist" occupies index 0.
+    pub fn has_radio_playlist(&self) -> bool {
+        !self.radios.is_empty()
+    }
+
+    /// Total number of unified playlists (radio + subsonic).
+    pub fn unified_playlist_count(&self, subsonic_count: usize) -> usize {
+        (if self.has_radio_playlist() { 1 } else { 0 }) + subsonic_count
+    }
+
+    /// Resolve a unified playlist index to radio or a Subsonic playlist offset.
+    pub fn resolve_playlist_index(
+        &self,
+        index: usize,
+        subsonic_count: usize,
+    ) -> Option<ResolvedPlaylist> {
+        let has_radio = self.has_radio_playlist();
+        let total = self.unified_playlist_count(subsonic_count);
+        if index >= total {
+            return None;
+        }
+        if has_radio && index == 0 {
+            Some(ResolvedPlaylist::Radio)
+        } else {
+            let sub_idx = if has_radio { index - 1 } else { index };
+            Some(ResolvedPlaylist::Subsonic(sub_idx))
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ZoneConfig {
     pub index: usize,

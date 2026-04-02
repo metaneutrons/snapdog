@@ -11,6 +11,7 @@ use axum::{Json, Router};
 use serde::Serialize;
 
 use crate::api::SharedState;
+use crate::config::ResolvedPlaylist;
 use crate::subsonic::SubsonicClient;
 
 #[derive(Serialize)]
@@ -82,39 +83,53 @@ async fn get_playlists(State(state): State<SharedState>) -> impl IntoResponse {
     Ok::<_, StatusCode>(Json(result))
 }
 
-/// Resolve a unified playlist index to either radio or a Subsonic playlist ID.
-/// Returns None for radio (index 0 when radios exist), Some(subsonic_id) for Subsonic.
-async fn resolve_subsonic_id(
+/// Resolve a unified playlist index using the shared config logic.
+async fn resolve_playlist(
     state: &SharedState,
     index: usize,
-) -> Result<Option<String>, StatusCode> {
-    let has_radio = !state.config.radios.is_empty();
-    if has_radio && index == 0 {
-        return Ok(None); // radio
-    }
-    let sub_idx = if has_radio { index - 1 } else { index };
-    let sub = subsonic(state)?;
-    let playlists = sub
-        .get_playlists()
-        .await
-        .map_err(|_| StatusCode::BAD_GATEWAY)?;
-    playlists
-        .get(sub_idx)
-        .map(|p| Some(p.id.clone()))
+) -> Result<ResolvedPlaylist, StatusCode> {
+    let sub_playlists = if let Ok(sub) = subsonic(state) {
+        sub.get_playlists().await.unwrap_or_default()
+    } else {
+        vec![]
+    };
+    state
+        .config
+        .resolve_playlist_index(index, sub_playlists.len())
         .ok_or(StatusCode::NOT_FOUND)
+}
+
+/// Resolve index and return the Subsonic playlist ID (or NOT_FOUND for radio/out-of-range).
+async fn resolve_subsonic_id(state: &SharedState, index: usize) -> Result<String, StatusCode> {
+    let sub_playlists = if let Ok(sub) = subsonic(state) {
+        sub.get_playlists().await.unwrap_or_default()
+    } else {
+        vec![]
+    };
+    match state
+        .config
+        .resolve_playlist_index(index, sub_playlists.len())
+    {
+        Some(ResolvedPlaylist::Subsonic(sub_idx)) => sub_playlists
+            .get(sub_idx)
+            .map(|p| p.id.clone())
+            .ok_or(StatusCode::NOT_FOUND),
+        _ => Err(StatusCode::NOT_FOUND),
+    }
 }
 
 async fn get_playlist(
     State(state): State<SharedState>,
     Path(index): Path<usize>,
 ) -> impl IntoResponse {
-    match resolve_subsonic_id(&state, index).await? {
-        None => Ok(Json(serde_json::json!({
+    match resolve_playlist(&state, index).await? {
+        ResolvedPlaylist::Radio => Ok(Json(serde_json::json!({
             "id": index,
             "name": "Radio",
             "tracks": state.config.radios.len(),
         }))),
-        Some(id) => {
+        ResolvedPlaylist::Subsonic(_) => {
+            let id = resolve_subsonic_id(&state, index).await?;
             let sub = subsonic(&state)?;
             match sub.get_playlist(&id).await {
                 Ok(playlist) => Ok(Json(serde_json::json!({
@@ -135,9 +150,7 @@ async fn get_playlist_cover(
     State(state): State<SharedState>,
     Path(index): Path<usize>,
 ) -> impl IntoResponse {
-    let id = resolve_subsonic_id(&state, index)
-        .await?
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let id = resolve_subsonic_id(&state, index).await?;
     let sub = subsonic(&state)?;
     let playlist = sub
         .get_playlists()
@@ -170,8 +183,8 @@ async fn get_playlist_tracks(
     State(state): State<SharedState>,
     Path(index): Path<usize>,
 ) -> impl IntoResponse {
-    match resolve_subsonic_id(&state, index).await? {
-        None => Ok(Json(
+    match resolve_playlist(&state, index).await? {
+        ResolvedPlaylist::Radio => Ok(Json(
             state
                 .config
                 .radios
@@ -189,7 +202,8 @@ async fn get_playlist_tracks(
                 })
                 .collect::<Vec<_>>(),
         )),
-        Some(id) => {
+        ResolvedPlaylist::Subsonic(_) => {
+            let id = resolve_subsonic_id(&state, index).await?;
             let sub = subsonic(&state)?;
             match sub.get_playlist(&id).await {
                 Ok(playlist) => Ok(Json(
@@ -221,8 +235,8 @@ async fn get_playlist_track(
     State(state): State<SharedState>,
     Path((index, track_index)): Path<(usize, usize)>,
 ) -> impl IntoResponse {
-    match resolve_subsonic_id(&state, index).await? {
-        None => state
+    match resolve_playlist(&state, index).await? {
+        ResolvedPlaylist::Radio => state
             .config
             .radios
             .get(track_index)
@@ -237,7 +251,8 @@ async fn get_playlist_track(
                 }))
             })
             .ok_or(StatusCode::NOT_FOUND),
-        Some(id) => {
+        ResolvedPlaylist::Subsonic(_) => {
+            let id = resolve_subsonic_id(&state, index).await?;
             let sub = subsonic(&state)?;
             match sub.get_playlist(&id).await {
                 Ok(playlist) => match playlist.entry.get(track_index) {
