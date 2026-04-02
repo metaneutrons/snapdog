@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback, useState, Component, type ReactNode } from "react";
+import { useEffect, useCallback, useState, Component, type ReactNode, type DragEvent } from "react";
 import { useAppStore, type ZoneState } from "@/stores/useAppStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { api, zones } from "@/lib/api";
@@ -116,6 +116,38 @@ function ZoneHeader({ zone }: { zone: ZoneState }) {
   );
 }
 
+function ZoneDropTarget({ zoneIndex, children }: { zoneIndex: number; children: ReactNode }) {
+  const [dragOver, setDragOver] = useState(false);
+
+  const handleDragOver = (e: DragEvent) => {
+    if (e.dataTransfer.types.includes("application/x-snapdog-client")) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      setDragOver(true);
+    }
+  };
+
+  const handleDrop = (e: DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const clientIndex = Number(e.dataTransfer.getData("application/x-snapdog-client"));
+    if (!isNaN(clientIndex)) {
+      api.clients.setZone(clientIndex, zoneIndex).catch(() => {});
+    }
+  };
+
+  return (
+    <div
+      className={`border rounded-xl bg-card overflow-hidden transition-colors ${dragOver ? "border-primary border-2" : "border-border"}`}
+      onDragOver={handleDragOver}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={handleDrop}
+    >
+      {children}
+    </div>
+  );
+}
+
 function ZoneDetail({ zone, sendCommand }: { zone: ZoneState; sendCommand: (zone: number, action: string, value?: string | number | boolean) => void }) {
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
@@ -123,7 +155,7 @@ function ZoneDetail({ zone, sendCommand }: { zone: ZoneState; sendCommand: (zone
         <ZoneHeader zone={zone} />
         {/* Desktop: horizontal layout for cover + controls */}
         <div className="xl:flex xl:gap-5 xl:items-start">
-          <div className="xl:w-40 xl:shrink-0">
+          <div className="xl:w-56 xl:shrink-0">
             <NowPlaying zone={zone} />
           </div>
           <div className="space-y-3 xl:flex-1 xl:min-w-0">
@@ -297,9 +329,9 @@ export default function Home() {
         <div className="hidden xl:grid xl:gap-4 xl:p-4 flex-1 overflow-y-auto" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))' }}>
           {zoneList.map((z) => (
             <ZoneErrorBoundary key={z.index}>
-              <div className="border border-border rounded-xl bg-card overflow-hidden">
+              <ZoneDropTarget zoneIndex={z.index}>
                 <ZoneDetail zone={z} sendCommand={sendCommand} />
-              </div>
+              </ZoneDropTarget>
             </ZoneErrorBoundary>
           ))}
         </div>

@@ -84,10 +84,10 @@ export function NowPlaying({ zone }: { zone: ZoneState }) {
 
       {/* Metadata */}
       <div className="text-center xl:text-left space-y-0.5 w-full">
-        <h3 className="text-sm font-semibold">{track.title || "Unknown"}</h3>
-        <p className="text-xs text-muted-foreground truncate">{track.artist || "Unknown Artist"}</p>
+        <h3 className="text-base font-bold leading-snug">{track.title || "Unknown"}</h3>
+        <p className="text-sm text-muted-foreground truncate">{track.artist || "Unknown Artist"}</p>
         {track.album && (
-          <p className="text-[10px] text-muted-foreground/70 truncate">{track.album}</p>
+          <p className="text-xs text-muted-foreground/70 truncate">{track.album}</p>
         )}
       </div>
     </div>
