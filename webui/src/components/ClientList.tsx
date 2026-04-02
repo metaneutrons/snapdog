@@ -81,7 +81,7 @@ function ClientCard({ client, zoneList }: { client: ClientInfo; zoneList: { inde
 }
 
 export function ClientList({ zone }: { zone: ZoneState }) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(() => typeof window !== "undefined" && window.innerWidth >= 768);
   const clients = useAppStore((s) => s.clients);
   const zones = useAppStore((s) => s.zones);
 
