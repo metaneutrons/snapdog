@@ -81,6 +81,13 @@ async fn get_playlist(
     State(state): State<SharedState>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
+    if id == "radio" {
+        return Ok(Json(serde_json::json!({
+            "id": "radio",
+            "name": "Radio",
+            "tracks": state.config.radios.len(),
+        })));
+    }
     let sub = subsonic(&state)?;
     match sub.get_playlist(&id).await {
         Ok(playlist) => Ok(Json(serde_json::json!({
@@ -122,6 +129,26 @@ async fn get_playlist_tracks(
     State(state): State<SharedState>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
+    if id == "radio" {
+        return Ok(Json(
+            state
+                .config
+                .radios
+                .iter()
+                .enumerate()
+                .map(|(i, r)| {
+                    serde_json::json!({
+                        "id": format!("radio_{i}"),
+                        "title": r.name,
+                        "artist": "Radio",
+                        "album": "",
+                        "duration": 0,
+                        "track": i + 1,
+                    })
+                })
+                .collect::<Vec<_>>(),
+        ));
+    }
     let sub = subsonic(&state)?;
     match sub.get_playlist(&id).await {
         Ok(playlist) => Ok(Json(
