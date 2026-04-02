@@ -51,7 +51,7 @@ const RETRY_BASE_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
 /// Build a reqwest client with User-Agent and timeout.
 fn http_client() -> Result<reqwest::Client> {
     reqwest::Client::builder()
-        .user_agent("SnapDog/1.0")
+        .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
         .timeout(HTTP_TIMEOUT)
         .build()
         .context("Failed to build HTTP client")
