@@ -594,3 +594,69 @@ playlist_providers = ["spotify", "subsonic"]
 - Adding a new provider requires only: enum variant + provider query function + config name
 - KNX/MQTT automation scripts may need updating if the user changes provider order
 - Default behavior (no `playlist_providers` in config) is backward-compatible: `["subsonic"]`
+
+---
+
+## ADR-017: Built-in Per-Zone DSP (EQ + Compressor/Limiter)
+
+**Status:** Proposed (future)
+
+**Decision:** Implement per-zone audio DSP (parametric EQ and compressor/limiter) as
+built-in pure Rust code, drawing on algorithms from established open-source LV2 plugins.
+No plugin host system (LV2/LADSPA/AU).
+
+**Rationale:**
+- SnapDog targets headless appliances (RPi, NAS, Docker) — installing plugin packages
+  is impractical, and LV2/LADSPA don't work on macOS
+- Only two DSP effects are needed: parametric EQ and compressor/limiter
+- High-quality algorithms are well-documented in open-source LV2 plugins:
+  - **LSP Plugins** (GPL-3.0) — parametric EQ with precise filter curves
+  - **ZamPlugins** (GPL-2.0) — broadcast-grade compressor/limiter
+  - **x42 plugins** (GPL-2.0) — reference biquad EQ implementations
+- The `biquad` Rust crate provides standard IIR filter primitives (peaking, shelving,
+  high/low pass) — the building blocks for any parametric EQ
+- A compressor/limiter is ~50-100 lines of Rust (envelope follower + gain reduction)
+- Pure Rust = works everywhere, no FFI, no shared libraries, no system dependencies
+
+**Pipeline change (when implemented):**
+```
+Current:  Decode → S16LE → Resampler → S16LE → TCP → Snapserver
+Future:   Decode → F32 → Resampler → [EQ → Compressor/Limiter] → S16LE → TCP → Snapserver
+```
+
+Internal format switches from S16LE to F32 to avoid precision loss during DSP.
+S16LE conversion happens once at the final output stage.
+
+**Config:**
+```toml
+[zone.eq]
+enabled = true
+bands = [
+    { type = "low_shelf", freq = 80, gain = 3.0, q = 0.7 },
+    { type = "peaking", freq = 1000, gain = -1.5, q = 1.0 },
+    { type = "high_shelf", freq = 8000, gain = -2.0, q = 0.7 },
+]
+
+[zone.compressor]
+enabled = true
+threshold = -20.0  # dBFS
+ratio = 4.0
+attack_ms = 10.0
+release_ms = 100.0
+makeup_gain = 0.0
+
+[zone.limiter]
+enabled = true
+threshold = -1.0  # dBFS — brick-wall ceiling
+```
+
+**API + WebUI:**
+- `GET/PUT /api/v1/zones/{id}/eq` — read/update EQ bands
+- `GET/PUT /api/v1/zones/{id}/compressor` — read/update compressor settings
+- WebUI: EQ curve visualization + compressor gain reduction meter per zone
+
+**Consequences:**
+- New `dsp` module with `Equalizer` (N-band biquad) and `Compressor` structs
+- Internal pipeline switches to F32 (all sources convert at decode boundary)
+- Per-zone DSP chain runs in the ZonePlayer select loop, zero additional latency
+- CPU cost is negligible for biquad filters + envelope follower at audio rates
