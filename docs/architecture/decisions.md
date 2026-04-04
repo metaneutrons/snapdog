@@ -470,3 +470,122 @@ struct WebAssets;
 - `rust-embed` adds a build dependency on the webui output directory
 - Development requires Node.js toolchain in addition to Rust
 - Two build steps: `npm run build` → `cargo build --release`
+
+---
+
+## ADR-015: Spotify Integration via librespot
+
+**Decision:** Integrate Spotify support using the `librespot` crate in two phases:
+- Phase 1: Spotify Connect receiver (passive, no credentials)
+- Phase 2: Active Spotify client (credentials, playlist playback)
+
+A potential Phase 3 (full media browser with search, albums, artists, library) is
+deferred as a future optional path.
+
+**Rationale:**
+- librespot is a mature, pure-Rust open-source Spotify client library (6.7k stars)
+- Spotify Connect is the #1 requested streaming protocol alongside AirPlay
+- Phase 1 requires zero user configuration (like AirPlay — just appears on the network)
+- Phase 2 integrates Spotify playlists into the unified playlist model alongside Radio and Subsonic
+
+**Phase 1 — Spotify Connect Receiver (passive):**
+- New module `snapdog/src/spotify/mod.rs` wrapping librespot
+- One Spotify Connect device advertised per zone via Zeroconf/mDNS
+- Device names: `"{prefix} {zone_name}"` (e.g., "SnapDog Ground Floor")
+- No credentials needed — the Spotify app on the user's device handles authentication
+- Audio: librespot decodes Vorbis/AAC → PCM → resampler → snapcast (same pipeline as all sources)
+- Metadata: librespot events → zone state → WebSocket notifications
+- Preemption: Spotify preempts current source (same as AirPlay)
+- Config:
+  ```toml
+  [spotify]
+  enabled = true
+  device_name_prefix = "SnapDog"
+  bitrate = 320  # 96, 160, 320
+  ```
+
+**Phase 2 — Active Spotify Client (credentials):**
+- When optional credentials are configured, SnapDog can actively browse and play Spotify playlists
+- Spotify playlists appear in the unified playlist index alongside Radio and Subsonic
+- Same `SetPlaylist(index, track)` command, same cover endpoint pattern
+- Config adds optional credentials:
+  ```toml
+  [spotify]
+  enabled = true
+  device_name_prefix = "SnapDog"
+  bitrate = 320
+  username = "user@example.com"  # optional: enables active playback
+  password = "..."               # or token cache for OAuth
+  ```
+
+**Integration pattern (same as AirPlay):**
+
+| Aspect | AirPlay | Spotify Connect | Spotify Active | Radio/Subsonic/URL |
+|--------|---------|-----------------|----------------|-------------------|
+| Control | External app | External app | SnapDog | SnapDog |
+| Audio | Push (RAOP) | Pull (librespot) | Pull (librespot) | Pull (HTTP) |
+| Metadata | DMAP push | librespot events | librespot events | ICY/Subsonic API |
+| Cover art | Raw bytes | URL in metadata | URL in metadata | Config URL/Subsonic |
+| Preempts | Yes | Yes | No (explicit) | No (explicit) |
+| Per-zone | Yes | Yes | N/A (shared) | N/A (shared) |
+
+**Consequences:**
+- New dependency: `librespot` crate (~adds to binary size)
+- Spotify Connect requires Spotify Premium on the controlling device
+- Active client mode requires Spotify Premium credentials in config
+- Cover art for Spotify tracks uses external URLs (i.scdn.co) — no proxy needed,
+  `cover_url` field in track metadata already supports arbitrary URLs
+
+---
+
+## ADR-016: Configurable Playlist Provider Ordering
+
+**Decision:** The order of playlist providers in the unified index is user-configurable
+via a `playlist_providers` list in the config. Radio is always index 0 (when configured).
+
+**Rationale:**
+- Different users have different primary music sources
+- KNX/MQTT use numeric playlist indices — the order matters for automation
+- Fixed index ranges (e.g., Spotify=1-99, Subsonic=100+) are fragile and wasteful
+- Dynamic ordering is extensible — new providers slot in without changing the scheme
+
+**Config:**
+```toml
+# Radio is always index 0 when [[radio]] entries exist.
+# Remaining providers are assigned indices in this order.
+playlist_providers = ["spotify", "subsonic"]
+```
+
+**Index assignment:**
+- Index 0 = Radio playlist (if `[[radio]]` entries exist)
+- Index 1..N = First provider's playlists
+- Index N+1..M = Second provider's playlists
+- etc.
+
+**Example with `playlist_providers = ["spotify", "subsonic"]` and 3 Spotify + 2 Subsonic playlists:**
+- 0 = Radio (12 stations)
+- 1 = Spotify: Discover Weekly
+- 2 = Spotify: Liked Songs
+- 3 = Spotify: Road Trip
+- 4 = Subsonic: Bulldogs Hits
+- 5 = Subsonic: SnapDog Hits
+
+**Swap order with `playlist_providers = ["subsonic", "spotify"]`:**
+- 0 = Radio
+- 1 = Subsonic: Bulldogs Hits
+- 2 = Subsonic: SnapDog Hits
+- 3 = Spotify: Discover Weekly
+- 4 = Spotify: Liked Songs
+- 5 = Spotify: Road Trip
+
+**Implementation:**
+- `AppConfig` gains `playlist_providers: Vec<String>` field (default: `["subsonic"]`)
+- `resolve_playlist_index()` iterates providers in order, accumulating offsets
+- `get_playlists` API assembles the unified list by querying each provider in order
+- `ResolvedPlaylist` enum gains a `Spotify(usize)` variant
+- Existing `Radio` and `Subsonic(usize)` variants unchanged
+
+**Consequences:**
+- Adding a new provider requires only: enum variant + provider query function + config name
+- KNX/MQTT automation scripts may need updating if the user changes provider order
+- Default behavior (no `playlist_providers` in config) is backward-compatible: `["subsonic"]`
