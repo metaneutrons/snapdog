@@ -27,23 +27,28 @@ Snapserver runs as a managed child process, started and supervised by the Rust b
 
 ---
 
-## ADR-002: libshairplay via Vendored C Source + FFI
+## ADR-002: Pure Rust AirPlay via shairplay crate
 
-**Decision:** AirPlay 1 (RAOP) support via `juhovh/shairplay` as a git submodule,
-compiled from source using the `cc` crate in `build.rs`.
+**Decision:** AirPlay 1 + 2 support via the `shairplay` crate — a pure Rust
+reimplementation of the original C library. No FFI, no vendored C source, no build.rs.
 
 **Rationale:**
-- No pure Rust RAOP implementation exists
-- libshairplay has a tiny, stable C API (~15 functions)
-- Callback-based design delivers raw PCM + metadata — perfect for our pipeline
-- AirPlay 1 is sufficient (no need for AirPlay 2's proprietary HAP pairing)
-- Vendoring ensures reproducible builds without system-level dependencies
+- Pure Rust: `#![forbid(unsafe_code)]`, no C compiler needed, cross-compiles trivially
+- Supports both AirPlay 1 (ALAC/PCM) and AirPlay 2 (AAC, encrypted transport, HAP pairing)
+- Same callback-based design: `AudioHandler` / `AudioSession` traits deliver F32LE PCM + metadata
+- Unified `RemoteControl` trait for AP1 (DACP) and AP2 (MediaRemote) transport control
+- `PairingStore` trait for persistent AP2 device pairing across restarts
+- Built-in ALAC/AAC decoding, optional resampling via `resample` feature
+- mDNS/Zeroconf service advertisement included
 
 **API surface:**
-- `raop_init` / `raop_start` / `raop_stop` / `raop_destroy`
-- `dnssd_init` / `dnssd_register_raop` / `dnssd_destroy` (mDNS included)
-- Callbacks: `audio_init`, `audio_process`, `audio_destroy`, `audio_flush`,
-  `audio_set_volume`, `audio_set_metadata`, `audio_set_coverart`, `audio_set_progress`
+- `RaopServer::builder()` → `.name()` / `.hwaddr()` / `.port()` / `.bind()` / `.pairing_store()` / `.build(handler)`
+- `AudioHandler::audio_init(format) → Box<dyn AudioSession>`
+- `AudioSession`: `audio_process`, `audio_flush`, `audio_set_volume`, `audio_set_metadata`,
+  `audio_set_coverart`, `audio_set_progress`, `remote_control_available`
+- `RemoteControl::send_command(RemoteCommand)` — Play, Pause, NextTrack, PreviousTrack, etc.
+
+**Supersedes:** Original ADR-002 (vendored C libshairplay + FFI via `cc` crate)
 
 ---
 
