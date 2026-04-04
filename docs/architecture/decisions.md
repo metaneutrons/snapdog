@@ -655,6 +655,12 @@ threshold = -1.0  # dBFS — brick-wall ceiling
 - `GET/PUT /api/v1/zones/{id}/compressor` — read/update compressor settings
 - WebUI: EQ curve visualization + compressor gain reduction meter per zone
 
+**Persistence:**
+- DSP settings are persisted in `snapdog.toml` (SSOT — one config file for everything)
+- API `PUT` updates live DSP parameters in memory for real-time tweaking (instant effect)
+- WebUI "save" writes current settings back to TOML for persistence across restarts
+- On startup, DSP chain is initialized from TOML config
+
 **Consequences:**
 - New `dsp` module with `Equalizer` (N-band biquad) and `Compressor` structs
 - Internal pipeline switches to F32 (all sources convert at decode boundary)
