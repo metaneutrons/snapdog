@@ -115,6 +115,10 @@ pub struct AirplayConfig {
     #[serde(default = "default_airplay_name")]
     pub name: String,
     pub password: Option<String>,
+    /// Path to persist AirPlay pairing keys (required for AP2 reconnects).
+    pub pairing_store: Option<std::path::PathBuf>,
+    /// Bind to specific addresses (default: all interfaces).
+    pub bind: Option<Vec<std::net::IpAddr>>,
 }
 
 impl Default for AirplayConfig {
@@ -122,6 +126,8 @@ impl Default for AirplayConfig {
         Self {
             name: default_airplay_name(),
             password: None,
+            pairing_store: None,
+            bind: None,
         }
     }
 }

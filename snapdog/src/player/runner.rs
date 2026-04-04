@@ -82,6 +82,8 @@ async fn run(
         let ap_config = crate::config::AirplayConfig {
             name: zone_config.airplay_name.clone(),
             password: config.airplay.password.clone(),
+            pairing_store: config.airplay.pairing_store.clone(),
+            bind: config.airplay.bind.clone(),
         };
         match crate::airplay::AirplayReceiver::start(
             &ap_config,
@@ -106,7 +108,7 @@ async fn run(
     let mut current_decode: Option<JoinHandle<()>> = None;
     let mut decode_rx: Option<mpsc::Receiver<Vec<u8>>> = None;
     let mut source = ActiveSource::Idle;
-    let mut dacp_client: Option<shairplay::dacp::DacpClient> = None;
+    let mut remote_control: Option<std::sync::Arc<dyn shairplay::RemoteControl>> = None;
     let mut resampler = audio::resample::Resampling::new(
         config.audio.sample_rate,
         config.audio.sample_rate,
@@ -201,9 +203,9 @@ async fn run(
                     }
                     ZoneCommand::Play => {
                         if matches!(source, ActiveSource::AirPlay) {
-                            if let Some(ref dacp) = dacp_client {
-                                if let Err(e) = dacp.play_pause().await { tracing::warn!(error = %e, "DACP play_pause failed"); }
-                            } else { tracing::debug!("No DACP client available for AirPlay control"); }
+                            if let Some(ref rc) = remote_control {
+                                if let Err(e) = rc.send_command(shairplay::RemoteCommand::Play) { tracing::warn!(error = %e, "Remote play failed"); }
+                            }
                         } else if matches!(source, ActiveSource::Idle) {
                             let z_state = store.read().await;
                             let radio_idx = z_state.zones.get(&zone_index).and_then(|z| {
@@ -226,9 +228,9 @@ async fn run(
                     }
                     ZoneCommand::Pause => {
                         if matches!(source, ActiveSource::AirPlay) {
-                            if let Some(ref dacp) = dacp_client {
-                                if let Err(e) = dacp.play_pause().await { tracing::warn!(error = %e, "DACP play_pause failed"); }
-                            } else { tracing::debug!("No DACP client available for AirPlay control"); }
+                            if let Some(ref rc) = remote_control {
+                                if let Err(e) = rc.send_command(shairplay::RemoteCommand::Pause) { tracing::warn!(error = %e, "Remote pause failed"); }
+                            }
                         } else {
                             stop_decode(&mut current_decode, &mut decode_rx).await;
                             update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Paused; }).await;
@@ -241,14 +243,14 @@ async fn run(
                     }
                     ZoneCommand::Next => {
                         if matches!(source, ActiveSource::AirPlay) {
-                            if let Some(ref dacp) = dacp_client { let _ = dacp.next().await; }
+                            if let Some(ref rc) = remote_control { let _ = rc.send_command(shairplay::RemoteCommand::NextTrack); }
                         } else {
                             handle_next(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify }).await;
                         }
                     }
                     ZoneCommand::Previous => {
                         if matches!(source, ActiveSource::AirPlay) {
-                            if let Some(ref dacp) = dacp_client { let _ = dacp.prev().await; }
+                            if let Some(ref rc) = remote_control { let _ = rc.send_command(shairplay::RemoteCommand::PreviousTrack); }
                         } else {
                             handle_previous(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify }).await;
                         }
@@ -470,12 +472,12 @@ async fn run(
                             let _ = ctx.snap_tx.send(SnapcastCmd { group_id: gid.clone(), action: SnapcastAction::Volume(percent) }).await;
                         }
                     }
-                    AirplayEvent::RemoteAvailable { client } => {
-                        dacp_client = Some(client);
+                    AirplayEvent::RemoteAvailable { remote } => {
+                        remote_control = Some(remote);
                     }
                     AirplayEvent::SessionEnded => {
                         source = ActiveSource::Idle;
-                        dacp_client = None;
+                        remote_control = None;
                         covers.write().await.clear(zone_index);
                         update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Stopped; z.source = SourceType::Idle; z.track = None; }).await;
                     }

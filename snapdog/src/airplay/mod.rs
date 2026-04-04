@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2025 Fabian Schmieder
 
-//! AirPlay 1 (RAOP) receiver via the pure-Rust `shairplay` crate.
+//! AirPlay 1 + 2 (RAOP) receiver via the pure-Rust `shairplay` crate.
 //!
 //! Implements [`shairplay::AudioHandler`] / [`shairplay::AudioSession`] to bridge
 //! decoded PCM audio and metadata into the SnapDog ZonePlayer channels.
 
-use std::net::IpAddr;
 use std::sync::Arc;
 
 use anyhow::Result;
-use shairplay::dacp::DacpClient;
-use shairplay::{AudioFormat, AudioHandler, AudioSession, RaopServer};
+use shairplay::{
+    AudioFormat, AudioHandler, AudioSession, BindConfig, PairingStore, RaopServer, RemoteControl,
+};
 use tokio::sync::mpsc;
 
 use crate::audio::PcmSender;
@@ -20,7 +20,6 @@ use crate::config::AirplayConfig;
 // ── Public types (unchanged from FFI version) ─────────────────
 
 /// AirPlay events sent to the ZonePlayer.
-#[derive(Debug)]
 pub enum AirplayEvent {
     Metadata {
         title: String,
@@ -38,7 +37,7 @@ pub enum AirplayEvent {
         percent: i32,
     },
     RemoteAvailable {
-        client: DacpClient,
+        remote: Arc<dyn RemoteControl>,
     },
     SessionEnded,
 }
@@ -76,11 +75,19 @@ impl AirplayReceiver {
             builder = builder.password(pw);
         }
 
+        if let Some(ref addrs) = config.bind {
+            builder = builder.bind(BindConfig::new().addrs(addrs.clone()));
+        }
+
+        if let Some(ref path) = config.pairing_store {
+            builder = builder.pairing_store(Arc::new(FilePairingStore::new(path.clone())));
+        }
+
         let mut server = builder.build(handler)?;
         server.start().await?;
 
         let port = server.service_info().port;
-        tracing::info!(name = %config.name, port, "AirPlay receiver started");
+        tracing::info!(name = %config.name, port, "AirPlay 2 receiver started");
 
         Ok(Self { server })
     }
@@ -123,7 +130,16 @@ struct BridgeSession {
 
 impl AudioSession for BridgeSession {
     fn audio_process(&mut self, buffer: &[u8]) {
-        let _ = self.pcm_tx.try_send(buffer.to_vec());
+        // shairplay delivers F32LE interleaved PCM — convert to S16LE for the pipeline
+        let s16_bytes: Vec<u8> = buffer
+            .chunks_exact(4)
+            .flat_map(|c| {
+                let sample = f32::from_le_bytes([c[0], c[1], c[2], c[3]]);
+                let clamped = (sample * 32767.0).clamp(-32768.0, 32767.0) as i16;
+                clamped.to_le_bytes()
+            })
+            .collect();
+        let _ = self.pcm_tx.try_send(s16_bytes);
     }
 
     fn audio_flush(&mut self) {
@@ -166,18 +182,11 @@ impl AudioSession for BridgeSession {
         });
     }
 
-    fn audio_remote_control_id(&mut self, dacp_id: &str, active_remote: &str, remote_addr: &[u8]) {
-        let ip = match remote_addr.len() {
-            4 => IpAddr::from(<[u8; 4]>::try_from(remote_addr).unwrap()),
-            16 => IpAddr::from(<[u8; 16]>::try_from(remote_addr).unwrap()),
-            _ => return,
-        };
-        let mut client = DacpClient::new(dacp_id, active_remote);
-        client.discover_from_remote(ip);
-        tracing::info!(%ip, dacp_id, "DACP remote control available");
+    fn remote_control_available(&mut self, remote: Arc<dyn RemoteControl>) {
+        tracing::info!("Remote control available");
         let _ = self
             .event_tx
-            .try_send(AirplayEvent::RemoteAvailable { client });
+            .try_send(AirplayEvent::RemoteAvailable { remote });
     }
 }
 
@@ -185,6 +194,50 @@ impl Drop for BridgeSession {
     fn drop(&mut self) {
         tracing::info!("AirPlay audio session ended");
         let _ = self.event_tx.try_send(AirplayEvent::SessionEnded);
+    }
+}
+
+// ── FilePairingStore (AP2 key persistence) ────────────────────
+
+struct FilePairingStore {
+    path: std::path::PathBuf,
+    keys: std::sync::Mutex<std::collections::HashMap<String, [u8; 32]>>,
+}
+
+impl FilePairingStore {
+    fn new(path: std::path::PathBuf) -> Self {
+        let keys = std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default();
+        Self {
+            path,
+            keys: std::sync::Mutex::new(keys),
+        }
+    }
+
+    fn save(&self, keys: &std::collections::HashMap<String, [u8; 32]>) {
+        if let Ok(json) = serde_json::to_string_pretty(keys) {
+            let _ = std::fs::write(&self.path, json);
+        }
+    }
+}
+
+impl PairingStore for FilePairingStore {
+    fn get(&self, device_id: &str) -> Option<[u8; 32]> {
+        self.keys.lock().ok()?.get(device_id).copied()
+    }
+    fn put(&self, device_id: &str, public_key: [u8; 32]) {
+        if let Ok(mut keys) = self.keys.lock() {
+            keys.insert(device_id.to_string(), public_key);
+            self.save(&keys);
+        }
+    }
+    fn remove(&self, device_id: &str) {
+        if let Ok(mut keys) = self.keys.lock() {
+            keys.remove(device_id);
+            self.save(&keys);
+        }
     }
 }
 
