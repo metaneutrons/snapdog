@@ -23,7 +23,7 @@ toml = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 tracing-appender = { workspace = true }
-snapcast-control = { workspace = true }
+# snapcast-control removed — using own JSON-RPC client (ADR-018)
 symphonia = { workspace = true }
 rubato = { workspace = true }
 rumqttc = { workspace = true }
@@ -39,7 +39,7 @@ bytes = { workspace = true }
 rust-embed = "8"
 mac_address = "1"
 crc32fast = "1"
-uuid = { version = "1", features = ["v4"] }
+uuid = { version = "1", features = ["v4", "serde"] }
 shairplay = { version = "0.1", features = ["ap2"] }
 librespot-core = { git = "https://github.com/librespot-org/librespot", branch = "dev", optional = true }
 librespot-playback = { git = "https://github.com/librespot-org/librespot", branch = "dev", default-features = false, optional = true }
