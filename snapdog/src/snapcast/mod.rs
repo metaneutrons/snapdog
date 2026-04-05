@@ -98,6 +98,17 @@ impl SnapcastClient {
         Ok(())
     }
 
+    /// Set client mute only (preserves current volume).
+    pub async fn client_set_mute(&self, id: &str, muted: bool) -> Result<()> {
+        self.conn
+            .request(
+                "Client.SetVolume",
+                json!({ "id": id, "volume": { "muted": muted } }),
+            )
+            .await?;
+        Ok(())
+    }
+
     /// Set client latency.
     pub async fn client_set_latency(&self, id: &str, latency: i32) -> Result<()> {
         self.conn
@@ -303,9 +314,7 @@ pub async fn execute_command(
                 snap.client_set_volume(client_id, (*percent).clamp(0, 100) as u8, false)
                     .await
             }
-            player::ClientAction::Mute(muted) => {
-                snap.client_set_volume(client_id, 100, *muted).await
-            }
+            player::ClientAction::Mute(muted) => snap.client_set_mute(client_id, *muted).await,
             player::ClientAction::Latency(ms) => snap.client_set_latency(client_id, *ms).await,
         },
     };
