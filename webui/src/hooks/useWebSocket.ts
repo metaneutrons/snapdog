@@ -5,7 +5,7 @@ import type { WsNotification, WsCommand } from "@/lib/types";
 
 const MAX_BACKOFF = 30_000;
 
-export function useWebSocket(onNotification: (n: WsNotification) => void) {
+export function useWebSocket(onNotification: (n: WsNotification) => void, onReconnect?: () => void) {
   const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const backoffRef = useRef(1_000);

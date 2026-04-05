@@ -67,7 +67,12 @@ export function VolumeSlider({
   const btnSize = compact ? "size-6" : "size-8";
 
   return (
-    <div className={`flex items-center gap-${compact ? "1.5" : "3"} w-full ${compact ? "" : "md:max-w-xs"}`}>
+    <div
+      className={`flex items-center gap-${compact ? "1.5" : "3"} w-full ${compact ? "" : "md:max-w-xs"}`}
+      draggable={false}
+      onMouseDown={(e) => e.stopPropagation()}
+      onDragStart={(e) => e.preventDefault()}
+    >
       <Button
         variant="ghost"
         size="icon"
