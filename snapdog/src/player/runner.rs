@@ -403,14 +403,12 @@ async fn run(
                         }
                     }
                     ZoneCommand::SetMute(m) => {
-                        update_and_notify(store, zone_index, notify, |z| z.muted = m).await;
                         if let Some(ref gid) = group_id {
                             let _ = ctx.snap_tx.send(SnapcastCmd::Group { group_id: gid.clone(), action: GroupAction::Mute(m) }).await;
                         }
                     }
                     ZoneCommand::ToggleMute => {
                         let muted = { store.read().await.zones.get(&zone_index).is_some_and(|z| !z.muted) };
-                        update_and_notify(store, zone_index, notify, |z| z.muted = muted).await;
                         if let Some(ref gid) = group_id {
                             let _ = ctx.snap_tx.send(SnapcastCmd::Group { group_id: gid.clone(), action: GroupAction::Mute(muted) }).await;
                         }

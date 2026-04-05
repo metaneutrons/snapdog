@@ -323,8 +323,54 @@ pub async fn execute_command(
             if let player::SnapcastCmd::Client { client_id, .. } = &cmd {
                 sync_client_after_command(snap, client_id, store, notify).await;
             }
+            if let player::SnapcastCmd::Group { group_id, .. } = &cmd {
+                sync_group_after_command(snap, group_id, store, notify).await;
+            }
         }
         Err(e) => tracing::warn!(error = %e, "Snapcast command failed"),
+    }
+}
+
+/// After a group command, re-fetch the group's state and broadcast changes.
+async fn sync_group_after_command(
+    snap: &SnapcastClient,
+    group_id: &str,
+    store: &state::SharedState,
+    notify: &tokio::sync::broadcast::Sender<api::ws::Notification>,
+) {
+    let group = match snap.group_get_status(group_id).await {
+        Ok(g) => g,
+        Err(e) => {
+            tracing::debug!(error = %e, "Failed to fetch group status after command");
+            return;
+        }
+    };
+
+    let muted = group.muted;
+
+    // Find the zone that owns this group
+    let mut s = store.write().await;
+    if let Some((&zone_idx, zone)) = s
+        .zones
+        .iter_mut()
+        .find(|(_, z)| z.snapcast_group_id.as_deref() == Some(group_id))
+    {
+        if zone.muted != muted {
+            zone.muted = muted;
+            let notif = api::ws::Notification::ZoneStateChanged {
+                zone: zone_idx,
+                playback: zone.playback.to_string(),
+                volume: zone.volume,
+                muted: zone.muted,
+                source: zone.source.to_string(),
+                shuffle: zone.shuffle,
+                repeat: zone.repeat,
+                track_repeat: zone.track_repeat,
+            };
+            drop(s);
+            tracing::info!(zone = zone_idx, muted, "Zone mute synced from Snapcast");
+            let _ = notify.send(notif);
+        }
     }
 }
 

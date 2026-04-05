@@ -161,7 +161,7 @@ function TrackInfo({ zone }: { zone: ZoneState }) {
   );
 }
 
-function ZoneDetail({ zone, sendCommand }: { zone: ZoneState; sendCommand: (zone: number, action: string, value?: string | number | boolean) => void }) {
+function ZoneDetail({ zone }: { zone: ZoneState }) {
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       <div className="w-full max-w-[calc(100%-2rem)] mx-auto md:max-w-[600px] space-y-3 px-4 py-4 md:px-5 md:py-4">
@@ -174,9 +174,9 @@ function ZoneDetail({ zone, sendCommand }: { zone: ZoneState; sendCommand: (zone
           <div className="space-y-3 md:flex-1 md:min-w-0 md:max-w-sm md:min-h-56 md:justify-between">
             <TrackInfo zone={zone} />
             <SeekBar zone={zone} />
-            <TransportControls zone={zone} sendCommand={sendCommand} />
+            <TransportControls zone={zone} />
             <ShuffleRepeat zone={zone} />
-            <VolumeSlider zone={zone} sendCommand={sendCommand} />
+            <VolumeSlider zone={zone} />
           </div>
         </div>
         {/* Full-width below the horizontal row */}
@@ -247,7 +247,7 @@ export default function Home() {
     [updateZone, updateZoneTrack, updateZoneProgress, updateClient],
   );
 
-  const { isConnected: wsConnected, sendCommand } = useWebSocket(handleNotification);
+  const { isConnected: wsConnected } = useWebSocket(handleNotification);
 
   useEffect(() => { setConnected(wsConnected); }, [wsConnected, setConnected]);
   useEffect(() => { loadAll(); }, [loadAll]);
@@ -344,7 +344,7 @@ export default function Home() {
             <ZoneErrorBoundary key={z.index}>
               <div className="w-full" style={{ minWidth: '480px', maxWidth: '600px', flex: '1 1 480px' }}>
                 <ZoneDropTarget zoneIndex={z.index}>
-                  <ZoneDetail zone={z} sendCommand={sendCommand} />
+                  <ZoneDetail zone={z} />
                 </ZoneDropTarget>
               </div>
             </ZoneErrorBoundary>
@@ -355,7 +355,7 @@ export default function Home() {
         <div className="xl:hidden flex-1">
           {currentZone && (
             <ZoneErrorBoundary>
-              <ZoneDetail zone={currentZone} sendCommand={sendCommand} />
+              <ZoneDetail zone={currentZone} />
             </ZoneErrorBoundary>
           )}
         </div>
