@@ -69,14 +69,12 @@ export function VolumeSlider({
   return (
     <div
       className={`flex items-center gap-${compact ? "1.5" : "3"} w-full ${compact ? "" : "md:max-w-xs"}`}
-      draggable={false}
-      onMouseDown={(e) => e.stopPropagation()}
-      onDragStart={(e) => e.preventDefault()}
     >
       <Button
         variant="ghost"
         size="icon"
         onClick={onMuteToggle}
+        onDragStart={(e) => e.preventDefault()}
         className={`${btnSize} shrink-0 rounded-full`}
       >
         <HugeiconsIcon icon={volumeIcon} size={iconSize} />
@@ -87,6 +85,7 @@ export function VolumeSlider({
         step={1}
         onValueChange={handleChange}
         onValueCommit={handleCommit}
+        onDragStart={(e: React.DragEvent) => e.preventDefault()}
         className="flex-1 min-w-0"
       />
       <span className={`text-muted-foreground tabular-nums text-right ${compact ? "text-[10px] w-5" : "text-xs w-7"}`}>
