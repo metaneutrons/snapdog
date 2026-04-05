@@ -3,7 +3,6 @@
 
 //! SnapDog library — re-exports all modules for integration tests.
 
-pub mod airplay;
 pub mod api;
 pub mod audio;
 pub mod config;

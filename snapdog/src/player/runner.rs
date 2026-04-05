@@ -16,6 +16,7 @@ use super::context::*;
 use super::helpers::*;
 use super::helpers::{DecodeState, PlaybackCtx};
 use crate::audio;
+use crate::receiver::ReceiverProvider;
 use crate::snapcast;
 use crate::state::{PlaybackState, SourceType, TrackInfo};
 use crate::subsonic::SubsonicClient;
@@ -74,28 +75,22 @@ async fn run(
     // Subsonic client (if configured)
     let subsonic = config.subsonic.as_ref().map(SubsonicClient::new);
 
-    // AirPlay: PCM channel + event channel + receiver instance
-    let (airplay_pcm_tx, mut airplay_rx) = audio::pcm_channel(128);
+    // AirPlay: F32 audio channel + event channel + receiver instance
+    let (airplay_audio_tx, mut airplay_audio_rx) = crate::receiver::audio_channel(128);
     let (airplay_event_tx, mut airplay_event_rx) =
-        mpsc::channel::<crate::airplay::AirplayEvent>(32);
-    let _airplay_receiver = {
+        mpsc::channel::<crate::receiver::ReceiverEvent>(32);
+    let mut _airplay_receiver = {
         let ap_config = crate::config::AirplayConfig {
             name: zone_config.airplay_name.clone(),
             password: config.airplay.password.clone(),
             pairing_store: config.airplay.pairing_store.clone(),
             bind: config.airplay.bind.clone(),
         };
-        match crate::airplay::AirplayReceiver::start(
-            &ap_config,
-            zone_index,
-            airplay_pcm_tx,
-            airplay_event_tx,
-        )
-        .await
-        {
-            Ok(r) => {
-                tracing::info!(zone = zone_index, name = %ap_config.name, "AirPlay receiver active");
-                Some(r)
+        let mut receiver = crate::receiver::airplay::AirPlayReceiver::new(ap_config, zone_index);
+        match receiver.start(airplay_audio_tx, airplay_event_tx).await {
+            Ok(()) => {
+                tracing::info!(zone = zone_index, "AirPlay receiver active");
+                Some(receiver)
             }
             Err(e) => {
                 tracing::warn!(zone = zone_index, error = %e, "AirPlay receiver failed to start");
@@ -108,14 +103,15 @@ async fn run(
     let mut current_decode: Option<JoinHandle<()>> = None;
     let mut decode_rx: Option<mpsc::Receiver<Vec<u8>>> = None;
     let mut source = ActiveSource::Idle;
-    let mut remote_control: Option<std::sync::Arc<dyn shairplay::RemoteControl>> = None;
+    let mut remote_control: Option<std::sync::Arc<dyn crate::receiver::RemoteControl>> = None;
     let mut resampler = audio::resample::Resampling::new(
         config.audio.sample_rate,
         config.audio.sample_rate,
         config.audio.channels,
     );
-    let mut airplay_resampler =
-        audio::resample::Resampling::new(44100, config.audio.sample_rate, config.audio.channels);
+    let mut receiver_resampler =
+        audio::resample::F32Resampling::new(44100, config.audio.sample_rate, config.audio.channels);
+    let output_bit_depth = config.audio.bit_depth;
 
     loop {
         tokio::select! {
@@ -204,7 +200,7 @@ async fn run(
                     ZoneCommand::Play => {
                         if matches!(source, ActiveSource::AirPlay) {
                             if let Some(ref rc) = remote_control {
-                                if let Err(e) = rc.send_command(shairplay::RemoteCommand::Play) { tracing::warn!(error = %e, "Remote play failed"); }
+                                if let Err(e) = rc.send_command(crate::receiver::RemoteCommand::Play) { tracing::warn!(error = %e, "Remote play failed"); }
                             }
                         } else if matches!(source, ActiveSource::Idle) {
                             let z_state = store.read().await;
@@ -229,7 +225,7 @@ async fn run(
                     ZoneCommand::Pause => {
                         if matches!(source, ActiveSource::AirPlay) {
                             if let Some(ref rc) = remote_control {
-                                if let Err(e) = rc.send_command(shairplay::RemoteCommand::Pause) { tracing::warn!(error = %e, "Remote pause failed"); }
+                                if let Err(e) = rc.send_command(crate::receiver::RemoteCommand::Pause) { tracing::warn!(error = %e, "Remote pause failed"); }
                             }
                         } else {
                             stop_decode(&mut current_decode, &mut decode_rx).await;
@@ -243,14 +239,14 @@ async fn run(
                     }
                     ZoneCommand::Next => {
                         if matches!(source, ActiveSource::AirPlay) {
-                            if let Some(ref rc) = remote_control { let _ = rc.send_command(shairplay::RemoteCommand::NextTrack); }
+                            if let Some(ref rc) = remote_control { let _ = rc.send_command(crate::receiver::RemoteCommand::NextTrack); }
                         } else {
                             handle_next(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify }).await;
                         }
                     }
                     ZoneCommand::Previous => {
                         if matches!(source, ActiveSource::AirPlay) {
-                            if let Some(ref rc) = remote_control { let _ = rc.send_command(shairplay::RemoteCommand::PreviousTrack); }
+                            if let Some(ref rc) = remote_control { let _ = rc.send_command(crate::receiver::RemoteCommand::PreviousTrack); }
                         } else {
                             handle_previous(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify }).await;
                         }
@@ -444,38 +440,42 @@ async fn run(
                     }
                 }
             }
-            Some(pcm) = airplay_rx.recv() => {
+            Some(samples) = airplay_audio_rx.recv() => {
                 if !matches!(source, ActiveSource::AirPlay) {
                     stop_decode(&mut current_decode, &mut decode_rx).await;
                     source = ActiveSource::AirPlay;
                     update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Playing; z.source = SourceType::AirPlay; }).await;
                 }
-                let pcm = airplay_resampler.process(&pcm).unwrap_or(pcm);
-                if pcm.is_empty() { continue; }
+                let samples = receiver_resampler.process(&samples).unwrap_or(samples);
+                if samples.is_empty() { continue; }
+                let pcm = audio::resample::f32_to_pcm(&samples, output_bit_depth);
                 if let Err(e) = tcp.write_all(&pcm).await { tracing::error!(zone = zone_index, error = %e, "TCP write failed (AirPlay)"); }
             }
             Some(event) = airplay_event_rx.recv() => {
-                use crate::airplay::AirplayEvent;
+                use crate::receiver::ReceiverEvent;
                 match event {
-                    AirplayEvent::Metadata { title, artist, album } => {
+                    ReceiverEvent::SessionStarted { format } => {
+                        receiver_resampler = audio::resample::F32Resampling::new(format.sample_rate, config.audio.sample_rate, format.channels);
+                    }
+                    ReceiverEvent::Metadata { title, artist, album } => {
                         update_and_notify(store, zone_index, notify, |z| {
-                            z.track = Some(TrackInfo { title, artist, album, album_artist: None, genre: None, year: None, track_number: None, disc_number: None, duration_ms: 0, position_ms: 0, source: SourceType::AirPlay, bitrate_kbps: None, content_type: None, sample_rate: Some(44100) });
+                            z.track = Some(TrackInfo { title, artist, album, album_artist: None, genre: None, year: None, track_number: None, disc_number: None, duration_ms: 0, position_ms: 0, source: SourceType::AirPlay, bitrate_kbps: None, content_type: None, sample_rate: None });
                         }).await;
                     }
-                    AirplayEvent::CoverArt { bytes } => { covers.write().await.set_auto_mime(zone_index, bytes); }
-                    AirplayEvent::Progress { position_ms, duration_ms } => {
+                    ReceiverEvent::CoverArt { bytes } => { covers.write().await.set_auto_mime(zone_index, bytes); }
+                    ReceiverEvent::Progress { position_ms, duration_ms } => {
                         update_and_notify(store, zone_index, notify, |z| { if let Some(ref mut t) = z.track { t.position_ms = position_ms as i64; t.duration_ms = duration_ms as i64; } }).await;
                     }
-                    AirplayEvent::Volume { percent } => {
+                    ReceiverEvent::Volume { percent } => {
                         update_and_notify(store, zone_index, notify, |z| z.volume = percent).await;
                         if let Some(ref gid) = group_id {
                             let _ = ctx.snap_tx.send(SnapcastCmd { group_id: gid.clone(), action: SnapcastAction::Volume(percent) }).await;
                         }
                     }
-                    AirplayEvent::RemoteAvailable { remote } => {
+                    ReceiverEvent::RemoteAvailable { remote } => {
                         remote_control = Some(remote);
                     }
-                    AirplayEvent::SessionEnded => {
+                    ReceiverEvent::SessionEnded => {
                         source = ActiveSource::Idle;
                         remote_control = None;
                         covers.write().await.clear(zone_index);
