@@ -65,6 +65,12 @@ mac = "02:42:ac:11:00:12"
 zone = "1st Floor"
 icon = "🛏️"
 
+[[client]]
+name = "Real Speaker"
+mac = "dc:a6:32:34:78:85"
+zone = "Ground Floor"
+icon = "🔊"
+
 # German public radio stations
 [[radio]]
 name = "Deutschlandfunk"
