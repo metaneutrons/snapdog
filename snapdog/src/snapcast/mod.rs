@@ -296,7 +296,7 @@ pub async fn execute_command(
 ) {
     let result = match &cmd {
         player::SnapcastCmd::Group { group_id, action } => {
-            tracing::info!(%group_id, ?action, "Executing Snapcast group command");
+            tracing::debug!(%group_id, ?action, "Snapcast group command");
             match action {
                 player::GroupAction::Stream(stream_id) => {
                     snap.group_set_stream(group_id, stream_id).await
@@ -313,7 +313,7 @@ pub async fn execute_command(
             }
         }
         player::SnapcastCmd::Client { client_id, action } => {
-            tracing::debug!(%client_id, ?action, "Executing Snapcast client command");
+            tracing::trace!(%client_id, ?action, "Snapcast client command");
             match action {
                 player::ClientAction::Volume(percent) => {
                     snap.client_set_volume(client_id, (*percent).clamp(0, 100) as u8)
@@ -423,7 +423,7 @@ async fn sync_client_after_command(
             };
             let name = client.name.clone();
             drop(s);
-            tracing::info!(client = %name, volume, muted, "Client state synced after command");
+            tracing::debug!(client = %name, volume, muted, "Client state synced");
             let _ = notify.send(notif);
         }
     }
@@ -444,7 +444,6 @@ pub async fn handle_notification(
         } => {
             let mac = snap_client.host.mac.to_lowercase();
             let snap_id = snap_client.id.clone();
-            tracing::info!(mac = %mac, snap_id = %snap_id, "Snapcast client connected");
 
             let mut s = store.write().await;
             if let Some((&idx, client)) = s
@@ -464,14 +463,13 @@ pub async fn handle_notification(
                 };
                 let name = client.name.clone();
                 drop(s);
-                tracing::info!(client = %name, "Client matched and marked connected");
+                tracing::info!(client = %name, snap_id = %snap_id, "Snapcast client connected");
                 let _ = notify.send(notif);
 
                 setup_zone_group_for_client(zone_index, &snap_id, config, snap).await;
             }
         }
         Notification::ClientOnDisconnect { id: snap_id } => {
-            tracing::info!(snap_id = %snap_id, "Snapcast client disconnected");
             let mut s = store.write().await;
             if let Some((&idx, client)) = s
                 .clients
@@ -488,7 +486,7 @@ pub async fn handle_notification(
                 };
                 let name = client.name.clone();
                 drop(s);
-                tracing::info!(client = %name, "Client marked disconnected");
+                tracing::info!(client = %name, "Snapcast client disconnected");
                 let _ = notify.send(notif);
             }
         }
@@ -515,7 +513,7 @@ pub async fn handle_notification(
                 };
                 let name = client.name.clone();
                 drop(s);
-                tracing::info!(client = %name, volume = vol, muted, "Client volume changed");
+                tracing::debug!(client = %name, volume = vol, muted, "Client volume changed");
                 let _ = notify.send(notif);
             }
         }
@@ -568,19 +566,19 @@ pub async fn handle_notification(
             }
         }
         Notification::GroupOnMute { id, mute } => {
-            tracing::info!(group = %id, mute, "Group mute changed");
+            tracing::debug!(group = %id, mute, "Group mute changed");
         }
         Notification::GroupOnStreamChanged { id, stream_id } => {
-            tracing::info!(group = %id, stream = %stream_id, "Group stream changed");
+            tracing::debug!(group = %id, stream = %stream_id, "Group stream changed");
         }
         Notification::GroupOnNameChanged { id, name } => {
-            tracing::info!(group = %id, name = %name, "Group name changed");
+            tracing::debug!(group = %id, name = %name, "Group name changed");
         }
         Notification::ServerOnUpdate { .. } => {
-            tracing::info!("Snapcast server state updated");
+            tracing::debug!("Snapcast server state updated");
         }
         Notification::StreamOnUpdate { id, stream } => {
-            tracing::info!(stream = %id, status = ?stream.status, "Stream status updated");
+            tracing::debug!(stream = %id, status = ?stream.status, "Stream status updated");
         }
         Notification::StreamOnProperties { id, .. } => {
             tracing::debug!(stream = %id, "Stream properties updated");

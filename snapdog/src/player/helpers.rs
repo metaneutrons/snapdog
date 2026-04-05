@@ -133,7 +133,7 @@ pub async fn start_radio_decode(
     tokio::spawn(async move {
         while let Some(meta) = icy_rx.recv().await {
             if let Some(title) = meta.title {
-                tracing::info!(zone = zone_index, title = %title, "ICY title update");
+                tracing::debug!(zone = zone_index, title = %title, "ICY metadata");
                 update_and_notify(&icy_store, zone_index, &icy_notify, |z| {
                     if let Some(ref mut track) = z.track {
                         track.artist = title.clone();
