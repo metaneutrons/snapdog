@@ -59,8 +59,6 @@ impl CoverCache {
     }
 }
 
-/// Detect MIME type from magic bytes.
-
 /// Simple percent-decoding for data: URI payloads.
 fn percent_decode_bytes(input: &str) -> Vec<u8> {
     let mut out = Vec::with_capacity(input.len());

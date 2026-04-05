@@ -98,10 +98,8 @@ fn render_config(config: &AppConfig) -> String {
     // TCP control (JSON-RPC raw TCP — used by snapcast-control crate)
     let tcp_control_port = config.snapcast.streaming_port + 1;
     out.push_str(&format!(
-        "[tcp-control]\nenabled = true\nbind_to_address = 127.0.0.1\nport = {}\n\n",
-        tcp_control_port
+        "[tcp-control]\nenabled = true\nbind_to_address = 127.0.0.1\nport = {tcp_control_port}\n\n",
     ));
-
     // Streaming server
     out.push_str(&format!(
         "[tcp-streaming]\nbind_to_address = 0.0.0.0\nport = {}\n\n",

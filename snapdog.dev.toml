@@ -6,8 +6,8 @@
 log_level = "debug"
 
 [audio]
-sample_rate = 48000
-bit_depth = 16
+sample_rate = 96000
+bit_depth = 24
 channels = 2
 codec = "flac"
 
