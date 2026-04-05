@@ -10,7 +10,7 @@ use super::commands::ActiveSource;
 use super::context::{NotifySender, stop_decode, update_and_notify};
 use crate::audio;
 use crate::config::AppConfig;
-use crate::state::{self, PlaybackState, SourceType, TrackInfo};
+use crate::state::{self, PlaybackState, SourceType, TrackInfo, cover::SharedCoverCache};
 use crate::subsonic::SubsonicClient;
 
 /// Mutable decode state passed to navigation helpers.
@@ -27,19 +27,54 @@ pub struct PlaybackCtx<'a> {
     pub store: &'a state::SharedState,
     pub zone_index: usize,
     pub notify: &'a NotifySender,
+    pub covers: &'a SharedCoverCache,
+}
+
+/// Fetch cover art in the background and update zone state.
+///
+/// For radio: fetches from config URL. For subsonic: fetches from getCoverArt.
+/// Stores bytes in SharedCoverCache and sets cover_url on the zone.
+pub fn spawn_cover_fetch(
+    covers: &SharedCoverCache,
+    store: &state::SharedState,
+    zone_index: usize,
+    notify: &NotifySender,
+    url: String,
+) {
+    let covers = covers.clone();
+    let store = store.clone();
+    let notify = notify.clone();
+    tokio::spawn(async move {
+        if let Some((bytes, mime)) = state::cover::fetch_cover(&url).await {
+            let mut cache = covers.write().await;
+            cache.set(zone_index, bytes, mime);
+            let hash = cache.get(zone_index).map(|e| e.hash.clone());
+            drop(cache);
+            if let Some(h) = hash {
+                let cover_url = format!("/api/v1/zones/{zone_index}/cover?h={h}");
+                update_and_notify(&store, zone_index, &notify, |z| {
+                    z.cover_url = Some(cover_url.clone());
+                })
+                .await;
+            }
+        }
+    });
 }
 pub async fn start_subsonic_track_decode(
     sub: &SubsonicClient,
     track: &crate::subsonic::Track,
-    config: &AppConfig,
-    current_decode: &mut Option<JoinHandle<()>>,
-    decode_rx: &mut Option<mpsc::Receiver<Vec<u8>>>,
+    ds: &mut DecodeState<'_>,
+    ctx: &PlaybackCtx<'_>,
 ) {
     let url = sub.stream_url(&track.id);
     let (tx, rx) = audio::pcm_channel(64);
-    *decode_rx = Some(rx);
-    let ac = config.audio.clone();
-    *current_decode = Some(tokio::spawn(async move {
+    *ds.decode_rx = Some(rx);
+    if let Some(ref cover_id) = track.cover_art {
+        let cover_url = sub.cover_art_fetch_url(cover_id);
+        spawn_cover_fetch(ctx.covers, ctx.store, ctx.zone_index, ctx.notify, cover_url);
+    }
+    let ac = ctx.config.audio.clone();
+    *ds.current_decode = Some(tokio::spawn(async move {
         if let Err(e) = audio::decode_http_stream(url, tx, ac, None).await {
             tracing::error!(error = %e, "Subsonic decode failed");
         }
@@ -85,19 +120,16 @@ pub fn radio_track_info(name: &str) -> TrackInfo {
 }
 
 pub async fn start_radio_decode(
-    url: &str,
-    config: &AppConfig,
-    current_decode: &mut Option<JoinHandle<()>>,
-    decode_rx: &mut Option<mpsc::Receiver<Vec<u8>>>,
-    store: &state::SharedState,
-    zone_index: usize,
-    notify: &NotifySender,
+    radio: &crate::config::RadioConfig,
+    ds: &mut DecodeState<'_>,
+    ctx: &PlaybackCtx<'_>,
 ) {
     let (tx, rx) = audio::pcm_channel(64);
-    *decode_rx = Some(rx);
+    *ds.decode_rx = Some(rx);
     let (icy_tx, mut icy_rx) = mpsc::channel::<audio::icy::IcyMetadata>(4);
-    let icy_store = store.clone();
-    let icy_notify = notify.clone();
+    let icy_store = ctx.store.clone();
+    let icy_notify = ctx.notify.clone();
+    let zone_index = ctx.zone_index;
     tokio::spawn(async move {
         while let Some(meta) = icy_rx.recv().await {
             if let Some(title) = meta.title {
@@ -111,9 +143,18 @@ pub async fn start_radio_decode(
             }
         }
     });
-    let url = url.to_string();
-    let ac = config.audio.clone();
-    *current_decode = Some(tokio::spawn(async move {
+    if let Some(ref cover_url) = radio.cover {
+        spawn_cover_fetch(
+            ctx.covers,
+            ctx.store,
+            ctx.zone_index,
+            ctx.notify,
+            cover_url.clone(),
+        );
+    }
+    let url = radio.url.clone();
+    let ac = ctx.config.audio.clone();
+    *ds.current_decode = Some(tokio::spawn(async move {
         if let Err(e) = audio::decode_http_stream(url, tx, ac, Some(icy_tx)).await {
             tracing::error!(error = %e, "Radio decode failed");
         }
@@ -126,16 +167,7 @@ pub async fn handle_next(ds: &mut DecodeState<'_>, ctx: &PlaybackCtx<'_>) {
             let next = (index + 1) % ctx.config.radios.len();
             stop_decode(ds.current_decode, ds.decode_rx).await;
             if let Some(radio) = ctx.config.radios.get(next) {
-                start_radio_decode(
-                    &radio.url,
-                    ctx.config,
-                    ds.current_decode,
-                    ds.decode_rx,
-                    ctx.store,
-                    ctx.zone_index,
-                    ctx.notify,
-                )
-                .await;
+                start_radio_decode(radio, ds, ctx).await;
                 *ds.source = ActiveSource::Radio { index: next };
                 update_and_notify(ctx.store, ctx.zone_index, ctx.notify, |z| {
                     z.playlist_index = Some(0);
@@ -189,16 +221,7 @@ pub async fn handle_previous(ds: &mut DecodeState<'_>, ctx: &PlaybackCtx<'_>) {
             };
             stop_decode(ds.current_decode, ds.decode_rx).await;
             if let Some(radio) = ctx.config.radios.get(prev) {
-                start_radio_decode(
-                    &radio.url,
-                    ctx.config,
-                    ds.current_decode,
-                    ds.decode_rx,
-                    ctx.store,
-                    ctx.zone_index,
-                    ctx.notify,
-                )
-                .await;
+                start_radio_decode(radio, ds, ctx).await;
                 *ds.source = ActiveSource::Radio { index: prev };
                 update_and_notify(ctx.store, ctx.zone_index, ctx.notify, |z| {
                     z.playlist_index = Some(0);
@@ -256,16 +279,7 @@ pub async fn handle_track_complete(ds: &mut DecodeState<'_>, ctx: &PlaybackCtx<'
         ActiveSource::Radio { index } => {
             tracing::warn!(zone = ctx.zone_index, "Radio stream ended, restarting");
             if let Some(radio) = ctx.config.radios.get(index) {
-                start_radio_decode(
-                    &radio.url,
-                    ctx.config,
-                    ds.current_decode,
-                    ds.decode_rx,
-                    ctx.store,
-                    ctx.zone_index,
-                    ctx.notify,
-                )
-                .await;
+                start_radio_decode(radio, ds, ctx).await;
             }
         }
         ActiveSource::AirPlay => {
@@ -300,14 +314,7 @@ async fn advance_playlist_track(
     if let Some(sub) = &ctx.subsonic {
         if let Ok(playlist) = sub.get_playlist(playlist_id).await {
             if let Some(track) = playlist.entry.get(track_index) {
-                start_subsonic_track_decode(
-                    sub,
-                    track,
-                    ctx.config,
-                    ds.current_decode,
-                    ds.decode_rx,
-                )
-                .await;
+                start_subsonic_track_decode(sub, track, ds, ctx).await;
                 *ds.source = ActiveSource::SubsonicPlaylist {
                     playlist_id: playlist_id.to_string(),
                     track_index,

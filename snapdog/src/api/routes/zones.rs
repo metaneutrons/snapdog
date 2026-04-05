@@ -76,6 +76,7 @@ pub fn router(state: SharedState) -> Router {
         .route("/{zone_index}/repeat/toggle", post(toggle_repeat))
         .route("/{zone_index}/track", get(get_track))
         .route("/{zone_index}/track/metadata", get(get_track_metadata))
+        .route("/{zone_index}/cover", get(get_zone_cover))
         .route("/{zone_index}/track/title", get(get_track_title))
         .route("/{zone_index}/track/artist", get(get_track_artist))
         .route("/{zone_index}/track/album", get(get_track_album))
@@ -357,11 +358,28 @@ async fn get_track_metadata(
         "content_type": zone.track.as_ref().and_then(|t| t.content_type.as_deref()),
         "sample_rate": zone.track.as_ref().and_then(|t| t.sample_rate),
         "source": zone.source.to_string(),
-        "cover_url": zone.playlist_index.zip(zone.playlist_track_index).map(|(pi, ti)| format!("/api/v1/media/playlists/{pi}/tracks/{ti}/cover")),
+        "cover_url": zone.cover_url,
         "playlist_index": zone.playlist_index,
         "playlist_track_index": zone.playlist_track_index,
         "playlist_track_count": zone.playlist_track_count,
     })))
+}
+async fn get_zone_cover(
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
+) -> impl IntoResponse {
+    let cache = state.covers.read().await;
+    match cache.get(idx) {
+        Some(entry) => Ok((
+            [
+                ("content-type", entry.mime.clone()),
+                ("cache-control", "public, max-age=86400, immutable".into()),
+                ("etag", format!("\"{}\"", entry.hash)),
+            ],
+            entry.bytes.clone(),
+        )),
+        None => Err(StatusCode::NOT_FOUND),
+    }
 }
 async fn get_track_title(
     State(state): State<SharedState>,
