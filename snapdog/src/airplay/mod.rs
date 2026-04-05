@@ -129,13 +129,12 @@ struct BridgeSession {
 }
 
 impl AudioSession for BridgeSession {
-    fn audio_process(&mut self, buffer: &[u8]) {
-        // shairplay delivers F32LE interleaved PCM — convert to S16LE for the pipeline
-        let s16_bytes: Vec<u8> = buffer
-            .chunks_exact(4)
-            .flat_map(|c| {
-                let sample = f32::from_le_bytes([c[0], c[1], c[2], c[3]]);
-                let clamped = (sample * 32767.0).clamp(-32768.0, 32767.0) as i16;
+    fn audio_process(&mut self, samples: &[f32]) {
+        // Convert F32 interleaved PCM to S16LE for the pipeline
+        let s16_bytes: Vec<u8> = samples
+            .iter()
+            .flat_map(|&s| {
+                let clamped = (s * 32767.0).clamp(-32768.0, 32767.0) as i16;
                 clamped.to_le_bytes()
             })
             .collect();
