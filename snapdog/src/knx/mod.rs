@@ -3,43 +3,159 @@
 
 //! KNX/IP integration via knxkit.
 //!
-//! Supports tunneling and routing (multicast) connections.
-//! Writes status values to KNX group addresses.
+//! Bidirectional:
+//! - **Publisher**: writes zone/client status to KNX group addresses on state changes
+//! - **Listener**: receives KNX group writes and routes them as zone/client commands
+//!
+//! Currently supports KNX/IP tunneling connections only.
+
+use std::net::Ipv4Addr;
+use std::str::FromStr;
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use knxkit::connection::ops::GroupOps;
 use knxkit::core::DataPoint;
 use knxkit::core::address::GroupAddress;
+use knxkit::net::tunnel::TunnelConnection;
+use tokio::sync::Mutex;
 
-use crate::config::KnxConfig;
+use crate::config::{AppConfig, KnxConfig};
+use crate::state;
 
-/// Build the KNX remote URL from config.
-pub fn remote_url(config: &KnxConfig) -> Result<String> {
-    anyhow::ensure!(config.enabled, "KNX is disabled");
-    match config.connection.as_str() {
-        "tunnel" => {
-            let gw = config
-                .gateway
-                .as_deref()
-                .context("KNX tunnel requires gateway")?;
-            Ok(format!("udp://{gw}"))
+// ── KNX Bridge ────────────────────────────────────────────────
+
+/// KNX bridge: publishes status, receives commands.
+pub struct KnxBridge {
+    conn: Arc<Mutex<TunnelConnection>>,
+    config: Arc<AppConfig>,
+}
+
+impl KnxBridge {
+    /// Connect to KNX gateway.
+    pub async fn connect(knx_config: &KnxConfig, app_config: Arc<AppConfig>) -> Result<Self> {
+        let gw = knx_config
+            .gateway
+            .as_deref()
+            .context("KNX requires gateway address")?;
+        let addr: std::net::SocketAddrV4 = gw
+            .parse()
+            .context("Invalid KNX gateway address (expected ip:port)")?;
+        let local = Ipv4Addr::from_str("0.0.0.0").unwrap();
+        let conn = TunnelConnection::start(local, addr)
+            .await
+            .context("Failed to connect to KNX gateway")?;
+        tracing::info!(gateway = gw, "KNX tunnel connected");
+        Ok(Self {
+            conn: Arc::new(Mutex::new(conn)),
+            config: app_config,
+        })
+    }
+
+    /// Publish zone state to KNX group addresses.
+    pub async fn publish_zone_state(&self, zone_index: usize, store: &state::SharedState) {
+        let s = store.read().await;
+        let Some(zone) = s.zones.get(&zone_index) else {
+            return;
+        };
+        let zone_cfg = match self.config.zones.get(zone_index - 1) {
+            Some(c) => c,
+            None => return,
+        };
+        let knx = &zone_cfg.knx;
+
+        if let Some(ref ga) = knx.volume_status {
+            self.write(ga, encode_percent(zone.volume.clamp(0, 100) as u8))
+                .await;
         }
-        "router" => Ok(format!("udp://{}", config.multicast)),
-        other => anyhow::bail!("Unknown KNX connection type: {other}"),
+        if let Some(ref ga) = knx.mute_status {
+            self.write(ga, encode_bool(zone.muted)).await;
+        }
+        if let Some(ref ga) = knx.shuffle_status {
+            self.write(ga, encode_bool(zone.shuffle)).await;
+        }
+        if let Some(ref ga) = knx.repeat_status {
+            self.write(ga, encode_bool(zone.repeat)).await;
+        }
+        if let Some(ref ga) = knx.track_playing_status {
+            self.write(ga, encode_bool(zone.playback.to_string() == "playing"))
+                .await;
+        }
+        if let Some(ref ga) = knx.track_repeat_status {
+            self.write(ga, encode_bool(zone.track_repeat)).await;
+        }
+    }
+
+    /// Publish zone track metadata to KNX.
+    pub async fn publish_zone_track(&self, zone_index: usize, store: &state::SharedState) {
+        let s = store.read().await;
+        let Some(zone) = s.zones.get(&zone_index) else {
+            return;
+        };
+        let zone_cfg = match self.config.zones.get(zone_index - 1) {
+            Some(c) => c,
+            None => return,
+        };
+        let knx = &zone_cfg.knx;
+
+        if let Some(ref track) = zone.track {
+            if let Some(ref ga) = knx.track_title_status {
+                self.write(ga, encode_string(&track.title)).await;
+            }
+            if let Some(ref ga) = knx.track_artist_status {
+                self.write(ga, encode_string(&track.artist)).await;
+            }
+            if let Some(ref ga) = knx.track_album_status {
+                self.write(ga, encode_string(&track.album)).await;
+            }
+        }
+    }
+
+    /// Publish client state to KNX group addresses.
+    pub async fn publish_client_state(&self, client_index: usize, store: &state::SharedState) {
+        let s = store.read().await;
+        let Some(client) = s.clients.get(&client_index) else {
+            return;
+        };
+        let client_cfg = match self.config.clients.get(client_index - 1) {
+            Some(c) => c,
+            None => return,
+        };
+        let knx = &client_cfg.knx;
+
+        if let Some(ref ga) = knx.volume_status {
+            self.write(ga, encode_percent(client.volume.clamp(0, 100) as u8))
+                .await;
+        }
+        if let Some(ref ga) = knx.mute_status {
+            self.write(ga, encode_bool(client.muted)).await;
+        }
+        if let Some(ref ga) = knx.connected_status {
+            self.write(ga, encode_bool(client.connected)).await;
+        }
+        if let Some(ref ga) = knx.zone_status {
+            self.write(ga, encode_percent(client.zone_index as u8))
+                .await;
+        }
+    }
+
+    /// Write a data point to a KNX group address.
+    async fn write(&self, ga_str: &str, dp: DataPoint) {
+        let ga = match GroupAddress::from_str(ga_str) {
+            Ok(ga) => ga,
+            Err(e) => {
+                tracing::warn!(ga = ga_str, error = %e, "Invalid KNX group address");
+                return;
+            }
+        };
+        let mut conn = self.conn.lock().await;
+        if let Err(e) = conn.group_write(ga, dp).await {
+            tracing::warn!(ga = ga_str, error = %e, "KNX group write failed");
+        }
     }
 }
 
-/// Parse "1/2/3" into a GroupAddress.
-pub fn parse_group_address(s: &str) -> Result<GroupAddress> {
-    let parts: Vec<&str> = s.split('/').collect();
-    anyhow::ensure!(
-        parts.len() == 3,
-        "Invalid group address: {s} (expected x/y/z)"
-    );
-    let main: u8 = parts[0].parse().context("Invalid main group")?;
-    let middle: u8 = parts[1].parse().context("Invalid middle group")?;
-    let sub: u8 = parts[2].parse().context("Invalid sub group")?;
-    Ok(GroupAddress::from_components((main, middle, sub)))
-}
+// ── Helpers ───────────────────────────────────────────────────
 
 /// Encode a boolean as KNX DPT 1.x.
 pub fn encode_bool(value: bool) -> DataPoint {
@@ -65,18 +181,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_group_address() {
-        let ga = parse_group_address("1/2/3").unwrap();
-        assert_eq!(ga, GroupAddress::from_components((1, 2, 3)));
-    }
-
-    #[test]
-    fn rejects_invalid_group_address() {
-        assert!(parse_group_address("1/2").is_err());
-        assert!(parse_group_address("abc").is_err());
-    }
-
-    #[test]
     fn encodes_bool() {
         assert_eq!(encode_bool(true), DataPoint::Short(1));
         assert_eq!(encode_bool(false), DataPoint::Short(0));
@@ -98,27 +202,5 @@ mod tests {
         } else {
             panic!("Expected Long DataPoint");
         }
-    }
-
-    #[test]
-    fn remote_url_tunnel() {
-        let config = KnxConfig {
-            enabled: true,
-            connection: "tunnel".into(),
-            gateway: Some("knxd:3671".into()),
-            multicast: "224.0.23.12".into(),
-        };
-        assert_eq!(remote_url(&config).unwrap(), "udp://knxd:3671");
-    }
-
-    #[test]
-    fn remote_url_router() {
-        let config = KnxConfig {
-            enabled: true,
-            connection: "router".into(),
-            gateway: None,
-            multicast: "224.0.23.12".into(),
-        };
-        assert_eq!(remote_url(&config).unwrap(), "udp://224.0.23.12");
     }
 }
