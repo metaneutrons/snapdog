@@ -81,7 +81,7 @@ impl SubsonicClient {
     pub fn stream_url_with_offset(&self, track_id: &str, offset_secs: u64) -> String {
         let (token, salt) = self.auth_token();
         let mut url = format!(
-            "{}/rest/stream?id={}&u={}&t={}&s={}&v={}&c={}&f=json",
+            "{}/rest/stream?id={}&u={}&t={}&s={}&v={}&c={}&f=json&format=raw",
             self.base_url, track_id, self.username, token, salt, API_VERSION, CLIENT_NAME
         );
         if offset_secs > 0 {
