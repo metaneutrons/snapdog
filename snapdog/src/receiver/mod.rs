@@ -14,6 +14,8 @@
 //! at the output boundary.
 
 pub mod airplay;
+#[cfg(feature = "spotify")]
+pub mod spotify;
 
 use std::sync::Arc;
 

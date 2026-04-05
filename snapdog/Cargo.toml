@@ -40,6 +40,15 @@ rust-embed = "8"
 mac_address = "1"
 crc32fast = "1"
 shairplay = { version = "0.1", features = ["ap2"] }
+librespot-core = { git = "https://github.com/librespot-org/librespot", branch = "dev", optional = true }
+librespot-playback = { git = "https://github.com/librespot-org/librespot", branch = "dev", default-features = false, optional = true }
+librespot-connect = { git = "https://github.com/librespot-org/librespot", branch = "dev", optional = true }
+librespot-discovery = { git = "https://github.com/librespot-org/librespot", branch = "dev", optional = true }
+librespot-metadata = { git = "https://github.com/librespot-org/librespot", branch = "dev", optional = true }
+
+[features]
+default = []
+spotify = ["dep:librespot-core", "dep:librespot-playback", "dep:librespot-connect", "dep:librespot-discovery", "dep:librespot-metadata"]
 
 [dev-dependencies]
 mockall = { workspace = true }
