@@ -229,24 +229,20 @@ use crate::state;
 use std::collections::HashMap;
 
 /// Sync initial client state from Snapcast server status.
-pub fn sync_initial_state(status: &ServerStatus, store: &state::SharedState) {
-    let rt = tokio::runtime::Handle::current();
-    rt.block_on(async {
-        let mut s = store.write().await;
-        for group in &status.server.groups {
-            for snap_client in &group.clients {
-                let mac = snap_client.host.mac.to_lowercase();
-                let snap_id = snap_client.id.clone();
-                let connected = snap_client.connected;
-                if let Some(client) = s.clients.values_mut().find(|c| c.mac.to_lowercase() == mac)
-                {
-                    client.snapcast_id = Some(snap_id.clone());
-                    client.connected = connected;
-                    tracing::info!(client = %client.name, snap_id = %snap_id, connected, "Initial client state synced");
-                }
+pub async fn sync_initial_state(status: &ServerStatus, store: &state::SharedState) {
+    let mut s = store.write().await;
+    for group in &status.server.groups {
+        for snap_client in &group.clients {
+            let mac = snap_client.host.mac.to_lowercase();
+            let snap_id = snap_client.id.clone();
+            let connected = snap_client.connected;
+            if let Some(client) = s.clients.values_mut().find(|c| c.mac.to_lowercase() == mac) {
+                client.snapcast_id = Some(snap_id.clone());
+                client.connected = connected;
+                tracing::info!(client = %client.name, snap_id = %snap_id, connected, "Initial client state synced");
             }
         }
-    });
+    }
 }
 
 /// Build MAC → snapcast_id map from server status.
@@ -280,41 +276,95 @@ pub fn build_group_clients(status: &ServerStatus) -> HashMap<String, Vec<String>
         .collect()
 }
 
-/// Execute a Snapcast command (fire-and-forget from main loop).
-pub async fn execute_command(snap: &SnapcastClient, cmd: player::SnapcastCmd) {
-    let result = match cmd {
+/// Execute a Snapcast command and sync state after success.
+pub async fn execute_command(
+    snap: &SnapcastClient,
+    cmd: player::SnapcastCmd,
+    store: &state::SharedState,
+    notify: &tokio::sync::broadcast::Sender<api::ws::Notification>,
+) {
+    let result = match &cmd {
         player::SnapcastCmd::Group { group_id, action } => match action {
             player::GroupAction::Stream(stream_id) => {
-                snap.group_set_stream(&group_id, &stream_id).await
+                snap.group_set_stream(group_id, stream_id).await
             }
             player::GroupAction::Clients(client_ids) => {
-                snap.group_set_clients(&group_id, client_ids).await
+                snap.group_set_clients(group_id, client_ids.clone()).await
             }
-            player::GroupAction::Name(name) => snap.group_set_name(&group_id, &name).await,
+            player::GroupAction::Name(name) => snap.group_set_name(group_id, name).await,
             player::GroupAction::Volume(_percent) => {
-                snap.group_set_mute(&group_id, false).await.ok();
-                // Group volume is set per-client proportionally by snapserver
-                // We just unmute and let the group volume command handle it
-                // TODO: implement proper group volume via snapserver
+                // TODO: implement proper group volume
                 Ok(())
             }
-            player::GroupAction::Mute(muted) => snap.group_set_mute(&group_id, muted).await,
+            player::GroupAction::Mute(muted) => snap.group_set_mute(group_id, *muted).await,
         },
         player::SnapcastCmd::Client { client_id, action } => match action {
             player::ClientAction::Volume(percent) => {
-                snap.client_set_volume(&client_id, percent.clamp(0, 100) as u8, false)
+                snap.client_set_volume(client_id, (*percent).clamp(0, 100) as u8, false)
                     .await
             }
             player::ClientAction::Mute(muted) => {
-                // For mute, we need current volume — read from store would require store ref
-                // Just set mute with percent=100 as placeholder; the notification will correct it
-                snap.client_set_volume(&client_id, 100, muted).await
+                snap.client_set_volume(client_id, 100, *muted).await
             }
-            player::ClientAction::Latency(ms) => snap.client_set_latency(&client_id, ms).await,
+            player::ClientAction::Latency(ms) => snap.client_set_latency(client_id, *ms).await,
         },
     };
-    if let Err(e) = result {
-        tracing::warn!(error = %e, "Snapcast command failed");
+    match result {
+        Ok(()) => {
+            if let player::SnapcastCmd::Client { client_id, .. } = &cmd {
+                sync_client_after_command(snap, client_id, store, notify).await;
+            }
+        }
+        Err(e) => tracing::warn!(error = %e, "Snapcast command failed"),
+    }
+}
+
+/// After a client command, re-fetch the client's state and broadcast changes.
+async fn sync_client_after_command(
+    snap: &SnapcastClient,
+    snap_id: &str,
+    store: &state::SharedState,
+    notify: &tokio::sync::broadcast::Sender<api::ws::Notification>,
+) {
+    let snap_client = match snap.client_get_status(snap_id).await {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::debug!(error = %e, "Failed to fetch client status after command");
+            return;
+        }
+    };
+    let volume = snap_client.config.volume.percent as i32;
+    let muted = snap_client.config.volume.muted;
+    let connected = snap_client.connected;
+    let latency = snap_client.config.latency as i32;
+
+    let mut s = store.write().await;
+    if let Some((&idx, client)) = s
+        .clients
+        .iter_mut()
+        .find(|(_, c)| c.snapcast_id.as_deref() == Some(snap_id))
+    {
+        let changed = client.volume != volume
+            || client.muted != muted
+            || client.connected != connected
+            || client.latency_ms != latency;
+        if changed {
+            client.volume = volume;
+            client.muted = muted;
+            client.connected = connected;
+            client.latency_ms = latency;
+            let notif = api::ws::Notification::ClientStateChanged {
+                client: idx,
+                volume: client.volume,
+                muted: client.muted,
+                connected: client.connected,
+                zone: client.zone_index,
+            };
+            let name = client.name.clone();
+            drop(s);
+            tracing::info!(client = %name, volume, muted, "Client state synced after command");
+            let _ = notify.send(notif);
+        }
     }
 }
 

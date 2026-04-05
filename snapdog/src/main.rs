@@ -48,7 +48,7 @@ async fn main() -> Result<()> {
     // Snapcast JSON-RPC client
     let snap = snapcast::SnapcastClient::from_config(&config).await?;
     let status = snap.server_get_status().await?;
-    snapcast::sync_initial_state(&status, &store);
+    snapcast::sync_initial_state(&status, &store).await;
     let mut snap_notifications = snap.subscribe();
 
     // Snapcast command channel
@@ -116,7 +116,7 @@ async fn main() -> Result<()> {
         tokio::select! {
             // Snapcast commands from zone players / API
             Some(cmd) = snap_cmd_rx.recv() => {
-                snapcast::execute_command(&snap, cmd).await;
+                snapcast::execute_command(&snap, cmd, &store, &notify_tx).await;
             }
             // Snapcast server notifications → state updates
             Ok(notification) = snap_notifications.recv() => {
