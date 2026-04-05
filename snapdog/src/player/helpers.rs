@@ -175,7 +175,7 @@ pub async fn handle_next(ds: &mut DecodeState<'_>, ctx: &PlaybackCtx<'_>) {
                     z.track = Some(radio_track_info(&radio.name));
                 })
                 .await;
-                tracing::info!(zone = ctx.zone_index, radio = %radio.name, "Next radio station");
+                tracing::info!(zone = %ctx.config.zones[ctx.zone_index - 1].name, radio = %radio.name, "Next radio station");
             }
         }
         ActiveSource::SubsonicPlaylist {
@@ -229,7 +229,7 @@ pub async fn handle_previous(ds: &mut DecodeState<'_>, ctx: &PlaybackCtx<'_>) {
                     z.track = Some(radio_track_info(&radio.name));
                 })
                 .await;
-                tracing::info!(zone = ctx.zone_index, radio = %radio.name, "Previous radio station");
+                tracing::info!(zone = %ctx.config.zones[ctx.zone_index - 1].name, radio = %radio.name, "Previous radio station");
             }
         }
         ActiveSource::SubsonicPlaylist {
@@ -290,7 +290,7 @@ pub async fn handle_track_complete(ds: &mut DecodeState<'_>, ctx: &PlaybackCtx<'
                 z.track = None;
             })
             .await;
-            tracing::info!(zone = ctx.zone_index, "AirPlay ended, zone idle");
+            tracing::info!(zone = %ctx.config.zones[ctx.zone_index - 1].name, "AirPlay ended, zone idle");
         }
         _ => {
             *ds.source = ActiveSource::Idle;
