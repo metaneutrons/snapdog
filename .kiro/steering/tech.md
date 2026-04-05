@@ -156,3 +156,5 @@ docker compose -f docker-compose.dev.yml up  # Start test rig
 ```
 
 **IMPORTANT: Never push to remote without explicit user approval.** Commits are local only until the user says "push".
+
+**IMPORTANT: Never commit UI fixes without user acknowledgment.** Show the fix, wait for confirmation, then commit.
