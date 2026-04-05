@@ -3,6 +3,13 @@
 
 //! SnapDog library — re-exports all modules for integration tests.
 
+#![forbid(unsafe_code)]
+#![warn(clippy::redundant_closure)]
+#![warn(clippy::implicit_clone)]
+#![warn(clippy::uninlined_format_args)]
+// TODO: enable once public API is documented
+// #![warn(missing_docs)]
+
 pub mod api;
 pub mod audio;
 pub mod config;
