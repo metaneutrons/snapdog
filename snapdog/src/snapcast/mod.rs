@@ -1,42 +1,41 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2025 Fabian Schmieder
 
-//! Snapcast integration: server lifecycle, control API, audio source feeding.
-//!
-//! - JSON-RPC control via `snapcast-control` crate (auto-managed state)
-//! - Feeds PCM audio to TCP sources (loopback-only)
+//! Snapcast JSON-RPC client and TCP audio source management.
+
+pub mod connection;
+pub mod protocol;
+pub mod types;
 
 use std::net::SocketAddr;
 
 use anyhow::{Context, Result};
-use snapcast_control::{SnapcastConnection, State};
+use serde_json::json;
+use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
+use tokio::sync::broadcast;
 
 use crate::config::AppConfig;
+use connection::Connection;
+pub use protocol::Notification;
+pub use types::ServerStatus;
+
+// ── SnapcastClient ────────────────────────────────────────────
 
 /// Snapcast controller: JSON-RPC connection + TCP audio sources.
-pub struct Snapcast {
-    conn: SnapcastConnection,
+pub struct SnapcastClient {
+    conn: Connection,
 }
 
-impl Snapcast {
-    /// Connect to snapserver JSON-RPC and fetch initial state.
-    #[tracing::instrument(skip_all, fields(address = %addr))]
+impl SnapcastClient {
+    /// Connect to snapserver JSON-RPC.
     pub async fn connect(addr: SocketAddr) -> Result<Self> {
-        let conn = SnapcastConnection::builder()
-            .on_connect(|| tracing::info!("Snapcast connected"))
-            .on_disconnect(|| tracing::warn!("Snapcast disconnected — reconnecting"))
-            .connect(addr)
-            .await
-            .context("Failed to connect to snapserver JSON-RPC")?;
-
-        tracing::info!("Snapcast JSON-RPC connection established");
+        let conn = Connection::connect(addr).await?;
         Ok(Self { conn })
     }
 
     /// Connect using app config.
     pub async fn from_config(config: &AppConfig) -> Result<Self> {
-        // snapcast-control uses raw TCP JSON-RPC (default: streaming_port + 1)
         let tcp_port = config.snapcast.jsonrpc_port;
         let host = &config.snapcast.address;
         let addr: SocketAddr = tokio::net::lookup_host(format!("{host}:{tcp_port}"))
@@ -47,128 +46,178 @@ impl Snapcast {
         Self::connect(addr).await
     }
 
-    /// Get shared state reference (auto-updated by the crate on every message).
-    pub fn state(&self) -> &std::sync::Arc<State> {
-        &self.conn.state
+    /// Subscribe to Snapcast server notifications.
+    pub fn subscribe(&self) -> broadcast::Receiver<Notification> {
+        self.conn.subscribe()
     }
 
-    /// Fetch initial server status and populate state.
-    pub async fn init(&mut self) -> Result<()> {
+    // ── Server methods ────────────────────────────────────────
+
+    /// Fetch full server status.
+    pub async fn server_get_status(&self) -> Result<ServerStatus> {
+        let result = self.conn.request("Server.GetStatus", json!({})).await?;
+        serde_json::from_value(result).context("Failed to parse ServerStatus")
+    }
+
+    /// Get JSON-RPC protocol version.
+    pub async fn server_get_rpc_version(&self) -> Result<serde_json::Value> {
+        self.conn.request("Server.GetRPCVersion", json!({})).await
+    }
+
+    /// Delete a client from the server.
+    pub async fn server_delete_client(&self, id: &str) -> Result<()> {
         self.conn
-            .server_get_status()
-            .await
-            .context("Failed to get server status")?;
-        // Wait for the response to arrive and populate state
-        if let Some(messages) = self.conn.recv().await {
-            for msg in messages {
-                if let Err(e) = msg {
-                    tracing::warn!(error = %e, "Error processing initial Snapcast message");
-                }
-            }
-        }
-        self.log_state();
+            .request("Server.DeleteClient", json!({ "id": id }))
+            .await?;
         Ok(())
     }
 
-    /// Process incoming messages (call in event loop).
-    pub async fn recv(
-        &mut self,
-    ) -> Option<Vec<Result<snapcast_control::ValidMessage, snapcast_control::ClientError>>> {
-        self.conn.recv().await
+    // ── Client methods ────────────────────────────────────────
+
+    /// Get client status.
+    pub async fn client_get_status(&self, id: &str) -> Result<types::Client> {
+        let result = self
+            .conn
+            .request("Client.GetStatus", json!({ "id": id }))
+            .await?;
+        #[derive(serde::Deserialize)]
+        struct R {
+            client: types::Client,
+        }
+        let r: R = serde_json::from_value(result)?;
+        Ok(r.client)
     }
 
-    /// Set volume for a client by snapcast ID.
-    pub async fn set_client_volume(&mut self, id: &str, percent: u8, muted: bool) -> Result<()> {
+    /// Set client volume.
+    pub async fn client_set_volume(&self, id: &str, percent: u8, muted: bool) -> Result<()> {
         self.conn
-            .client_set_volume(
-                id.to_string(),
-                snapcast_control::client::ClientVolume {
-                    percent: percent.into(),
-                    muted,
-                },
+            .request(
+                "Client.SetVolume",
+                json!({ "id": id, "volume": { "percent": percent, "muted": muted } }),
             )
-            .await
-            .context("Failed to set client volume")
+            .await?;
+        Ok(())
     }
 
-    pub async fn set_client_latency(&mut self, id: &str, latency_ms: i32) -> Result<()> {
+    /// Set client latency.
+    pub async fn client_set_latency(&self, id: &str, latency: i32) -> Result<()> {
         self.conn
-            .client_set_latency(id.to_string(), latency_ms as usize)
-            .await
-            .context("Failed to set client latency")
+            .request("Client.SetLatency", json!({ "id": id, "latency": latency }))
+            .await?;
+        Ok(())
     }
 
-    /// Assign a group to a specific stream.
-    pub async fn set_group_stream(&mut self, group_id: &str, stream_id: &str) -> Result<()> {
+    /// Set client name.
+    pub async fn client_set_name(&self, id: &str, name: &str) -> Result<()> {
         self.conn
-            .group_set_stream(group_id.to_string(), stream_id.to_string())
-            .await
-            .context("Failed to set group stream")
+            .request("Client.SetName", json!({ "id": id, "name": name }))
+            .await?;
+        Ok(())
     }
 
-    /// Set clients for a group.
-    pub async fn set_group_clients(
-        &mut self,
-        group_id: &str,
-        client_ids: Vec<String>,
-    ) -> Result<()> {
+    // ── Group methods ─────────────────────────────────────────
+
+    /// Get group status.
+    pub async fn group_get_status(&self, id: &str) -> Result<types::Group> {
+        let result = self
+            .conn
+            .request("Group.GetStatus", json!({ "id": id }))
+            .await?;
+        #[derive(serde::Deserialize)]
+        struct R {
+            group: types::Group,
+        }
+        let r: R = serde_json::from_value(result)?;
+        Ok(r.group)
+    }
+
+    /// Set group mute.
+    pub async fn group_set_mute(&self, id: &str, muted: bool) -> Result<()> {
         self.conn
-            .group_set_clients(group_id.to_string(), client_ids)
-            .await
-            .context("Failed to set group clients")
+            .request("Group.SetMute", json!({ "id": id, "mute": muted }))
+            .await?;
+        Ok(())
+    }
+
+    /// Set group stream.
+    pub async fn group_set_stream(&self, id: &str, stream_id: &str) -> Result<()> {
+        self.conn
+            .request(
+                "Group.SetStream",
+                json!({ "id": id, "stream_id": stream_id }),
+            )
+            .await?;
+        Ok(())
+    }
+
+    /// Set group clients.
+    pub async fn group_set_clients(&self, id: &str, clients: Vec<String>) -> Result<()> {
+        self.conn
+            .request("Group.SetClients", json!({ "id": id, "clients": clients }))
+            .await?;
+        Ok(())
     }
 
     /// Set group name.
-    pub async fn set_group_name(&mut self, group_id: &str, name: &str) -> Result<()> {
+    pub async fn group_set_name(&self, id: &str, name: &str) -> Result<()> {
         self.conn
-            .group_set_name(group_id.to_string(), name.to_string())
-            .await
-            .context("Failed to set group name")
-    }
-
-    /// Set volume for all clients in a group.
-    pub async fn set_group_volume(&mut self, group_id: &str, percent: i32) -> Result<()> {
-        let client_ids: Vec<String> = self
-            .state()
-            .groups
-            .get(group_id)
-            .map(|g| g.clients.iter().cloned().collect())
-            .unwrap_or_default();
-        for client_id in client_ids {
-            self.set_client_volume(&client_id, percent.clamp(0, 100) as u8, false)
-                .await?;
-        }
+            .request("Group.SetName", json!({ "id": id, "name": name }))
+            .await?;
         Ok(())
     }
 
-    /// Set mute for a group.
-    pub async fn set_group_mute(&mut self, group_id: &str, muted: bool) -> Result<()> {
+    // ── Stream methods ────────────────────────────────────────
+
+    /// Add a stream.
+    pub async fn stream_add(&self, stream_uri: &str) -> Result<serde_json::Value> {
         self.conn
-            .group_set_mute(group_id.to_string(), muted)
+            .request("Stream.AddStream", json!({ "streamUri": stream_uri }))
             .await
-            .context("Failed to set group mute")
     }
 
-    fn log_state(&self) {
-        let state = self.state();
-        let groups: Vec<_> = state.groups.iter().map(|g| g.key().clone()).collect();
-        let clients: Vec<_> = state.clients.iter().map(|c| c.key().clone()).collect();
-        let streams: Vec<_> = state.streams.iter().map(|s| s.key().clone()).collect();
-        tracing::info!(
-            groups = ?groups,
-            clients = ?clients,
-            streams = ?streams,
-            "Snapcast state loaded"
-        );
+    /// Remove a stream.
+    pub async fn stream_remove(&self, id: &str) -> Result<()> {
+        self.conn
+            .request("Stream.RemoveStream", json!({ "id": id }))
+            .await?;
+        Ok(())
+    }
+
+    /// Control a stream.
+    pub async fn stream_control(
+        &self,
+        id: &str,
+        command: &str,
+        params: serde_json::Value,
+    ) -> Result<()> {
+        self.conn
+            .request(
+                "Stream.Control",
+                json!({ "id": id, "command": command, "params": params }),
+            )
+            .await?;
+        Ok(())
+    }
+
+    /// Set stream property.
+    pub async fn stream_set_property(&self, id: &str, properties: serde_json::Value) -> Result<()> {
+        self.conn
+            .request(
+                "Stream.SetProperty",
+                json!({ "id": id, "properties": properties }),
+            )
+            .await?;
+        Ok(())
     }
 }
 
-/// Open a TCP connection to a snapcast TCP source for feeding PCM audio.
+// ── TCP Audio Source ───────────────────────────────────────────
+
+/// Open a TCP audio source connection to snapserver.
 pub async fn open_audio_source(port: u16) -> Result<TcpStream> {
-    let addr = format!("127.0.0.1:{port}");
-    let stream = TcpStream::connect(&addr)
+    let stream = TcpStream::connect(format!("127.0.0.1:{port}"))
         .await
-        .with_context(|| format!("Failed to connect to TCP source at {addr}"))?;
+        .context("Failed to connect audio source")?;
     tracing::info!(port, "Audio source connected");
     Ok(stream)
 }
