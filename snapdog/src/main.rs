@@ -56,7 +56,7 @@ async fn main() -> Result<()> {
         store: store.clone(),
         covers: covers.clone(),
         notify: notify_tx.clone(),
-        snap_tx: snap_cmd_tx,
+        snap_tx: snap_cmd_tx.clone(),
         client_mac_map: snap_state
             .clients
             .iter()
@@ -77,9 +77,17 @@ async fn main() -> Result<()> {
     let api_commands = zone_commands.clone();
     let api_covers = covers.clone();
     let api_notify = notify_tx.clone();
+    let api_snap_tx = snap_cmd_tx.clone();
     tokio::spawn(async move {
-        if let Err(e) =
-            api::serve(api_config, api_store, api_commands, api_covers, api_notify).await
+        if let Err(e) = api::serve(
+            api_config,
+            api_store,
+            api_commands,
+            api_snap_tx,
+            api_covers,
+            api_notify,
+        )
+        .await
         {
             tracing::error!(error = %e, "API server failed");
         }
@@ -111,17 +119,31 @@ async fn main() -> Result<()> {
     loop {
         tokio::select! {
             Some(cmd) = snap_cmd_rx.recv() => {
-                let result = match cmd.action {
-                    player::SnapcastAction::Stream(stream_id) =>
-                        snap.set_group_stream(&cmd.group_id, &stream_id).await,
-                    player::SnapcastAction::Clients(client_ids) =>
-                        snap.set_group_clients(&cmd.group_id, client_ids).await,
-                    player::SnapcastAction::Name(name) =>
-                        snap.set_group_name(&cmd.group_id, &name).await,
-                    player::SnapcastAction::Volume(percent) =>
-                        snap.set_group_volume(&cmd.group_id, percent).await,
-                    player::SnapcastAction::Mute(muted) =>
-                        snap.set_group_mute(&cmd.group_id, muted).await,
+                let result = match cmd {
+                    player::SnapcastCmd::Group { group_id, action } => match action {
+                        player::GroupAction::Stream(stream_id) =>
+                            snap.set_group_stream(&group_id, &stream_id).await,
+                        player::GroupAction::Clients(client_ids) =>
+                            snap.set_group_clients(&group_id, client_ids).await,
+                        player::GroupAction::Name(name) =>
+                            snap.set_group_name(&group_id, &name).await,
+                        player::GroupAction::Volume(percent) =>
+                            snap.set_group_volume(&group_id, percent).await,
+                        player::GroupAction::Mute(muted) =>
+                            snap.set_group_mute(&group_id, muted).await,
+                    },
+                    player::SnapcastCmd::Client { client_id, action } => match action {
+                        player::ClientAction::Volume(percent) =>
+                            snap.set_client_volume(&client_id, percent.clamp(0, 100) as u8, false).await,
+                        player::ClientAction::Mute(muted) => {
+                            let vol = store.read().await.clients.values()
+                                .find(|c| c.snapcast_id.as_deref() == Some(&client_id))
+                                .map_or(100, |c| c.volume);
+                            snap.set_client_volume(&client_id, vol.clamp(0, 100) as u8, muted).await
+                        }
+                        player::ClientAction::Latency(ms) =>
+                            snap.set_client_latency(&client_id, ms).await,
+                    },
                 };
                 if let Err(e) = result {
                     tracing::warn!(error = %e, "Snapcast command failed");

@@ -12,6 +12,7 @@ use serde::Serialize;
 
 use crate::api::SharedState;
 use crate::api::routes::zones::VolumeValue;
+use crate::player::{ClientAction, SnapcastCmd};
 use crate::state;
 
 #[derive(Serialize)]
@@ -106,12 +107,28 @@ async fn set_volume(
     Path(idx): Path<usize>,
     Json(value): Json<VolumeValue>,
 ) -> impl IntoResponse {
-    let mut store = state.store.write().await;
-    let client = store.clients.get_mut(&idx).ok_or(not_found())?;
+    let store = state.store.read().await;
+    let client = store.clients.get(&idx).ok_or(not_found())?;
     let volume = value
         .resolve(client.volume)
         .map_err(|_| StatusCode::BAD_REQUEST)?;
-    client.volume = volume;
+    let snap_id = client.snapcast_id.clone().ok_or(not_found())?;
+    drop(store);
+
+    state
+        .snap_tx
+        .send(SnapcastCmd::Client {
+            client_id: snap_id,
+            action: ClientAction::Volume(volume),
+        })
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Update local state
+    let mut store = state.store.write().await;
+    if let Some(c) = store.clients.get_mut(&idx) {
+        c.volume = volume;
+    }
     tracing::info!(client = idx, volume, "Client volume set");
     Ok::<_, StatusCode>(Json(volume))
 }
@@ -128,8 +145,19 @@ async fn set_mute(
     Path(idx): Path<usize>,
     Json(v): Json<bool>,
 ) -> impl IntoResponse {
+    let snap_id = read_client(&state, idx)
+        .await
+        .and_then(|c| c.snapcast_id.clone())
+        .ok_or(not_found())?;
+    let _ = state
+        .snap_tx
+        .send(SnapcastCmd::Client {
+            client_id: snap_id,
+            action: ClientAction::Mute(v),
+        })
+        .await;
     crate::state::update_client_and_notify(&state.store, idx, &state.notifications, |c| {
-        c.muted = v
+        c.muted = v;
     })
     .await;
     Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
@@ -139,9 +167,18 @@ async fn toggle_mute(
     State(state): State<SharedState>,
     Path(idx): Path<usize>,
 ) -> impl IntoResponse {
-    let muted = read_client(&state, idx).await.is_some_and(|c| !c.muted);
+    let client = read_client(&state, idx).await.ok_or(not_found())?;
+    let muted = !client.muted;
+    let snap_id = client.snapcast_id.clone().ok_or(not_found())?;
+    let _ = state
+        .snap_tx
+        .send(SnapcastCmd::Client {
+            client_id: snap_id,
+            action: ClientAction::Mute(muted),
+        })
+        .await;
     crate::state::update_client_and_notify(&state.store, idx, &state.notifications, |c| {
-        c.muted = muted
+        c.muted = muted;
     })
     .await;
     Ok::<_, StatusCode>(Json(muted))
