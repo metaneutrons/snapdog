@@ -1,13 +1,19 @@
-# ── Build stage ────────────────────────────────────────────────
+# ── WebUI build stage ─────────────────────────────────────────
+FROM node:22-slim AS webui-builder
+
+WORKDIR /build/webui
+COPY webui/package.json webui/package-lock.json ./
+RUN npm ci
+COPY webui/ .
+RUN npm run build
+
+# ── Rust build stage ──────────────────────────────────────────
 FROM rust:1-bookworm AS builder
 
-RUN apt-get update && apt-get install -y \
-    cmake build-essential libavahi-compat-libdnssd-dev \
-    && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /build
-COPY . .
-RUN git submodule update --init --recursive 2>/dev/null || true
+COPY Cargo.toml Cargo.lock ./
+COPY snapdog/ snapdog/
+COPY --from=webui-builder /build/webui/out webui/out
 RUN cargo build --release
 
 # ── Snapserver build ──────────────────────────────────────────
@@ -38,7 +44,6 @@ RUN git clone --depth 1 --branch v${SNAPCAST_VERSION} https://github.com/badaix/
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libavahi-compat-libdnssd1 \
     libasound2 libflac12 libssl3 \
     ca-certificates dumb-init \
     && rm -rf /var/lib/apt/lists/*
