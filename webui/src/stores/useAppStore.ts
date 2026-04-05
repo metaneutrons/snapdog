@@ -143,5 +143,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   selectZone: (id) => set({ selectedZone: id }),
-  setConnected: (v) => set({ isConnected: v }),
+  setConnected: (v) => {
+    const was = get().isConnected;
+    set({ isConnected: v });
+    // On reconnect, re-fetch all state
+    if (v && !was) {
+      get().loadAll();
+    }
+  },
 }));
