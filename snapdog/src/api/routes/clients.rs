@@ -123,7 +123,7 @@ async fn set_volume(
         })
         .await;
     // State update comes from Snapcast Client.OnVolumeChanged notification
-    tracing::info!(client = idx, volume, "Client volume command sent");
+    tracing::debug!(client = idx, volume, "Client volume command sent");
     Ok::<_, StatusCode>(Json(volume))
 }
 

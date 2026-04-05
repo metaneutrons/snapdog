@@ -132,13 +132,13 @@ impl shairplay::AudioSession for BridgeSession {
         } else {
             ((volume + 30.0) / 30.0 * 100.0).clamp(0.0, 100.0) as i32
         };
-        tracing::info!(raw = volume, percent, "AirPlay volume");
+        tracing::debug!(percent, "AirPlay volume");
         let _ = self.event_tx.try_send(ReceiverEvent::Volume { percent });
     }
 
     fn audio_set_metadata(&mut self, metadata: &[u8]) {
         let (title, artist, album) = parse_dmap(metadata);
-        tracing::info!(title = %title, artist = %artist, album = %album, "AirPlay metadata");
+        tracing::debug!(title = %title, artist = %artist, "AirPlay metadata");
         let _ = self.event_tx.try_send(ReceiverEvent::Metadata {
             title,
             artist,
@@ -147,7 +147,7 @@ impl shairplay::AudioSession for BridgeSession {
     }
 
     fn audio_set_coverart(&mut self, coverart: &[u8]) {
-        tracing::info!(size = coverart.len(), "AirPlay cover art received");
+        tracing::debug!(size = coverart.len(), "AirPlay cover art");
         let _ = self.event_tx.try_send(ReceiverEvent::CoverArt {
             bytes: coverart.to_vec(),
         });
@@ -163,7 +163,7 @@ impl shairplay::AudioSession for BridgeSession {
     }
 
     fn remote_control_available(&mut self, remote: Arc<dyn shairplay::RemoteControl>) {
-        tracing::info!("Remote control available");
+        tracing::debug!("AirPlay remote control available");
         let _ = self.event_tx.try_send(ReceiverEvent::RemoteAvailable {
             remote: Arc::new(ShairplayRemoteBridge(remote)),
         });
