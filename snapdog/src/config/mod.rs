@@ -104,27 +104,23 @@ mod tests {
     }
 
     #[test]
-    fn knx_zone_conventions_applied() {
+    fn knx_zone_no_defaults() {
         let raw: RawConfig = toml::from_str(minimal_toml()).unwrap();
         let config = load_raw(raw).unwrap();
         let knx = &config.zones[0].knx;
-        assert_eq!(knx.play, "1/1/1");
-        assert_eq!(knx.pause, "1/1/2");
-        assert_eq!(knx.stop, "1/1/3");
-        assert_eq!(knx.volume, "1/2/1");
-        assert_eq!(knx.volume_status, "1/2/2");
-        assert_eq!(knx.mute, "1/2/5");
+        // No convention defaults — all None unless explicitly configured
+        assert!(knx.play.is_none());
+        assert!(knx.volume.is_none());
+        assert!(knx.mute.is_none());
     }
 
     #[test]
-    fn knx_client_conventions_applied() {
+    fn knx_client_no_defaults() {
         let raw: RawConfig = toml::from_str(minimal_toml()).unwrap();
         let config = load_raw(raw).unwrap();
         let knx = &config.clients[0].knx;
-        assert_eq!(knx.volume, "3/1/1");
-        assert_eq!(knx.volume_status, "3/1/2");
-        assert_eq!(knx.mute, "3/1/5");
-        assert_eq!(knx.mute_status, "3/1/6");
+        assert!(knx.volume.is_none());
+        assert!(knx.mute.is_none());
     }
 
     #[test]
@@ -204,7 +200,7 @@ mod tests {
         assert_eq!(config.zones[1].index, 2);
         assert_eq!(config.zones[1].sink, "/snapsinks/zone2");
         assert_eq!(config.zones[1].tcp_source_port, 4954);
-        assert_eq!(config.zones[1].knx.play, "2/1/1");
+        assert_eq!(config.zones[1].knx.play, None);
         assert_eq!(config.clients[0].zone_index, 2);
     }
 }

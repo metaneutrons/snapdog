@@ -57,40 +57,56 @@ pub fn resolve_client(
     })
 }
 
-/// Zone N KNX convention: N/1/x (control), N/2/x (volume), N/3/x (track), N/4/x (playlist)
-fn resolve_zone_knx(n: usize, raw: RawZoneKnxConfig) -> ZoneKnxAddresses {
+/// Zone KNX addresses — explicit only, no convention defaults.
+/// Only configured GAs are active. Unconfigured GAs are ignored.
+fn resolve_zone_knx(_n: usize, raw: RawZoneKnxConfig) -> ZoneKnxAddresses {
     ZoneKnxAddresses {
-        play: raw.play.unwrap_or_else(|| format!("{n}/1/1")),
-        pause: raw.pause.unwrap_or_else(|| format!("{n}/1/2")),
-        stop: raw.stop.unwrap_or_else(|| format!("{n}/1/3")),
-        volume: raw.volume.unwrap_or_else(|| format!("{n}/2/1")),
-        volume_status: raw.volume_status.unwrap_or_else(|| format!("{n}/2/2")),
-        volume_dim: raw.volume_dim.unwrap_or_else(|| format!("{n}/2/3")),
-        mute: raw.mute.unwrap_or_else(|| format!("{n}/2/5")),
-        mute_status: raw.mute_status.unwrap_or_else(|| format!("{n}/2/6")),
-        mute_toggle: raw.mute_toggle.unwrap_or_else(|| format!("{n}/2/7")),
-        track_next: raw.track_next.unwrap_or_else(|| format!("{n}/1/4")),
-        track_previous: raw.track_previous.unwrap_or_else(|| format!("{n}/1/5")),
-        playlist: raw.playlist.unwrap_or_else(|| format!("{n}/4/1")),
-        playlist_status: raw.playlist_status.unwrap_or_else(|| format!("{n}/4/2")),
-        shuffle: raw.shuffle.unwrap_or_else(|| format!("{n}/4/5")),
-        shuffle_status: raw.shuffle_status.unwrap_or_else(|| format!("{n}/4/6")),
-        repeat: raw.repeat.unwrap_or_else(|| format!("{n}/4/8")),
-        repeat_status: raw.repeat_status.unwrap_or_else(|| format!("{n}/4/9")),
+        play: raw.play,
+        pause: raw.pause,
+        stop: raw.stop,
+        volume: raw.volume,
+        volume_status: raw.volume_status,
+        volume_dim: raw.volume_dim,
+        mute: raw.mute,
+        mute_status: raw.mute_status,
+        mute_toggle: raw.mute_toggle,
+        track_next: raw.track_next,
+        track_previous: raw.track_previous,
+        control_status: raw.control_status,
+        track_title_status: raw.track_title_status,
+        track_artist_status: raw.track_artist_status,
+        track_album_status: raw.track_album_status,
+        track_progress_status: raw.track_progress_status,
+        track_playing_status: raw.track_playing_status,
+        track_repeat: raw.track_repeat,
+        track_repeat_status: raw.track_repeat_status,
+        track_repeat_toggle: raw.track_repeat_toggle,
+        playlist: raw.playlist,
+        playlist_status: raw.playlist_status,
+        playlist_next: raw.playlist_next,
+        playlist_previous: raw.playlist_previous,
+        shuffle: raw.shuffle,
+        shuffle_status: raw.shuffle_status,
+        shuffle_toggle: raw.shuffle_toggle,
+        repeat: raw.repeat,
+        repeat_status: raw.repeat_status,
+        repeat_toggle: raw.repeat_toggle,
     }
 }
 
-/// Client N KNX convention: 3/N/x
-fn resolve_client_knx(n: usize, raw: RawClientKnxConfig) -> ClientKnxAddresses {
+/// Client KNX addresses — explicit only, no convention defaults.
+fn resolve_client_knx(_n: usize, raw: RawClientKnxConfig) -> ClientKnxAddresses {
     ClientKnxAddresses {
-        volume: raw.volume.unwrap_or_else(|| format!("3/{n}/1")),
-        volume_status: raw.volume_status.unwrap_or_else(|| format!("3/{n}/2")),
-        volume_dim: raw.volume_dim.unwrap_or_else(|| format!("3/{n}/3")),
-        mute: raw.mute.unwrap_or_else(|| format!("3/{n}/5")),
-        mute_status: raw.mute_status.unwrap_or_else(|| format!("3/{n}/6")),
-        mute_toggle: raw.mute_toggle.unwrap_or_else(|| format!("3/{n}/7")),
-        zone: raw.zone.unwrap_or_else(|| format!("3/{n}/10")),
-        zone_status: raw.zone_status.unwrap_or_else(|| format!("3/{n}/11")),
-        connected_status: raw.connected_status.unwrap_or_else(|| format!("3/{n}/12")),
+        volume: raw.volume,
+        volume_status: raw.volume_status,
+        volume_dim: raw.volume_dim,
+        mute: raw.mute,
+        mute_status: raw.mute_status,
+        mute_toggle: raw.mute_toggle,
+        latency: raw.latency,
+        latency_status: raw.latency_status,
+        zone: raw.zone,
+        zone_status: raw.zone_status,
+        connected_status: raw.connected_status,
     }
 }
