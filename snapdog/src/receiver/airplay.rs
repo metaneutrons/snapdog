@@ -9,7 +9,9 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use shairplay::{BindConfig, PairingStore, RaopServer};
+use shairplay::RaopServer;
+#[cfg(feature = "ap2")]
+use shairplay::{BindConfig, PairingStore};
 
 use super::{AudioFormat, AudioSender, ReceiverEvent, ReceiverEventTx, ReceiverProvider};
 use crate::config::AirplayConfig;
@@ -55,10 +57,12 @@ impl ReceiverProvider for AirPlayReceiver {
             builder = builder.password(pw);
         }
 
+        #[cfg(feature = "ap2")]
         if let Some(ref addrs) = self.config.bind {
             builder = builder.bind(BindConfig::new().addrs(addrs.clone()));
         }
 
+        #[cfg(feature = "ap2")]
         if let Some(ref path) = self.config.pairing_store {
             builder = builder.pairing_store(Arc::new(FilePairingStore::new(path.clone())));
         }
@@ -201,11 +205,13 @@ impl super::RemoteControl for ShairplayRemoteBridge {
 
 // ── FilePairingStore (AP2 key persistence) ────────────────────
 
+#[cfg(feature = "ap2")]
 struct FilePairingStore {
     path: std::path::PathBuf,
     keys: std::sync::Mutex<std::collections::HashMap<String, [u8; 32]>>,
 }
 
+#[cfg(feature = "ap2")]
 impl FilePairingStore {
     fn new(path: std::path::PathBuf) -> Self {
         let keys = std::fs::read_to_string(&path)
@@ -225,6 +231,7 @@ impl FilePairingStore {
     }
 }
 
+#[cfg(feature = "ap2")]
 impl PairingStore for FilePairingStore {
     fn get(&self, device_id: &str) -> Option<[u8; 32]> {
         self.keys.lock().ok()?.get(device_id).copied()

@@ -40,7 +40,7 @@ rust-embed = "8"
 mac_address = "1"
 crc32fast = "1"
 uuid = { version = "1", features = ["v4", "serde"] }
-shairplay = { version = "0.1", features = ["ap2"] }
+shairplay = "0.1"
 librespot-core = { git = "https://github.com/librespot-org/librespot", branch = "dev", optional = true }
 librespot-playback = { git = "https://github.com/librespot-org/librespot", branch = "dev", default-features = false, optional = true }
 librespot-connect = { git = "https://github.com/librespot-org/librespot", branch = "dev", optional = true }
@@ -48,7 +48,8 @@ librespot-discovery = { git = "https://github.com/librespot-org/librespot", bran
 librespot-metadata = { git = "https://github.com/librespot-org/librespot", branch = "dev", optional = true }
 
 [features]
-default = []
+default = ["ap2"]
+ap2 = ["shairplay/ap2"]
 spotify = ["dep:librespot-core", "dep:librespot-playback", "dep:librespot-connect", "dep:librespot-discovery", "dep:librespot-metadata"]
 
 [dev-dependencies]
