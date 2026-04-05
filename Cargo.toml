@@ -29,9 +29,6 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 tracing-appender = "0.2"
 
-# Snapcast control
-snapcast-control = "0.4"
-
 # Audio decoding
 symphonia = { version = "0.5", features = ["aac", "mp3", "flac", "alac", "isomp4", "pcm"] }
 
