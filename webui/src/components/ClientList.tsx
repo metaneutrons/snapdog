@@ -46,7 +46,10 @@ function ClientCard({ client, zoneList }: { client: ClientInfo; zoneList: { inde
             value={[client.muted ? 0 : client.volume]}
             max={100}
             step={1}
-            onValueChange={(v) => api.clients.setVolume(client.index, v[0]).catch(() => {})}
+            onValueChange={(v) => {
+              if (client.muted) api.clients.setMute(client.index, false).catch(() => {});
+              api.clients.setVolume(client.index, v[0]).catch(() => {});
+            }}
             className="flex-1 min-w-0"
           />
           <span className="text-[10px] text-muted-foreground tabular-nums w-5 text-right">

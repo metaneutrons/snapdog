@@ -11,13 +11,13 @@ import {
 import { motion } from "framer-motion";
 import type { ZoneState } from "@/stores/useAppStore";
 import { Button } from "@/components/ui/button";
+import { api } from "@/lib/api";
 
 interface TransportControlsProps {
   zone: ZoneState;
-  sendCommand: (zone: number, action: string) => void;
 }
 
-export function TransportControls({ zone, sendCommand }: TransportControlsProps) {
+export function TransportControls({ zone }: TransportControlsProps) {
   const { index, playback, source } = zone;
   const isPlaying = playback === "playing";
   const isIdle = source === "idle";
@@ -25,7 +25,15 @@ export function TransportControls({ zone, sendCommand }: TransportControlsProps)
   const isUrl = source === "url";
   const hasNavigation = source === "radio" || source === "subsonic_playlist" || isAirPlay;
 
-  const cmd = (action: string) => sendCommand(index, action);
+  const cmd = (action: string) => {
+    switch (action) {
+      case "play": api.zones.play(index).catch(() => {}); break;
+      case "pause": api.zones.pause(index).catch(() => {}); break;
+      case "stop": api.zones.stop(index).catch(() => {}); break;
+      case "next": api.zones.next(index).catch(() => {}); break;
+      case "previous": api.zones.previous(index).catch(() => {}); break;
+    }
+  };
 
   return (
     <div className="flex items-center justify-center gap-2">

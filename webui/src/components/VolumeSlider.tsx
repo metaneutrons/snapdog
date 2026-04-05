@@ -14,10 +14,9 @@ import type { ZoneState } from "@/stores/useAppStore";
 
 interface VolumeSliderProps {
   zone: ZoneState;
-  sendCommand: (zone: number, action: string, value?: number | boolean) => void;
 }
 
-export function VolumeSlider({ zone, sendCommand }: VolumeSliderProps) {
+export function VolumeSlider({ zone }: VolumeSliderProps) {
   const [localVolume, setLocalVolume] = useState(zone.volume);
   const [dragging, setDragging] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -38,13 +37,17 @@ export function VolumeSlider({ zone, sendCommand }: VolumeSliderProps) {
       const v = value[0];
       setLocalVolume(v);
       setDragging(true);
+      // Auto-unmute when user interacts with slider
+      if (zone.muted) {
+        api.zones.setMute(zone.index, false).catch(() => {});
+      }
       // Debounced API call
       clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
-        sendCommand(zone.index, "set_volume", v);
+        api.zones.setVolume(zone.index, v).catch(() => {});
       }, 50);
     },
-    [zone.index, sendCommand],
+    [zone.index, zone.muted],
   );
 
   const handleVolumeCommit = useCallback(
@@ -57,9 +60,8 @@ export function VolumeSlider({ zone, sendCommand }: VolumeSliderProps) {
   );
 
   const toggleMute = useCallback(() => {
-    sendCommand(zone.index, "toggle_mute");
     api.zones.toggleMute(zone.index).catch(() => {});
-  }, [zone.index, sendCommand]);
+  }, [zone.index]);
 
   return (
     <div className="flex items-center gap-3 w-full md:max-w-xs">
