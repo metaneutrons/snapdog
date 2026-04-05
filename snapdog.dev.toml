@@ -24,9 +24,9 @@ managed = false  # snapserver runs in Docker
 name = "SnapDog-Dev"
 
 [subsonic]
-url = "http://localhost:4533"
-username = "admin"
-password = "admin"
+url = "https://music.schmieder.eu"
+username = "fabian"
+password = "kofduh-xahny1-zidwEw"
 
 [mqtt]
 broker = "localhost:1883"
