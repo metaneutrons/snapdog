@@ -16,7 +16,7 @@ port = 5555
 
 [snapcast]
 address = "localhost"
-jsonrpc_port = 1780
+jsonrpc_port = 1705
 streaming_port = 1704
 managed = false  # snapserver runs in Docker
 

@@ -162,6 +162,10 @@ async fn main() -> Result<()> {
                 };
                 if let Err(e) = result {
                     tracing::warn!(error = %e, "Snapcast command failed");
+                } else {
+                    tracing::debug!("Snapcast command executed successfully");
+                    // After command execution, sync state from snapcast-control's internal state
+                    sync_client_state_from_snapcast(&snap, &store, &notify_tx).await;
                 }
             }
             _ = tokio::signal::ctrl_c() => {
@@ -170,12 +174,15 @@ async fn main() -> Result<()> {
             }
             // Snapcast server notifications (client connect/disconnect, volume changes, etc.)
             Some(messages) = snap.recv() => {
+                tracing::debug!(count = messages.len(), "Snapcast messages received");
                 for msg in messages {
                     match msg {
                         Ok(snapcast_control::ValidMessage::Notification { method, .. }) => {
                             handle_snapcast_notification(*method, &store, &notify_tx, &config, &mut snap).await;
                         }
-                        Ok(_) => {} // Result messages handled internally by snapcast-control
+                        Ok(snapcast_control::ValidMessage::Result { .. }) => {
+                            tracing::debug!("Snapcast result message (handled internally)");
+                        }
                         Err(e) => tracing::warn!(error = %e, "Snapcast message error"),
                     }
                 }
@@ -293,15 +300,23 @@ async fn handle_snapcast_notification(
             let snap_id = params.id;
             let latency = params.latency as i32;
             let mut s = store.write().await;
-            if let Some((_, client)) = s
+            if let Some((&idx, client)) = s
                 .clients
                 .iter_mut()
                 .find(|(_, c)| c.snapcast_id.as_deref() == Some(&snap_id))
             {
                 client.latency_ms = latency;
+                let notif = api::ws::Notification::ClientStateChanged {
+                    client: idx,
+                    volume: client.volume,
+                    muted: client.muted,
+                    connected: client.connected,
+                    zone: client.zone_index,
+                };
                 let name = client.name.clone();
                 drop(s);
                 tracing::info!(client = %name, latency, "Client latency changed");
+                let _ = notify.send(notif);
             }
         }
         Notification::StreamOnUpdate { params } => {
@@ -323,7 +338,26 @@ async fn handle_snapcast_notification(
             tracing::debug!(stream = %params.id, "Stream properties updated");
         }
         Notification::ClientOnNameChanged { params } => {
-            tracing::info!(snap_id = %params.id, name = %params.name, "Client name changed");
+            let snap_id = params.id;
+            let new_name = params.name;
+            let mut s = store.write().await;
+            if let Some((&idx, client)) = s
+                .clients
+                .iter_mut()
+                .find(|(_, c)| c.snapcast_id.as_deref() == Some(&snap_id))
+            {
+                client.name = new_name.clone();
+                let notif = api::ws::Notification::ClientStateChanged {
+                    client: idx,
+                    volume: client.volume,
+                    muted: client.muted,
+                    connected: client.connected,
+                    zone: client.zone_index,
+                };
+                drop(s);
+                tracing::info!(client = %new_name, "Client name changed");
+                let _ = notify.send(notif);
+            }
         }
     }
 }
@@ -400,4 +434,45 @@ async fn setup_zone_group_for_client(
         stream = %zone_config.stream_name,
         "Zone group configured dynamically"
     );
+}
+
+async fn sync_client_state_from_snapcast(
+    snap: &snapcast::Snapcast,
+    store: &state::SharedState,
+    notify: &tokio::sync::broadcast::Sender<api::ws::Notification>,
+) {
+    let snap_state = snap.state().clone();
+    let mut s = store.write().await;
+
+    for snap_client in snap_state.clients.iter() {
+        let snap_id = snap_client.key();
+        let volume = snap_client.value().config.volume.percent as i32;
+        let muted = snap_client.value().config.volume.muted;
+        let connected = snap_client.value().connected;
+
+        if let Some((&idx, client)) = s
+            .clients
+            .iter_mut()
+            .find(|(_, c)| c.snapcast_id.as_deref() == Some(snap_id))
+        {
+            let changed =
+                client.volume != volume || client.muted != muted || client.connected != connected;
+
+            if changed {
+                client.volume = volume;
+                client.muted = muted;
+                client.connected = connected;
+                let notif = api::ws::Notification::ClientStateChanged {
+                    client: idx,
+                    volume: client.volume,
+                    muted: client.muted,
+                    connected: client.connected,
+                    zone: client.zone_index,
+                };
+                let name = client.name.clone();
+                tracing::info!(client = %name, volume, muted, connected, "Client state synced from Snapcast");
+                let _ = notify.send(notif);
+            }
+        }
+    }
 }
