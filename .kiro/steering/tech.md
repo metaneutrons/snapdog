@@ -158,5 +158,3 @@ docker compose -f docker-compose.dev.yml up  # Start test rig
 **IMPORTANT: Never push to remote without explicit user approval.** Commits are local only until the user says "push".
 
 **IMPORTANT: Never commit UI fixes without user acknowledgment.** Show the fix, wait for confirmation, then commit.
-
-**IMPORTANT: No hacks, no shortcuts.** When tempted to say "the simplest way" — stop, step back, and think about the proper enterprise-grade solution. Even if it requires a heavy refactor, do it right. Quick fixes accumulate into technical debt. The correct pattern, implemented once, is always cheaper than a hack that needs to be replaced later.
