@@ -9,79 +9,82 @@ import {
 } from "@hugeicons/core-free-icons";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
-import { api } from "@/lib/api";
-import type { ZoneState } from "@/stores/useAppStore";
 
 interface VolumeSliderProps {
-  zone: ZoneState;
+  volume: number;
+  muted: boolean;
+  onVolumeChange: (volume: number) => void;
+  onMuteToggle: () => void;
+  onUnmute: () => void;
+  /** Compact mode for client chips (smaller controls, no value display) */
+  compact?: boolean;
 }
 
-export function VolumeSlider({ zone }: VolumeSliderProps) {
-  const [localVolume, setLocalVolume] = useState(zone.volume);
+export function VolumeSlider({
+  volume,
+  muted,
+  onVolumeChange,
+  onMuteToggle,
+  onUnmute,
+  compact = false,
+}: VolumeSliderProps) {
+  const [localVolume, setLocalVolume] = useState(volume);
   const [dragging, setDragging] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  // Sync from server only when not dragging
   useEffect(() => {
-    if (!dragging) setLocalVolume(zone.volume);
-  }, [zone.volume, dragging]);
+    if (!dragging) setLocalVolume(volume);
+  }, [volume, dragging]);
 
-  const volumeIcon = zone.muted
+  const volumeIcon = muted
     ? VolumeMute02Icon
     : localVolume > 50
       ? VolumeHighIcon
       : VolumeLowIcon;
 
-  const handleVolumeChange = useCallback(
+  const handleChange = useCallback(
     (value: number[]) => {
       const v = value[0];
       setLocalVolume(v);
       setDragging(true);
-      // Auto-unmute when user interacts with slider
-      if (zone.muted) {
-        api.zones.setMute(zone.index, false).catch(() => {});
-      }
-      // Debounced API call
+      if (muted) onUnmute();
       clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => {
-        api.zones.setVolume(zone.index, v).catch(() => {});
-      }, 50);
+      timerRef.current = setTimeout(() => onVolumeChange(v), 50);
     },
-    [zone.index, zone.muted],
+    [muted, onVolumeChange, onUnmute],
   );
 
-  const handleVolumeCommit = useCallback(
+  const handleCommit = useCallback(
     (value: number[]) => {
       setDragging(false);
       clearTimeout(timerRef.current);
-      api.zones.setVolume(zone.index, value[0]).catch(() => {});
+      onVolumeChange(value[0]);
     },
-    [zone.index],
+    [onVolumeChange],
   );
 
-  const toggleMute = useCallback(() => {
-    api.zones.toggleMute(zone.index).catch(() => {});
-  }, [zone.index]);
+  const iconSize = compact ? 14 : 18;
+  const btnSize = compact ? "size-6" : "size-8";
 
   return (
-    <div className="flex items-center gap-3 w-full md:max-w-xs">
+    <div className={`flex items-center gap-${compact ? "1.5" : "3"} w-full ${compact ? "" : "md:max-w-xs"}`}>
       <Button
         variant="ghost"
         size="icon"
-        onClick={toggleMute}
-        className="size-8 shrink-0 rounded-full"
+        onClick={onMuteToggle}
+        className={`${btnSize} shrink-0 rounded-full`}
       >
-        <HugeiconsIcon icon={volumeIcon} size={18} />
+        <HugeiconsIcon icon={volumeIcon} size={iconSize} />
       </Button>
       <Slider
-        value={[zone.muted ? 0 : localVolume]}
+        value={[muted ? 0 : localVolume]}
         max={100}
         step={1}
-        onValueChange={handleVolumeChange}
-        onValueCommit={handleVolumeCommit}
-        className="flex-1"
+        onValueChange={handleChange}
+        onValueCommit={handleCommit}
+        className="flex-1 min-w-0"
       />
-      <span className="text-xs text-muted-foreground tabular-nums w-7 text-right">
+      <span className={`text-muted-foreground tabular-nums text-right ${compact ? "text-[10px] w-5" : "text-xs w-7"}`}>
         {localVolume}
       </span>
     </div>

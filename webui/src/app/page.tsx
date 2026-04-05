@@ -176,7 +176,13 @@ function ZoneDetail({ zone }: { zone: ZoneState }) {
             <SeekBar zone={zone} />
             <TransportControls zone={zone} />
             <ShuffleRepeat zone={zone} />
-            <VolumeSlider zone={zone} />
+            <VolumeSlider
+              volume={zone.volume}
+              muted={zone.muted}
+              onVolumeChange={(v) => api.zones.setVolume(zone.index, v).catch(() => {})}
+              onMuteToggle={() => api.zones.toggleMute(zone.index).catch(() => {})}
+              onUnmute={() => api.zones.setMute(zone.index, false).catch(() => {})}
+            />
           </div>
         </div>
         {/* Full-width below the horizontal row */}
