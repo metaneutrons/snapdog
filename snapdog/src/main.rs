@@ -173,7 +173,7 @@ async fn main() -> Result<()> {
                 for msg in messages {
                     match msg {
                         Ok(snapcast_control::ValidMessage::Notification { method, .. }) => {
-                            handle_snapcast_notification(*method, &store, &notify_tx).await;
+                            handle_snapcast_notification(*method, &store, &notify_tx, &config, &mut snap).await;
                         }
                         Ok(_) => {} // Result messages handled internally by snapcast-control
                         Err(e) => tracing::warn!(error = %e, "Snapcast message error"),
@@ -203,6 +203,8 @@ async fn handle_snapcast_notification(
     notification: snapcast_control::Notification,
     store: &state::SharedState,
     notify: &tokio::sync::broadcast::Sender<api::ws::Notification>,
+    config: &config::AppConfig,
+    snap: &mut snapcast::Snapcast,
 ) {
     use snapcast_control::Notification;
 
@@ -219,18 +221,22 @@ async fn handle_snapcast_notification(
                 .find(|(_, c)| c.mac.to_lowercase() == mac)
             {
                 client.connected = true;
-                client.snapcast_id = Some(snap_id);
+                client.snapcast_id = Some(snap_id.clone());
+                let zone_index = client.zone_index;
                 let notif = api::ws::Notification::ClientStateChanged {
                     client: idx,
                     volume: client.volume,
                     muted: client.muted,
                     connected: client.connected,
-                    zone: client.zone_index,
+                    zone: zone_index,
                 };
                 let name = client.name.clone();
                 drop(s);
                 tracing::info!(client = %name, "Client matched and marked connected");
                 let _ = notify.send(notif);
+
+                // Re-setup zone group: assign this client to the correct group
+                setup_zone_group_for_client(zone_index, &snap_id, config, snap).await;
             }
         }
         Notification::ClientOnDisconnect { params } => {
@@ -320,4 +326,78 @@ async fn handle_snapcast_notification(
             tracing::info!(snap_id = %params.id, name = %params.name, "Client name changed");
         }
     }
+}
+
+async fn setup_zone_group_for_client(
+    zone_index: usize,
+    snap_client_id: &str,
+    config: &config::AppConfig,
+    snap: &mut snapcast::Snapcast,
+) {
+    // Re-fetch current Snapcast state to get fresh group info
+    if let Err(e) = snap.init().await {
+        tracing::warn!(error = %e, "Failed to refresh Snapcast state for group setup");
+        return;
+    }
+    let snap_state = snap.state().clone();
+
+    let zone_config = &config.zones[zone_index - 1];
+
+    // Collect all snapcast IDs for clients in this zone
+    let zone_macs: Vec<String> = config
+        .clients
+        .iter()
+        .filter(|c| c.zone_index == zone_index)
+        .map(|c| c.mac.to_lowercase())
+        .collect();
+
+    let snap_client_ids: Vec<String> = zone_macs
+        .iter()
+        .filter_map(|mac| {
+            snap_state
+                .clients
+                .iter()
+                .find(|e| e.value().host.mac.to_lowercase() == *mac)
+                .map(|e| e.key().clone())
+        })
+        .collect();
+
+    if snap_client_ids.is_empty() {
+        return;
+    }
+
+    // Find the group containing the newly connected client, or use first available
+    let gid = snap_state
+        .groups
+        .iter()
+        .find(|g| g.clients.iter().any(|c| c == snap_client_id))
+        .map(|g| g.key().clone())
+        .or_else(|| snap_state.groups.iter().next().map(|g| g.key().clone()));
+
+    let Some(gid) = gid else {
+        tracing::warn!(
+            zone = zone_index,
+            "No Snapcast groups available for zone setup"
+        );
+        return;
+    };
+
+    // Assign all zone clients to this group, set stream and name
+    if let Err(e) = snap.set_group_clients(&gid, snap_client_ids.clone()).await {
+        tracing::warn!(error = %e, "Failed to set group clients");
+    }
+    if let Err(e) = snap.set_group_stream(&gid, &zone_config.stream_name).await {
+        tracing::warn!(error = %e, "Failed to set group stream");
+    }
+    if let Err(e) = snap.set_group_name(&gid, &zone_config.name).await {
+        tracing::warn!(error = %e, "Failed to set group name");
+    }
+
+    tracing::info!(
+        zone = zone_index,
+        group = %gid,
+        clients = ?snap_client_ids,
+        stream = %zone_config.stream_name,
+        "Zone group configured dynamically"
+    );
 }
