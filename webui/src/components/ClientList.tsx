@@ -8,30 +8,34 @@ import { useAppStore, type ZoneState } from "@/stores/useAppStore";
 import type { ClientInfo } from "@/lib/types";
 import { VolumeSlider } from "@/components/VolumeSlider";
 
-function ClientCard({ client, zoneList }: { client: ClientInfo; zoneList: { index: number; name: string }[] }) {
-  const [showZoneSelect, setShowZoneSelect] = useState(false);
+function ClientCard({ client }: { client: ClientInfo }) {
 
   return (
     <div
-      className="flex items-center gap-2 px-2 py-2 rounded-lg bg-muted shadow-[inset_0_2px_4px_rgba(0,0,0,0.15)] border border-border/50 xl:cursor-grab xl:active:cursor-grabbing xl:active:opacity-50 xl:active:shadow-lg xl:hover:border-primary/30 transition-all"
+      className="flex items-stretch gap-2 px-3 py-2.5 rounded-lg bg-muted shadow-[inset_0_2px_4px_rgba(0,0,0,0.15)] border border-border/50 cursor-grab active:cursor-grabbing active:opacity-50 active:shadow-lg hover:border-primary/30 transition-all"
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData("application/x-snapdog-client", String(client.index));
         e.dataTransfer.effectAllowed = "move";
       }}
     >
-      {/* Drag handle */}
-      <div className="hidden xl:flex shrink-0 text-muted-foreground/40">
-        <HugeiconsIcon icon={DragDropVerticalIcon} size={14} />
+      {/* Drag handle — full height grip */}
+      <div className="shrink-0 flex items-center text-muted-foreground/30">
+        <div className="flex flex-col gap-[3px]">
+          <div className="flex gap-[3px]"><div className="size-[3px] rounded-full bg-current" /><div className="size-[3px] rounded-full bg-current" /></div>
+          <div className="flex gap-[3px]"><div className="size-[3px] rounded-full bg-current" /><div className="size-[3px] rounded-full bg-current" /></div>
+          <div className="flex gap-[3px]"><div className="size-[3px] rounded-full bg-current" /><div className="size-[3px] rounded-full bg-current" /></div>
+          <div className="flex gap-[3px]"><div className="size-[3px] rounded-full bg-current" /><div className="size-[3px] rounded-full bg-current" /></div>
+        </div>
       </div>
-      <div className="min-w-0 flex-1 space-y-1">
+      <div className="min-w-0 flex-1 space-y-1.5">
+        {/* Name row: icon + connection indicator + name */}
         <div className="flex items-center gap-1.5">
-          <div className="relative shrink-0">
-            <span className="text-lg">{client.icon || "🔊"}</span>
-            <div className={`absolute -bottom-0.5 -right-0.5 size-2 rounded-full ${client.connected ? "bg-green-500" : "bg-destructive"}`} />
-          </div>
+          <span className="text-lg shrink-0">{client.icon || "🔊"}</span>
+          <div className={`size-2 rounded-full shrink-0 ${client.connected ? "bg-green-500" : "bg-destructive"}`} />
           <span className="text-sm font-medium truncate">{client.name}</span>
         </div>
+        {/* Volume */}
         <VolumeSlider
           volume={client.volume}
           muted={client.muted}
@@ -40,33 +44,6 @@ function ClientCard({ client, zoneList }: { client: ClientInfo; zoneList: { inde
           onUnmute={() => api.clients.setMute(client.index, false).catch(() => {})}
           compact
         />
-        <div className="relative">
-          <button
-            onClick={() => setShowZoneSelect(!showZoneSelect)}
-            className="text-[10px] text-muted-foreground flex items-center gap-0.5 hover:text-foreground transition-colors"
-          >
-            Zone: {zoneList.find((z) => z.index === client.zone_index)?.name ?? "?"}
-            <HugeiconsIcon icon={ArrowDown01Icon} size={10} />
-          </button>
-          {showZoneSelect && (
-            <div className="absolute top-5 left-0 z-10 bg-popover border border-border rounded-md shadow-md py-1 min-w-32">
-              {zoneList.map((z) => (
-                <button
-                  key={z.index}
-                  onClick={() => {
-                    api.clients.setZone(client.index, z.index).catch(() => {});
-                    setShowZoneSelect(false);
-                  }}
-                  className={`w-full text-left px-3 py-1 text-xs hover:bg-muted transition-colors ${
-                    z.index === client.zone_index ? "text-primary font-medium" : ""
-                  }`}
-                >
-                  {z.name}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );
@@ -75,10 +52,8 @@ function ClientCard({ client, zoneList }: { client: ClientInfo; zoneList: { inde
 export function ClientList({ zone }: { zone: ZoneState }) {
   const [expanded, setExpanded] = useState(() => typeof window !== "undefined" && window.innerWidth >= 768);
   const clients = useAppStore((s) => s.clients);
-  const zones = useAppStore((s) => s.zones);
 
   const zoneClients = Array.from(clients.values()).filter((c) => c.zone_index === zone.index);
-  const zoneList = Array.from(zones.values()).map((z) => ({ index: z.index, name: z.name }));
 
   if (zoneClients.length === 0) return null;
 
@@ -95,7 +70,7 @@ export function ClientList({ zone }: { zone: ZoneState }) {
         <div className="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-1 border-t border-border pt-1">
           {zoneClients.map((c) => (
             <div key={c.index}>
-              <ClientCard client={c} zoneList={zoneList} />
+              <ClientCard client={c} />
             </div>
           ))}
         </div>
