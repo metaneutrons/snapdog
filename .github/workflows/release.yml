@@ -37,11 +37,26 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
       - name: Build release
         run: cargo build --release --target ${{ matrix.target }}
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: snapdog-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/snapdog
+
+  upload-release-artifacts:
+    name: Upload Release Artifacts
+    runs-on: ubuntu-latest
+    needs: [build]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: snapdog-*/snapdog
 
   docker:
     name: Docker Image
@@ -81,35 +96,3 @@ jobs:
         run: npm ci && npm run build
       - name: Publish
         run: cargo publish -p snapdog --token ${{ secrets.CRATES_IO_TOKEN }}
-
-  release:
-    name: GitHub Release
-    runs-on: ubuntu-latest
-    needs: [build]
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Generate changelog
-        id: changelog
-        run: |
-          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          if [ -z "$PREV_TAG" ]; then
-            CHANGES=$(git log --pretty=format:"- %s" HEAD)
-          else
-            CHANGES=$(git log --pretty=format:"- %s" ${PREV_TAG}..HEAD)
-          fi
-          echo "changes<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGES" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-      - uses: actions/download-artifact@v4
-      - name: Create release
-        uses: softprops/action-gh-release@v2
-        with:
-          body: |
-            ## Changes
-            ${{ steps.changelog.outputs.changes }}
-          files: |
-            snapdog-*/snapdog
