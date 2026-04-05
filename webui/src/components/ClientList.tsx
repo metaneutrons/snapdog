@@ -102,7 +102,7 @@ export function ClientList({ zone }: { zone: ZoneState }) {
       {expanded && (
         <div className="flex flex-wrap gap-1 border-t border-border pt-1">
           {zoneClients.map((c) => (
-            <div key={c.index} className="min-w-48 flex-1">
+            <div key={c.index} className="min-w-48 max-w-64 flex-1">
               <ClientCard client={c} zoneList={zoneList} />
             </div>
           ))}
