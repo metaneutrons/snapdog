@@ -23,6 +23,8 @@ pub struct RawConfig {
     #[serde(default)]
     pub subsonic: Option<SubsonicConfig>,
     #[serde(default)]
+    pub spotify: Option<SpotifyConfig>,
+    #[serde(default)]
     pub mqtt: Option<MqttConfig>,
     #[serde(default)]
     pub knx: KnxConfig,
@@ -130,6 +132,26 @@ impl Default for AirplayConfig {
             bind: None,
         }
     }
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct SpotifyConfig {
+    /// Device name shown in Spotify app (e.g., "SnapDog Ground Floor").
+    pub name: String,
+    /// Audio bitrate: 96, 160, or 320 kbps. Default: 320.
+    #[serde(default = "default_spotify_bitrate")]
+    pub bitrate: u32,
+}
+
+impl SpotifyConfig {
+    /// Stable device ID derived from the name (for Zeroconf).
+    pub fn device_id(&self) -> String {
+        format!("{:x}", md5::compute(self.name.as_bytes()))
+    }
+}
+
+fn default_spotify_bitrate() -> u32 {
+    320
 }
 
 #[derive(Debug, Deserialize, Clone)]
