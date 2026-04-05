@@ -50,15 +50,33 @@ function ZoneRailItem({ zone, selected, onSelect }: {
   onSelect: () => void;
 }) {
   const [imgError, setImgError] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const isPlaying = zone.playback === "playing";
   const hasCover = zone.track?.cover_url && zone.source !== "idle" && !imgError;
   return (
     <button
       onClick={onSelect}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes("application/x-snapdog-client")) {
+          e.preventDefault();
+          setDragOver(true);
+        }
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragOver(false);
+        const clientIndex = Number(e.dataTransfer.getData("application/x-snapdog-client"));
+        if (!isNaN(clientIndex)) {
+          api.clients.setZone(clientIndex, zone.index).catch(() => {});
+        }
+      }}
       className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left transition-colors ${
-        selected
-          ? "bg-primary/10 text-primary"
-          : "hover:bg-muted text-foreground"
+        dragOver
+          ? "bg-primary/20 ring-2 ring-primary"
+          : selected
+            ? "bg-primary/10 text-primary"
+            : "hover:bg-muted text-foreground"
       }`}
     >
       {/* Cover thumbnail or zone icon */}
