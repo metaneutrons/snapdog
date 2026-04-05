@@ -151,7 +151,7 @@ async fn set_mute(
         })
         .await;
     // State update comes from Snapcast Client.OnVolumeChanged notification
-    tracing::info!(client = idx, muted = v, "Client mute command sent");
+    tracing::info!(client = idx, muted = v, "Client mute set");
     Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
 }
 
@@ -170,7 +170,7 @@ async fn toggle_mute(
         })
         .await;
     // State update comes from Snapcast Client.OnVolumeChanged notification
-    tracing::info!(client = idx, muted, "Client mute toggle command sent");
+    tracing::info!(client = %client.name, muted, "Client mute toggled");
     Ok::<_, StatusCode>(Json(muted))
 }
 
@@ -201,7 +201,7 @@ async fn set_latency(
         })
         .await;
     // State update comes from Snapcast Client.OnLatencyChanged notification
-    tracing::info!(client = idx, latency = v, "Client latency command sent");
+    tracing::info!(client = idx, latency = v, "Client latency set");
     Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
 }
 

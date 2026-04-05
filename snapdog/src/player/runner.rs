@@ -89,7 +89,7 @@ async fn run(
         let mut receiver = crate::receiver::airplay::AirPlayReceiver::new(ap_config, zone_index);
         match receiver.start(airplay_audio_tx, airplay_event_tx).await {
             Ok(()) => {
-                tracing::info!(zone = zone_index, "AirPlay receiver active");
+                tracing::info!(zone = %zone_config.name, "AirPlay receiver active");
                 Some(receiver)
             }
             Err(e) => {
@@ -178,7 +178,7 @@ async fn run(
                                         z.playlist_track_index = Some(track_idx);
                                         z.track = Some(radio_track_info(&radio.name));
                                     }).await;
-                                    tracing::info!(zone = zone_index, radio = %radio.name, "Set radio station");
+                                    tracing::info!(zone = %zone_config.name, radio = %radio.name, "Set radio station");
                                 }
                             }
                         } else if let ActiveSource::SubsonicPlaylist { ref playlist_id, track_count, .. } = source {
@@ -298,13 +298,13 @@ async fn run(
                                     z.playlist_track_count = Some(config.radios.len());
                                     z.track = Some(radio_track_info(&radio.name));
                                 }).await;
-                                tracing::info!(zone = zone_index, radio = %radio.name, "Playing radio via playlist 0");
+                                tracing::info!(zone = %zone_config.name, radio = %radio.name, "Playing radio");
                             }
                         }
                             Some(crate::config::ResolvedPlaylist::Subsonic(sub_idx)) => {
                             if let Some(sub) = &subsonic {
                                 if let Some(pl) = subsonic_playlists.get(sub_idx) {
-                                    tracing::info!(zone = zone_index, playlist = %pl.name, "Switching playlist");
+                                    tracing::info!(zone = %zone_config.name, playlist = %pl.name, "Switching playlist");
                                     stop_decode(&mut current_decode, &mut decode_rx).await;
                                     if let Ok(playlist) = sub.get_playlist(&pl.id).await {
                                         let track_idx = start_track.min(playlist.entry.len().saturating_sub(1));
@@ -357,7 +357,7 @@ async fn run(
                                 update_and_notify(store, zone_index, notify, |z| {
                                     if let Some(ref mut t) = z.track { t.position_ms = pos_ms; }
                                 }).await;
-                                tracing::info!(zone = zone_index, position_ms = pos_ms, "Seeked");
+                                tracing::debug!(zone = %zone_config.name, position_ms = pos_ms, "Seeked");
                             }
                         }
                     }
