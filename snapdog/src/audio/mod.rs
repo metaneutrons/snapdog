@@ -357,7 +357,7 @@ fn decode_to_pcm(
     reader: impl MediaSource + 'static,
     content_type: &str,
     tx: PcmSender,
-    audio_config: &AudioConfig,
+    _audio_config: &AudioConfig,
 ) -> Result<()> {
     let mut hint = Hint::new();
     match content_type {
@@ -394,20 +394,7 @@ fn decode_to_pcm(
         .make(&track.codec_params, &DecoderOptions::default())
         .context("Failed to create decoder")?;
 
-    // Send format info so the runner can set up the resampler
-    let source_rate = track
-        .codec_params
-        .sample_rate
-        .unwrap_or(audio_config.sample_rate as u32);
-    let source_channels = track
-        .codec_params
-        .channels
-        .map_or(audio_config.channels, |c| c.count() as u16);
-    tx.blocking_send(PcmMessage::Format {
-        sample_rate: source_rate,
-        channels: source_channels,
-    })
-    .ok();
+    let mut format_sent = false;
 
     loop {
         let packet = match format.next_packet() {
@@ -439,6 +426,16 @@ fn decode_to_pcm(
         // Convert to interleaved S16LE
         let spec = *decoded.spec();
         let num_frames = decoded.frames();
+
+        // Send actual format from decoded audio (not container metadata)
+        if !format_sent {
+            let _ = tx.blocking_send(PcmMessage::Format {
+                sample_rate: spec.rate,
+                channels: spec.channels.count() as u16,
+            });
+            format_sent = true;
+        }
+
         let mut sample_buf = SampleBuffer::<i16>::new(num_frames as u64, spec);
         sample_buf.copy_interleaved_ref(decoded);
 
