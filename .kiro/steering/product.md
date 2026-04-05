@@ -24,19 +24,36 @@ Snapcast feeding, and smart home protocol bridges (MQTT, KNX).
 
 ## Target Use Cases
 - Multi-room synchronized audio (party mode) or independent per-zone streams
-- AirPlay receiver that feeds directly into the multi-room system
+- AirPlay 1 + 2 receiver that feeds directly into the multi-room system
+- Spotify Connect receiver (planned, via librespot)
 - Control via embedded WebUI, REST API, MQTT, KNX, or WebSocket
 - Subsonic/Navidrome integration for personal music library + internet radio
+
+## Unified Playlist Model
+Radio stations and Subsonic playlists are unified into a single numeric index system:
+- Index 0 = Radio (stations from config)
+- Index 1+ = Subsonic playlists (or other providers, order configurable)
+- `SetPlaylist(index, start_track)` — single atomic command for all sources
+- Cover art: deterministic endpoint per playlist/track index
 
 ## WebUI Scope
 The embedded WebUI is the primary user-facing control surface:
 - **Zone control**: play/pause/stop, next/previous, volume, mute, shuffle, repeat
-- **Source browsing**: Subsonic playlists + tracks, radio stations, arbitrary URLs
-- **Now Playing**: cover art, track metadata, seek bar, progress
-- **Client management**: see connected clients per zone, move clients between zones
+- **Source browsing**: unified playlist browser (radio + Subsonic), arbitrary URLs
+- **Now Playing**: cover art (deterministic, no cache), track metadata (3-line marquee),
+  seek bar (disabled with elapsed counter for radio), progress
+- **Client management**: see connected clients per zone, drag-and-drop between zones
 - **Real-time updates**: WebSocket-driven state sync (no polling)
-- **Responsive**: swipe-per-zone on mobile, split view on tablet, sidebar on desktop
+- **Responsive layout**:
+  - Desktop: all zones side-by-side in flex-wrap grid (no sidebar)
+  - Tablet: sidebar + single zone with horizontal card layout
+  - Mobile: tab bar + full-width zone card
 - **System theme**: automatic dark/light mode via `prefers-color-scheme`
+
+## Future Paths (ADR-documented)
+- **Spotify Connect** (ADR-015): passive receiver via librespot, optional active client
+- **Configurable provider ordering** (ADR-016): user controls playlist index assignment
+- **Per-zone DSP** (ADR-017): built-in parametric EQ + compressor/limiter, pure Rust
 
 ## Author & License
 - Author: Fabian Schmieder

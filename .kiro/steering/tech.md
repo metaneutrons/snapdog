@@ -38,7 +38,8 @@
 
 ### Audio
 - **symphonia** — pure Rust decoding (AAC, MP3, FLAC, ALAC)
-- **libshairplay** — AirPlay 1 / RAOP receiver (C library, vendored, FFI)
+- **shairplay** — pure Rust AirPlay 1 + 2 receiver (crates.io, `ap2` feature)
+- **rubato** — sample rate conversion (resampling)
 - **Snapcast** — multi-room streaming (external binary, managed as child process)
 - **snapcast-control** — JSON-RPC control API client
 
@@ -47,7 +48,7 @@
 - **knxkit** — KNX/IP tunneling and routing
 
 ### HTTP
-- **reqwest** — Subsonic API client, radio stream fetching
+- **reqwest** — Subsonic API client, radio stream fetching, cover art proxy
 
 ### Error Handling
 - **thiserror** — typed errors for library-style modules
@@ -114,7 +115,7 @@ Log levels:
 - No tests for external binaries (snapserver) — test the Rust wrapper
 
 ### Dependencies
-- Prefer pure Rust crates over FFI bindings (exception: libshairplay)
+- Prefer pure Rust crates — no FFI bindings
 - Pin workspace dependency versions in `Cargo.toml`
 - Minimize dependency count — every crate must justify its existence
 
@@ -128,13 +129,14 @@ Log levels:
 ```
 
 Types: `feat`, `fix`, `refactor`, `docs`, `test`, `ci`, `chore`, `perf`, `style`
-Scopes: `config`, `audio`, `airplay`, `snapcast`, `api`, `mqtt`, `knx`, `subsonic`, `state`, `process`
+Scopes: `config`, `audio`, `airplay`, `snapcast`, `api`, `mqtt`, `knx`, `subsonic`, `state`, `process`, `webui`
 
 Examples:
 ```
 feat(config): add TOML parsing with convention-over-config
 fix(snapcast): handle reconnect on connection loss
 refactor(audio): extract PCM pipeline into separate module
+feat(webui): add responsive zone grid layout
 docs: update architecture decisions
 ci: add clippy to pre-push hook
 ```
