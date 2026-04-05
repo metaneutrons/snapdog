@@ -666,3 +666,71 @@ threshold = -1.0  # dBFS — brick-wall ceiling
 - Internal pipeline switches to F32 (all sources convert at decode boundary)
 - Per-zone DSP chain runs in the ZonePlayer select loop, zero additional latency
 - CPU cost is negligible for biquad filters + envelope follower at audio rates
+
+---
+
+## ADR-018: Replace snapcast-control Crate with Own JSON-RPC Client
+
+**Status:** Accepted
+
+**Decision:** Replace the `snapcast-control` crate with a custom Snapcast JSON-RPC
+client built on `tokio::net::TcpStream` and `serde_json`. The client will own no
+state — all messages (results and notifications) flow through channels to the
+consumer, which manages state.
+
+**Rationale:**
+- The `snapcast-control` crate (v0.4) has a fundamental design flaw: it silently
+  updates internal state from both Result and Notification messages, but provides
+  no mechanism to observe state changes (no watch channel, no callback, no event)
+- For commands initiated by SnapDog, Snapcast sends a Result (not a Notification),
+  so the crate updates its state but SnapDog has no way to know what changed
+- This forces a workaround: diff the crate's internal state after every command
+- The crate also has an `init()` race condition: `server_get_status()` sends the
+  request but doesn't wait for the response, so state is empty when read immediately
+
+**Architecture:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│ snapdog/src/snapcast/mod.rs                                  │
+│                                                              │
+│  SnapcastClient                                              │
+│    ├── connect(addr) → TcpStream (line-delimited JSON)      │
+│    ├── send(request) → oneshot::Receiver<Result>             │
+│    ├── notification_rx → broadcast::Receiver<Notification>   │
+│    └── reconnect logic (auto-reconnect on disconnect)       │
+│                                                              │
+│  Internal task (spawned):                                    │
+│    ├── reads lines from TcpStream                           │
+│    ├── Result messages → matched to pending request via id  │
+│    ├── Notification messages → broadcast to all listeners   │
+│    └── disconnect → trigger reconnect                       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Key design principles:**
+- **No internal state**: the client is a pure message transport
+- **Request/response correlation**: each `send()` returns a `oneshot::Receiver`
+  that resolves when the matching Result arrives (matched by JSON-RPC `id`)
+- **Notifications via broadcast**: all Notification messages are sent through a
+  `broadcast::Sender`, any number of consumers can subscribe
+- **Auto-reconnect**: on disconnect, automatically reconnect and re-fetch state
+- **Typed messages**: use serde for Snapcast-specific request/response/notification
+  types (can reuse type definitions from `snapcast-control` or define our own)
+
+**State management (in main.rs):**
+- Subscribe to notification channel
+- On any notification: update SnapDog state + send WebSocket notification
+- On command execution: await the oneshot Result, then handle success/failure
+- Single source of truth: Snapcast server → notifications → SnapDog state → WebUI
+
+**Dependencies:**
+- `tokio` (already have) — TcpStream, channels, spawn
+- `serde_json` (already have) — JSON serialization
+- `uuid` (already have) — JSON-RPC request IDs
+- Remove: `snapcast-control`
+
+**Consequences:**
+- Full control over message flow — no hidden state mutations
+- Proper request/response correlation — API handlers can await results
+- Clean notification pipeline — all state changes flow through one path
+- More code to maintain, but simpler and more predictable than the crate
