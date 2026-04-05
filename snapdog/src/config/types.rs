@@ -159,6 +159,14 @@ pub struct SubsonicConfig {
     pub url: String,
     pub username: String,
     pub password: String,
+    /// Stream format: "raw" (original file), "flac", "mp3", "opus".
+    /// Default: "flac" (lossless, streamable, no buffering delay).
+    #[serde(default = "default_subsonic_format")]
+    pub format: String,
+}
+
+fn default_subsonic_format() -> String {
+    "flac".into()
 }
 
 #[derive(Debug, Deserialize, Clone)]
