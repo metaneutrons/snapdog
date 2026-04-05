@@ -8,6 +8,8 @@ use std::sync::Arc;
 
 use tokio::sync::mpsc;
 
+use crate::audio;
+
 use crate::config::AppConfig;
 use crate::state;
 use crate::state::cover::SharedCoverCache;
@@ -69,7 +71,7 @@ pub enum ClientAction {
 /// Stop the current decode task and clear the PCM receiver.
 pub async fn stop_decode(
     current: &mut Option<tokio::task::JoinHandle<()>>,
-    rx: &mut Option<mpsc::Receiver<Vec<u8>>>,
+    rx: &mut Option<mpsc::Receiver<audio::PcmMessage>>,
 ) {
     if let Some(handle) = current.take() {
         handle.abort();

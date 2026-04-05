@@ -22,9 +22,17 @@ use tokio::sync::mpsc;
 
 use crate::config::AudioConfig;
 
-/// PCM output: interleaved S16LE bytes.
-pub type PcmSender = mpsc::Sender<Vec<u8>>;
-pub type PcmReceiver = mpsc::Receiver<Vec<u8>>;
+/// PCM channel message: either audio data or format change.
+#[derive(Debug)]
+pub enum PcmMessage {
+    /// Audio format detected/changed — receiver must (re)create resampler.
+    Format { sample_rate: u32, channels: u16 },
+    /// Interleaved S16LE audio data.
+    Audio(Vec<u8>),
+}
+
+pub type PcmSender = mpsc::Sender<PcmMessage>;
+pub type PcmReceiver = mpsc::Receiver<PcmMessage>;
 
 /// Create a PCM channel pair.
 pub fn pcm_channel(buffer: usize) -> (PcmSender, PcmReceiver) {
@@ -386,8 +394,20 @@ fn decode_to_pcm(
         .make(&track.codec_params, &DecoderOptions::default())
         .context("Failed to create decoder")?;
 
-    let _target_rate = audio_config.sample_rate;
-    let _target_channels = audio_config.channels;
+    // Send format info so the runner can set up the resampler
+    let source_rate = track
+        .codec_params
+        .sample_rate
+        .unwrap_or(audio_config.sample_rate as u32);
+    let source_channels = track
+        .codec_params
+        .channels
+        .map_or(audio_config.channels, |c| c.count() as u16);
+    tx.blocking_send(PcmMessage::Format {
+        sample_rate: source_rate,
+        channels: source_channels,
+    })
+    .ok();
 
     loop {
         let packet = match format.next_packet() {
@@ -428,7 +448,7 @@ fn decode_to_pcm(
             bytes.extend_from_slice(&s.to_le_bytes());
         }
 
-        if tx.blocking_send(bytes).is_err() {
+        if tx.blocking_send(PcmMessage::Audio(bytes)).is_err() {
             tracing::debug!("PCM consumer dropped, stopping decode");
             break;
         }

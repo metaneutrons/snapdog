@@ -101,7 +101,7 @@ async fn run(
 
     // Decode task state
     let mut current_decode: Option<JoinHandle<()>> = None;
-    let mut decode_rx: Option<mpsc::Receiver<Vec<u8>>> = None;
+    let mut decode_rx: Option<mpsc::Receiver<audio::PcmMessage>> = None;
     let mut source = ActiveSource::Idle;
     let mut remote_control: Option<std::sync::Arc<dyn crate::receiver::RemoteControl>> = None;
     let mut resampler = audio::resample::Resampling::new(
@@ -423,7 +423,11 @@ async fn run(
             }
             pcm = async { match &mut decode_rx { Some(rx) => rx.recv().await, None => std::future::pending().await } } => {
                 match pcm {
-                    Some(data) => {
+                    Some(audio::PcmMessage::Format { sample_rate, channels }) => {
+                        resampler = audio::resample::Resampling::new(sample_rate, config.audio.sample_rate, channels);
+                        tracing::debug!(source_rate = sample_rate, target_rate = config.audio.sample_rate, "Active source resampler configured");
+                    }
+                    Some(audio::PcmMessage::Audio(data)) => {
                         let data = resampler.process(&data).unwrap_or(data);
                         if data.is_empty() { continue; }
                         if let Err(e) = tcp.write_all(&data).await {
