@@ -48,7 +48,7 @@ librespot-discovery = { git = "https://github.com/librespot-org/librespot", bran
 librespot-metadata = { git = "https://github.com/librespot-org/librespot", branch = "dev", optional = true }
 
 [features]
-default = ["ap2"]
+default = []
 ap2 = ["shairplay/ap2"]
 spotify = ["dep:librespot-core", "dep:librespot-playback", "dep:librespot-connect", "dep:librespot-discovery", "dep:librespot-metadata"]
 
