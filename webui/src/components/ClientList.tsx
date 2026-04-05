@@ -2,12 +2,11 @@
 
 import { useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { VolumeLowIcon, VolumeMute02Icon, ArrowDown01Icon, DragDropVerticalIcon } from "@hugeicons/core-free-icons";
-import { Slider } from "@/components/ui/slider";
-import { Button } from "@/components/ui/button";
+import { ArrowDown01Icon, DragDropVerticalIcon } from "@hugeicons/core-free-icons";
 import { api } from "@/lib/api";
 import { useAppStore, type ZoneState } from "@/stores/useAppStore";
 import type { ClientInfo } from "@/lib/types";
+import { VolumeSlider } from "@/components/VolumeSlider";
 
 function ClientCard({ client, zoneList }: { client: ClientInfo; zoneList: { index: number; name: string }[] }) {
   const [showZoneSelect, setShowZoneSelect] = useState(false);
@@ -33,29 +32,14 @@ function ClientCard({ client, zoneList }: { client: ClientInfo; zoneList: { inde
           </div>
           <span className="text-sm font-medium truncate">{client.name}</span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-6 rounded-full shrink-0"
-            onClick={() => api.clients.toggleMute(client.index).catch(() => {})}
-          >
-            <HugeiconsIcon icon={client.muted ? VolumeMute02Icon : VolumeLowIcon} size={14} />
-          </Button>
-          <Slider
-            value={[client.muted ? 0 : client.volume]}
-            max={100}
-            step={1}
-            onValueChange={(v) => {
-              if (client.muted) api.clients.setMute(client.index, false).catch(() => {});
-              api.clients.setVolume(client.index, v[0]).catch(() => {});
-            }}
-            className="flex-1 min-w-0"
-          />
-          <span className="text-[10px] text-muted-foreground tabular-nums w-5 text-right">
-            {client.volume}
-          </span>
-        </div>
+        <VolumeSlider
+          volume={client.volume}
+          muted={client.muted}
+          onVolumeChange={(v) => api.clients.setVolume(client.index, v).catch(() => {})}
+          onMuteToggle={() => api.clients.toggleMute(client.index).catch(() => {})}
+          onUnmute={() => api.clients.setMute(client.index, false).catch(() => {})}
+          compact
+        />
         <div className="relative">
           <button
             onClick={() => setShowZoneSelect(!showZoneSelect)}
