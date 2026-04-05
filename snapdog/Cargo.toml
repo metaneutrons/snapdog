@@ -38,7 +38,7 @@ fastrand = { workspace = true }
 bytes = { workspace = true }
 rust-embed = "8"
 mac_address = "1"
-shairplay = { path = "../../shairplay", features = ["ap2"] }
+shairplay = { version = "0.1", features = ["ap2"] }
 
 [dev-dependencies]
 mockall = { workspace = true }
