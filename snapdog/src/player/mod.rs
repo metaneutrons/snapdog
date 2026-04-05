@@ -10,6 +10,6 @@ mod runner;
 
 pub use commands::ZoneCommand;
 pub use context::{
-    SnapcastAction, SnapcastCmd, SnapcastCmdSender, ZoneCommandSender, ZonePlayerContext,
+    ClientAction, GroupAction, SnapcastCmd, SnapcastCmdSender, ZoneCommandSender, ZonePlayerContext,
 };
 pub use runner::spawn_zone_players;

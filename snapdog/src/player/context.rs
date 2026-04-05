@@ -32,20 +32,38 @@ pub struct ZonePlayerContext {
 }
 
 /// Commands sent to the Snapcast manager task (runs on main thread because
-/// SnapcastConnection is !Send).
+/// Command sent to the main loop for Snapcast JSON-RPC execution.
+///
+/// The Snapcast connection is `!Send`, so all JSON-RPC calls must happen
+/// on the main task. Zone players and API handlers send commands via channel.
 #[derive(Debug)]
-pub struct SnapcastCmd {
-    pub group_id: String,
-    pub action: SnapcastAction,
+pub enum SnapcastCmd {
+    /// Group-level command (volume, mute, stream, clients, name).
+    Group {
+        group_id: String,
+        action: GroupAction,
+    },
+    /// Client-level command (volume, mute, latency).
+    Client {
+        client_id: String,
+        action: ClientAction,
+    },
 }
 
 #[derive(Debug)]
-pub enum SnapcastAction {
+pub enum GroupAction {
     Stream(String),
     Clients(Vec<String>),
     Name(String),
     Volume(i32),
     Mute(bool),
+}
+
+#[derive(Debug)]
+pub enum ClientAction {
+    Volume(i32),
+    Mute(bool),
+    Latency(i32),
 }
 
 /// Stop the current decode task and clear the PCM receiver.
@@ -157,23 +175,23 @@ pub async fn setup_zone_group(zone_index: usize, ctx: &ZonePlayerContext) -> Opt
 
     let _ = ctx
         .snap_tx
-        .send(SnapcastCmd {
+        .send(SnapcastCmd::Group {
             group_id: gid.clone(),
-            action: SnapcastAction::Stream(zone_config.stream_name.clone()),
+            action: GroupAction::Stream(zone_config.stream_name.clone()),
         })
         .await;
     let _ = ctx
         .snap_tx
-        .send(SnapcastCmd {
+        .send(SnapcastCmd::Group {
             group_id: gid.clone(),
-            action: SnapcastAction::Clients(snap_client_ids.clone()),
+            action: GroupAction::Clients(snap_client_ids.clone()),
         })
         .await;
     let _ = ctx
         .snap_tx
-        .send(SnapcastCmd {
+        .send(SnapcastCmd::Group {
             group_id: gid.clone(),
-            action: SnapcastAction::Name(zone_config.name.clone()),
+            action: GroupAction::Name(zone_config.name.clone()),
         })
         .await;
 

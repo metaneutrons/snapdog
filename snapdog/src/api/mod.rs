@@ -16,6 +16,7 @@ use axum::Router;
 use tokio::net::TcpListener;
 
 use crate::config::AppConfig;
+use crate::player;
 use crate::player::ZoneCommandSender;
 use crate::state;
 
@@ -24,6 +25,7 @@ pub struct AppState {
     pub config: AppConfig,
     pub store: state::SharedState,
     pub zone_commands: HashMap<usize, ZoneCommandSender>,
+    pub snap_tx: player::SnapcastCmdSender,
     pub covers: state::cover::SharedCoverCache,
     pub notifications: tokio::sync::broadcast::Sender<ws::Notification>,
 }
@@ -35,6 +37,7 @@ pub async fn serve(
     config: AppConfig,
     store: state::SharedState,
     zone_commands: HashMap<usize, ZoneCommandSender>,
+    snap_tx: player::SnapcastCmdSender,
     covers: state::cover::SharedCoverCache,
     notifications: tokio::sync::broadcast::Sender<ws::Notification>,
 ) -> Result<()> {
@@ -43,6 +46,7 @@ pub async fn serve(
         config,
         store,
         zone_commands,
+        snap_tx,
         covers,
         notifications,
     });

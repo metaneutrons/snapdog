@@ -83,6 +83,13 @@ impl Snapcast {
             .context("Failed to set client volume")
     }
 
+    pub async fn set_client_latency(&mut self, id: &str, latency_ms: i32) -> Result<()> {
+        self.conn
+            .client_set_latency(id.to_string(), latency_ms as usize)
+            .await
+            .context("Failed to set client latency")
+    }
+
     /// Assign a group to a specific stream.
     pub async fn set_group_stream(&mut self, group_id: &str, stream_id: &str) -> Result<()> {
         self.conn
