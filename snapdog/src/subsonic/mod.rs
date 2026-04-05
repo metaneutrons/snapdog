@@ -19,6 +19,7 @@ pub struct SubsonicClient {
     base_url: String,
     username: String,
     password: String,
+    format: String,
     http: reqwest::Client,
 }
 
@@ -28,6 +29,7 @@ impl SubsonicClient {
             base_url: config.url.trim_end_matches('/').to_string(),
             username: config.username.clone(),
             password: config.password.clone(),
+            format: config.format.clone(),
             http: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(10))
                 .connect_timeout(std::time::Duration::from_secs(5))
@@ -81,8 +83,15 @@ impl SubsonicClient {
     pub fn stream_url_with_offset(&self, track_id: &str, offset_secs: u64) -> String {
         let (token, salt) = self.auth_token();
         let mut url = format!(
-            "{}/rest/stream?id={}&u={}&t={}&s={}&v={}&c={}&f=json&format=raw",
-            self.base_url, track_id, self.username, token, salt, API_VERSION, CLIENT_NAME
+            "{}/rest/stream?id={}&u={}&t={}&s={}&v={}&c={}&f=json&format={}",
+            self.base_url,
+            track_id,
+            self.username,
+            token,
+            salt,
+            API_VERSION,
+            CLIENT_NAME,
+            self.format
         );
         if offset_secs > 0 {
             url.push_str(&format!("&timeOffset={offset_secs}"));
