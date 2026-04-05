@@ -247,13 +247,38 @@ impl F32Resampling {
 
 // ── Conversion ────────────────────────────────────────────────
 
-/// Convert F32 interleaved samples to S16LE bytes.
+/// Convert F32 interleaved samples to PCM bytes at the given bit depth.
+///
+/// Supports 16-bit (S16LE), 24-bit (S24LE), and 32-bit (S32LE) output.
+/// This is the final output stage before writing to snapserver.
 #[inline]
-pub fn f32_to_s16le(samples: &[f32]) -> Vec<u8> {
-    let mut out = Vec::with_capacity(samples.len() * 2);
-    for &s in samples {
-        let clamped = (s * 32767.0).clamp(-32768.0, 32767.0) as i16;
-        out.extend_from_slice(&clamped.to_le_bytes());
+pub fn f32_to_pcm(samples: &[f32], bit_depth: u16) -> Vec<u8> {
+    let bytes_per_sample = (bit_depth / 8) as usize;
+    let mut out = Vec::with_capacity(samples.len() * bytes_per_sample);
+    match bit_depth {
+        16 => {
+            for &s in samples {
+                let v = (s * 32767.0).clamp(-32768.0, 32767.0) as i16;
+                out.extend_from_slice(&v.to_le_bytes());
+            }
+        }
+        24 => {
+            for &s in samples {
+                let v = (s * 8_388_607.0).clamp(-8_388_608.0, 8_388_607.0) as i32;
+                let b = v.to_le_bytes();
+                out.extend_from_slice(&b[..3]); // lower 3 bytes of i32
+            }
+        }
+        32 => {
+            for &s in samples {
+                let v = (s * 2_147_483_647.0).clamp(-2_147_483_648.0, 2_147_483_647.0) as i32;
+                out.extend_from_slice(&v.to_le_bytes());
+            }
+        }
+        _ => {
+            tracing::error!(bit_depth, "Unsupported bit depth, falling back to 16-bit");
+            return f32_to_pcm(samples, 16);
+        }
     }
     out
 }
@@ -325,12 +350,36 @@ mod tests {
     }
 
     #[test]
-    fn f32_to_s16le_converts_correctly() {
-        let bytes = f32_to_s16le(&[0.0, 1.0, -1.0, 0.5]);
+    fn f32_to_pcm_16bit() {
+        let bytes = f32_to_pcm(&[0.0, 1.0, -1.0, 0.5], 16);
         assert_eq!(bytes.len(), 8);
         assert_eq!(i16::from_le_bytes([bytes[0], bytes[1]]), 0);
         assert_eq!(i16::from_le_bytes([bytes[2], bytes[3]]), 32767);
         assert_eq!(i16::from_le_bytes([bytes[4], bytes[5]]), -32767);
         assert_eq!(i16::from_le_bytes([bytes[6], bytes[7]]), 16383);
+    }
+
+    #[test]
+    fn f32_to_pcm_24bit() {
+        let bytes = f32_to_pcm(&[0.0, 1.0, -1.0], 24);
+        assert_eq!(bytes.len(), 9); // 3 bytes per sample
+        // Silence
+        assert_eq!(&bytes[0..3], &[0, 0, 0]);
+        // Max positive: 0x7FFFFF = 8388607
+        assert_eq!(&bytes[3..6], &[0xFF, 0xFF, 0x7F]);
+    }
+
+    #[test]
+    fn f32_to_pcm_32bit() {
+        let bytes = f32_to_pcm(&[0.0, 1.0], 32);
+        assert_eq!(bytes.len(), 8);
+        assert_eq!(
+            i32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]),
+            0
+        );
+        assert_eq!(
+            i32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]),
+            2_147_483_647
+        );
     }
 }
