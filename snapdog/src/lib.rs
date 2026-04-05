@@ -11,6 +11,7 @@ pub mod knx;
 pub mod mqtt;
 pub mod player;
 pub mod process;
+pub mod receiver;
 pub mod snapcast;
 pub mod state;
 pub mod subsonic;
