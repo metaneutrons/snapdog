@@ -215,13 +215,46 @@ async fn get_zone(State(state): State<SharedState>, Path(idx): Path<usize>) -> i
 async fn set_zone(
     State(state): State<SharedState>,
     Path(idx): Path<usize>,
-    Json(v): Json<usize>,
+    Json(target_zone): Json<usize>,
 ) -> impl IntoResponse {
+    let store = state.store.read().await;
+    let client = store.clients.get(&idx).ok_or(not_found())?;
+    let snap_id = client.snapcast_id.clone().ok_or(not_found())?;
+
+    // Find target zone's group ID
+    let target_group_id = store
+        .zones
+        .get(&target_zone)
+        .and_then(|z| z.snapcast_group_id.clone())
+        .ok_or(not_found())?;
+
+    // Collect all snapcast IDs already in the target zone + the moving client
+    let mut target_client_ids: Vec<String> = store
+        .clients
+        .values()
+        .filter(|c| c.zone_index == target_zone && c.snapcast_id.is_some())
+        .filter_map(|c| c.snapcast_id.clone())
+        .collect();
+    if !target_client_ids.contains(&snap_id) {
+        target_client_ids.push(snap_id);
+    }
+    drop(store);
+
+    // Move client by setting the target group's client list
+    let _ = state
+        .snap_tx
+        .send(SnapcastCmd::Group {
+            group_id: target_group_id.clone(),
+            action: crate::player::GroupAction::Clients(target_client_ids.clone()),
+        })
+        .await;
+
+    // Update local state
     crate::state::update_client_and_notify(&state.store, idx, &state.notifications, |c| {
-        c.zone_index = v
+        c.zone_index = target_zone;
     })
     .await;
-    tracing::info!(client = idx, zone = v, "Client zone changed");
+    tracing::info!(client = idx, zone = target_zone, group = %target_group_id, clients = ?target_client_ids, "Client zone changed — group reassigned");
     Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
 }
 

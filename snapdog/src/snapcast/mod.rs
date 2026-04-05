@@ -295,28 +295,34 @@ pub async fn execute_command(
     notify: &tokio::sync::broadcast::Sender<api::ws::Notification>,
 ) {
     let result = match &cmd {
-        player::SnapcastCmd::Group { group_id, action } => match action {
-            player::GroupAction::Stream(stream_id) => {
-                snap.group_set_stream(group_id, stream_id).await
+        player::SnapcastCmd::Group { group_id, action } => {
+            tracing::info!(%group_id, ?action, "Executing Snapcast group command");
+            match action {
+                player::GroupAction::Stream(stream_id) => {
+                    snap.group_set_stream(group_id, stream_id).await
+                }
+                player::GroupAction::Clients(client_ids) => {
+                    snap.group_set_clients(group_id, client_ids.clone()).await
+                }
+                player::GroupAction::Name(name) => snap.group_set_name(group_id, name).await,
+                player::GroupAction::Volume(_percent) => {
+                    // TODO: implement proper group volume
+                    Ok(())
+                }
+                player::GroupAction::Mute(muted) => snap.group_set_mute(group_id, *muted).await,
             }
-            player::GroupAction::Clients(client_ids) => {
-                snap.group_set_clients(group_id, client_ids.clone()).await
+        }
+        player::SnapcastCmd::Client { client_id, action } => {
+            tracing::debug!(%client_id, ?action, "Executing Snapcast client command");
+            match action {
+                player::ClientAction::Volume(percent) => {
+                    snap.client_set_volume(client_id, (*percent).clamp(0, 100) as u8)
+                        .await
+                }
+                player::ClientAction::Mute(muted) => snap.client_set_mute(client_id, *muted).await,
+                player::ClientAction::Latency(ms) => snap.client_set_latency(client_id, *ms).await,
             }
-            player::GroupAction::Name(name) => snap.group_set_name(group_id, name).await,
-            player::GroupAction::Volume(_percent) => {
-                // TODO: implement proper group volume
-                Ok(())
-            }
-            player::GroupAction::Mute(muted) => snap.group_set_mute(group_id, *muted).await,
-        },
-        player::SnapcastCmd::Client { client_id, action } => match action {
-            player::ClientAction::Volume(percent) => {
-                snap.client_set_volume(client_id, (*percent).clamp(0, 100) as u8)
-                    .await
-            }
-            player::ClientAction::Mute(muted) => snap.client_set_mute(client_id, *muted).await,
-            player::ClientAction::Latency(ms) => snap.client_set_latency(client_id, *ms).await,
-        },
+        }
     };
     match result {
         Ok(()) => {

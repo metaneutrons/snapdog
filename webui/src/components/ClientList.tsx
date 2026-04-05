@@ -12,17 +12,15 @@ function ClientCard({ client }: { client: ClientInfo }) {
 
   return (
     <div
-      className="flex items-stretch gap-2 px-3 py-2.5 rounded-lg bg-muted shadow-[inset_0_2px_4px_rgba(0,0,0,0.15)] border border-border/50 hover:border-primary/30 transition-all"
+      className="flex items-stretch gap-2 px-3 py-2.5 rounded-lg bg-muted shadow-[inset_0_2px_4px_rgba(0,0,0,0.15)] border border-border/50 cursor-grab hover:border-primary/30 transition-colors"
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData("application/x-snapdog-client", String(client.index));
+        e.dataTransfer.effectAllowed = "move";
+      }}
     >
-      {/* Drag handle — only this element is draggable */}
-      <div
-        className="shrink-0 flex items-center text-muted-foreground/30 cursor-grab active:cursor-grabbing active:opacity-50"
-        draggable
-        onDragStart={(e) => {
-          e.dataTransfer.setData("application/x-snapdog-client", String(client.index));
-          e.dataTransfer.effectAllowed = "move";
-        }}
-      >        <div className="flex flex-col gap-[3px]">
+      {/* Drag handle — visual indicator */}
+      <div className="shrink-0 flex items-center text-muted-foreground/30">        <div className="flex flex-col gap-[3px]">
           <div className="flex gap-[3px]"><div className="size-[3px] rounded-full bg-current" /><div className="size-[3px] rounded-full bg-current" /></div>
           <div className="flex gap-[3px]"><div className="size-[3px] rounded-full bg-current" /><div className="size-[3px] rounded-full bg-current" /></div>
           <div className="flex gap-[3px]"><div className="size-[3px] rounded-full bg-current" /><div className="size-[3px] rounded-full bg-current" /></div>
