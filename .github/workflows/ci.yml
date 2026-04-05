@@ -26,14 +26,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libavahi-compat-libdnssd-dev
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: webui/package-lock.json
+      - name: Build WebUI
+        working-directory: webui
+        run: npm ci && npm run build
       - run: cargo clippy --all-targets -- -D warnings
 
   unit-tests:
@@ -41,12 +45,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libavahi-compat-libdnssd-dev
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: webui/package-lock.json
+      - name: Build WebUI
+        working-directory: webui
+        run: npm ci && npm run build
       - run: cargo test --lib
 
   integration-tests:
@@ -71,14 +79,20 @@ jobs:
           ND_LOGLEVEL: error
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Install system dependencies
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: webui/package-lock.json
+      - name: Build WebUI
+        working-directory: webui
+        run: npm ci && npm run build
+      - name: Install snapserver
         run: |
           sudo apt-get update
-          sudo apt-get install -y libavahi-compat-libdnssd-dev snapserver
+          sudo apt-get install -y snapserver
       - name: Create test env
         run: |
           cat > .env.test << EOF
