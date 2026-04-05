@@ -153,6 +153,18 @@ async fn main() -> Result<()> {
                 tracing::info!("Shutting down");
                 break;
             }
+            // Snapcast server notifications (client connect/disconnect, volume changes, etc.)
+            Some(messages) = snap.recv() => {
+                for msg in messages {
+                    match msg {
+                        Ok(snapcast_control::ValidMessage::Notification { method, .. }) => {
+                            handle_snapcast_notification(*method, &store, &notify_tx).await;
+                        }
+                        Ok(_) => {} // Result messages handled internally by snapcast-control
+                        Err(e) => tracing::warn!(error = %e, "Snapcast message error"),
+                    }
+                }
+            }
             // MQTT event polling
             _ = async {
                 if let Some(ref mut bridge) = mqtt_bridge {
@@ -170,4 +182,94 @@ async fn main() -> Result<()> {
     }
     snapserver.stop().await?;
     Ok(())
+}
+
+async fn handle_snapcast_notification(
+    notification: snapcast_control::Notification,
+    store: &state::SharedState,
+    notify: &tokio::sync::broadcast::Sender<api::ws::Notification>,
+) {
+    use snapcast_control::Notification;
+
+    match notification {
+        Notification::ClientOnConnect { params } => {
+            let mac = params.client.host.mac.to_lowercase();
+            let snap_id = params.client.id.clone();
+            tracing::info!(mac = %mac, snap_id = %snap_id, "Snapcast client connected");
+
+            let mut s = store.write().await;
+            if let Some((&idx, client)) = s
+                .clients
+                .iter_mut()
+                .find(|(_, c)| c.mac.to_lowercase() == mac)
+            {
+                client.connected = true;
+                client.snapcast_id = Some(snap_id);
+                let notif = api::ws::Notification::ClientStateChanged {
+                    client: idx,
+                    volume: client.volume,
+                    muted: client.muted,
+                    connected: client.connected,
+                    zone: client.zone_index,
+                };
+                let name = client.name.clone();
+                drop(s);
+                tracing::info!(client = %name, "Client matched and marked connected");
+                let _ = notify.send(notif);
+            }
+        }
+        Notification::ClientOnDisconnect { params } => {
+            let snap_id = params.id;
+            tracing::info!(snap_id = %snap_id, "Snapcast client disconnected");
+
+            let mut s = store.write().await;
+            if let Some((&idx, client)) = s
+                .clients
+                .iter_mut()
+                .find(|(_, c)| c.snapcast_id.as_deref() == Some(&snap_id))
+            {
+                client.connected = false;
+                let notif = api::ws::Notification::ClientStateChanged {
+                    client: idx,
+                    volume: client.volume,
+                    muted: client.muted,
+                    connected: client.connected,
+                    zone: client.zone_index,
+                };
+                let name = client.name.clone();
+                drop(s);
+                tracing::info!(client = %name, "Client marked disconnected");
+                let _ = notify.send(notif);
+            }
+        }
+        Notification::ClientOnVolumeChanged { params } => {
+            let snap_id = params.id;
+            let volume = params.volume.percent as i32;
+            let muted = params.volume.muted;
+
+            let mut s = store.write().await;
+            if let Some((&idx, client)) = s
+                .clients
+                .iter_mut()
+                .find(|(_, c)| c.snapcast_id.as_deref() == Some(&snap_id))
+            {
+                client.volume = volume;
+                client.muted = muted;
+                let notif = api::ws::Notification::ClientStateChanged {
+                    client: idx,
+                    volume: client.volume,
+                    muted: client.muted,
+                    connected: client.connected,
+                    zone: client.zone_index,
+                };
+                let name = client.name.clone();
+                drop(s);
+                tracing::info!(client = %name, volume, muted, "Client volume changed (external)");
+                let _ = notify.send(notif);
+            }
+        }
+        other => {
+            tracing::debug!(?other, "Unhandled Snapcast notification");
+        }
+    }
 }
