@@ -36,6 +36,7 @@ impl Snapcast {
 
     /// Connect using app config.
     pub async fn from_config(config: &AppConfig) -> Result<Self> {
+        // snapcast-control uses raw TCP JSON-RPC (default: streaming_port + 1)
         let tcp_port = config.snapcast.jsonrpc_port;
         let host = &config.snapcast.address;
         let addr: SocketAddr = tokio::net::lookup_host(format!("{host}:{tcp_port}"))
@@ -57,6 +58,14 @@ impl Snapcast {
             .server_get_status()
             .await
             .context("Failed to get server status")?;
+        // Wait for the response to arrive and populate state
+        if let Some(messages) = self.conn.recv().await {
+            for msg in messages {
+                if let Err(e) = msg {
+                    tracing::warn!(error = %e, "Error processing initial Snapcast message");
+                }
+            }
+        }
         self.log_state();
         Ok(())
     }

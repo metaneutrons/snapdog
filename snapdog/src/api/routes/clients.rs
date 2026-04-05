@@ -115,21 +115,15 @@ async fn set_volume(
     let snap_id = client.snapcast_id.clone().ok_or(not_found())?;
     drop(store);
 
-    state
+    let _ = state
         .snap_tx
         .send(SnapcastCmd::Client {
             client_id: snap_id,
             action: ClientAction::Volume(volume),
         })
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    // Update local state
-    let mut store = state.store.write().await;
-    if let Some(c) = store.clients.get_mut(&idx) {
-        c.volume = volume;
-    }
-    tracing::info!(client = idx, volume, "Client volume set");
+        .await;
+    // State update comes from Snapcast Client.OnVolumeChanged notification
+    tracing::info!(client = idx, volume, "Client volume command sent");
     Ok::<_, StatusCode>(Json(volume))
 }
 
@@ -156,10 +150,8 @@ async fn set_mute(
             action: ClientAction::Mute(v),
         })
         .await;
-    crate::state::update_client_and_notify(&state.store, idx, &state.notifications, |c| {
-        c.muted = v;
-    })
-    .await;
+    // State update comes from Snapcast Client.OnVolumeChanged notification
+    tracing::info!(client = idx, muted = v, "Client mute command sent");
     Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
 }
 
@@ -177,10 +169,8 @@ async fn toggle_mute(
             action: ClientAction::Mute(muted),
         })
         .await;
-    crate::state::update_client_and_notify(&state.store, idx, &state.notifications, |c| {
-        c.muted = muted;
-    })
-    .await;
+    // State update comes from Snapcast Client.OnVolumeChanged notification
+    tracing::info!(client = idx, muted, "Client mute toggle command sent");
     Ok::<_, StatusCode>(Json(muted))
 }
 
@@ -199,10 +189,19 @@ async fn set_latency(
     Path(idx): Path<usize>,
     Json(v): Json<i32>,
 ) -> impl IntoResponse {
-    crate::state::update_client_and_notify(&state.store, idx, &state.notifications, |c| {
-        c.latency_ms = v
-    })
-    .await;
+    let snap_id = read_client(&state, idx)
+        .await
+        .and_then(|c| c.snapcast_id.clone())
+        .ok_or(not_found())?;
+    let _ = state
+        .snap_tx
+        .send(SnapcastCmd::Client {
+            client_id: snap_id,
+            action: ClientAction::Latency(v),
+        })
+        .await;
+    // State update comes from Snapcast Client.OnLatencyChanged notification
+    tracing::info!(client = idx, latency = v, "Client latency command sent");
     Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
 }
 
@@ -238,8 +237,10 @@ async fn set_name(
     Path(idx): Path<usize>,
     Json(v): Json<String>,
 ) -> impl IntoResponse {
+    let name = v.clone();
     crate::state::update_client_and_notify(&state.store, idx, &state.notifications, |c| c.name = v)
         .await;
+    tracing::info!(client = idx, name = %name, "Client name set");
     Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
 }
 
