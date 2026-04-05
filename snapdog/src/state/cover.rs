@@ -24,18 +24,28 @@ pub struct CoverCache {
 pub struct CoverEntry {
     pub bytes: Vec<u8>,
     pub mime: String,
+    pub hash: String,
+}
+
+impl CoverEntry {
+    fn new(bytes: Vec<u8>, mime: String) -> Self {
+        let hash = format!("{:08x}", crc32fast::hash(&bytes));
+        Self { bytes, mime, hash }
+    }
 }
 
 impl CoverCache {
     /// Store cover art for a zone.
     pub fn set(&mut self, zone_index: usize, bytes: Vec<u8>, mime: String) {
-        self.entries.insert(zone_index, CoverEntry { bytes, mime });
+        self.entries
+            .insert(zone_index, CoverEntry::new(bytes, mime));
     }
 
     /// Store cover art with auto-detected MIME from magic bytes.
     pub fn set_auto_mime(&mut self, zone_index: usize, bytes: Vec<u8>) {
         let mime = detect_mime(&bytes).to_string();
-        self.set(zone_index, bytes, mime);
+        self.entries
+            .insert(zone_index, CoverEntry::new(bytes, mime));
     }
 
     /// Get cover art for a zone.

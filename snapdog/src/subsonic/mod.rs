@@ -90,6 +90,15 @@ impl SubsonicClient {
         url
     }
 
+    /// Get cover art URL for fetching (authenticated).
+    pub fn cover_art_fetch_url(&self, cover_id: &str) -> String {
+        let (token, salt) = self.auth_token();
+        format!(
+            "{}/rest/getCoverArt?id={}&u={}&t={}&s={}&v={}&c={}",
+            self.base_url, cover_id, self.username, token, salt, API_VERSION, CLIENT_NAME
+        )
+    }
+
     /// Get cover art bytes.
     pub async fn get_cover_art(&self, cover_id: &str) -> Result<Vec<u8>> {
         let (token, salt) = self.auth_token();
