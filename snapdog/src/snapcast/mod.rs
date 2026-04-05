@@ -87,12 +87,12 @@ impl SnapcastClient {
         Ok(r.client)
     }
 
-    /// Set client volume.
-    pub async fn client_set_volume(&self, id: &str, percent: u8, muted: bool) -> Result<()> {
+    /// Set client volume (preserves current mute state).
+    pub async fn client_set_volume(&self, id: &str, percent: u8) -> Result<()> {
         self.conn
             .request(
                 "Client.SetVolume",
-                json!({ "id": id, "volume": { "percent": percent, "muted": muted } }),
+                json!({ "id": id, "volume": { "percent": percent } }),
             )
             .await?;
         Ok(())
@@ -311,7 +311,7 @@ pub async fn execute_command(
         },
         player::SnapcastCmd::Client { client_id, action } => match action {
             player::ClientAction::Volume(percent) => {
-                snap.client_set_volume(client_id, (*percent).clamp(0, 100) as u8, false)
+                snap.client_set_volume(client_id, (*percent).clamp(0, 100) as u8)
                     .await
             }
             player::ClientAction::Mute(muted) => snap.client_set_mute(client_id, *muted).await,
