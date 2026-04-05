@@ -16,7 +16,7 @@ use crate::subsonic::SubsonicClient;
 /// Mutable decode state passed to navigation helpers.
 pub struct DecodeState<'a> {
     pub current_decode: &'a mut Option<JoinHandle<()>>,
-    pub decode_rx: &'a mut Option<mpsc::Receiver<Vec<u8>>>,
+    pub decode_rx: &'a mut Option<mpsc::Receiver<audio::PcmMessage>>,
     pub source: &'a mut ActiveSource,
 }
 
