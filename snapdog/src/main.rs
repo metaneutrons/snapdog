@@ -47,6 +47,21 @@ async fn main() -> Result<()> {
     snap.init().await?;
     let snap_state = snap.state().clone();
 
+    // Populate snapcast_id and connected status for already-connected clients
+    {
+        let mut s = store.write().await;
+        for snap_client in snap_state.clients.iter() {
+            let mac = snap_client.value().host.mac.to_lowercase();
+            let snap_id = snap_client.key().clone();
+            let connected = snap_client.value().connected;
+            if let Some(client) = s.clients.values_mut().find(|c| c.mac.to_lowercase() == mac) {
+                client.snapcast_id = Some(snap_id.clone());
+                client.connected = connected;
+                tracing::info!(client = %client.name, snap_id = %snap_id, connected, "Initial client state synced");
+            }
+        }
+    }
+
     // Snapcast command channel (SnapcastConnection is !Send, stays on main task)
     let (snap_cmd_tx, mut snap_cmd_rx) = tokio::sync::mpsc::channel::<player::SnapcastCmd>(64); // snapcast command backlog;
 
@@ -268,8 +283,41 @@ async fn handle_snapcast_notification(
                 let _ = notify.send(notif);
             }
         }
-        other => {
-            tracing::debug!(?other, "Unhandled Snapcast notification");
+        Notification::ClientOnLatencyChanged { params } => {
+            let snap_id = params.id;
+            let latency = params.latency as i32;
+            let mut s = store.write().await;
+            if let Some((_, client)) = s
+                .clients
+                .iter_mut()
+                .find(|(_, c)| c.snapcast_id.as_deref() == Some(&snap_id))
+            {
+                client.latency_ms = latency;
+                let name = client.name.clone();
+                drop(s);
+                tracing::info!(client = %name, latency, "Client latency changed");
+            }
+        }
+        Notification::StreamOnUpdate { params } => {
+            tracing::info!(stream = %params.stream.id, status = ?params.stream.status, "Stream status updated");
+        }
+        Notification::GroupOnMute { params } => {
+            tracing::info!(group = %params.id, mute = %params.mute, "Group mute changed");
+        }
+        Notification::GroupOnStreamChanged { params } => {
+            tracing::info!(group = %params.id, stream = %params.stream_id, "Group stream changed");
+        }
+        Notification::GroupOnNameChanged { params } => {
+            tracing::info!(group = %params.id, name = %params.name, "Group name changed");
+        }
+        Notification::ServerOnUpdate { .. } => {
+            tracing::info!("Snapcast server state updated");
+        }
+        Notification::StreamOnProperties { params } => {
+            tracing::debug!(stream = %params.id, "Stream properties updated");
+        }
+        Notification::ClientOnNameChanged { params } => {
+            tracing::info!(snap_id = %params.id, name = %params.name, "Client name changed");
         }
     }
 }

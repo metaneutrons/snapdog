@@ -34,13 +34,6 @@ function ClientCard({ client, zoneList }: { client: ClientInfo; zoneList: { inde
           <span className="text-sm font-medium truncate">{client.name}</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <Slider
-            value={[client.muted ? 0 : client.volume]}
-            max={100}
-            step={1}
-            onValueChange={(v) => api.clients.setVolume(client.index, v[0]).catch(() => {})}
-            className="flex-1 min-w-0"
-          />
           <Button
             variant="ghost"
             size="icon"
@@ -49,6 +42,16 @@ function ClientCard({ client, zoneList }: { client: ClientInfo; zoneList: { inde
           >
             <HugeiconsIcon icon={client.muted ? VolumeMute02Icon : VolumeLowIcon} size={14} />
           </Button>
+          <Slider
+            value={[client.muted ? 0 : client.volume]}
+            max={100}
+            step={1}
+            onValueChange={(v) => api.clients.setVolume(client.index, v[0]).catch(() => {})}
+            className="flex-1 min-w-0"
+          />
+          <span className="text-[10px] text-muted-foreground tabular-nums w-5 text-right">
+            {client.volume}
+          </span>
         </div>
         <div className="relative">
           <button
