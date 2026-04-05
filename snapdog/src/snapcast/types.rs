@@ -106,11 +106,17 @@ pub struct StreamProperties {
     pub mute: Option<bool>,
     pub rate: Option<f64>,
     pub position: Option<f64>,
+    #[serde(default)]
     pub can_go_next: bool,
+    #[serde(default)]
     pub can_go_previous: bool,
+    #[serde(default)]
     pub can_play: bool,
+    #[serde(default)]
     pub can_pause: bool,
+    #[serde(default)]
     pub can_seek: bool,
+    #[serde(default)]
     pub can_control: bool,
     pub metadata: Option<serde_json::Value>,
 }
