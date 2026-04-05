@@ -89,7 +89,7 @@ impl ReceiverProvider for AirPlayReceiver {
     }
 }
 
-// ── AudioHandler / AudioSession bridge ────────────────────────
+// ── AudioHandler bridge (metadata + lifecycle, off audio path) ─
 
 struct BridgeHandler {
     audio_tx: AudioSender,
@@ -111,26 +111,10 @@ impl shairplay::AudioHandler for BridgeHandler {
         });
         Box::new(BridgeSession {
             audio_tx: self.audio_tx.clone(),
-            event_tx: self.event_tx.clone(),
         })
     }
-}
 
-struct BridgeSession {
-    audio_tx: AudioSender,
-    event_tx: ReceiverEventTx,
-}
-
-impl shairplay::AudioSession for BridgeSession {
-    fn audio_process(&mut self, samples: &[f32]) {
-        let _ = self.audio_tx.try_send(samples.to_vec());
-    }
-
-    fn audio_flush(&mut self) {
-        tracing::debug!("AirPlay audio flush");
-    }
-
-    fn audio_set_volume(&mut self, volume: f32) {
+    fn on_volume(&self, volume: f32) {
         let percent = if volume <= -144.0 {
             0
         } else {
@@ -140,8 +124,10 @@ impl shairplay::AudioSession for BridgeSession {
         let _ = self.event_tx.try_send(ReceiverEvent::Volume { percent });
     }
 
-    fn audio_set_metadata(&mut self, metadata: &[u8]) {
-        let (title, artist, album) = parse_dmap(metadata);
+    fn on_metadata(&self, metadata: &shairplay::TrackMetadata) {
+        let title = metadata.title.clone().unwrap_or_default();
+        let artist = metadata.artist.clone().unwrap_or_default();
+        let album = metadata.album.clone().unwrap_or_default();
         tracing::debug!(title = %title, artist = %artist, "AirPlay metadata");
         let _ = self.event_tx.try_send(ReceiverEvent::Metadata {
             title,
@@ -150,14 +136,14 @@ impl shairplay::AudioSession for BridgeSession {
         });
     }
 
-    fn audio_set_coverart(&mut self, coverart: &[u8]) {
+    fn on_coverart(&self, coverart: &[u8]) {
         tracing::debug!(size = coverart.len(), "AirPlay cover art");
         let _ = self.event_tx.try_send(ReceiverEvent::CoverArt {
             bytes: coverart.to_vec(),
         });
     }
 
-    fn audio_set_progress(&mut self, start: u32, current: u32, end: u32) {
+    fn on_progress(&self, start: u32, current: u32, end: u32) {
         let position_ms = ((current - start) as u64 * 1000) / 44100;
         let duration_ms = ((end - start) as u64 * 1000) / 44100;
         let _ = self.event_tx.try_send(ReceiverEvent::Progress {
@@ -166,25 +152,33 @@ impl shairplay::AudioSession for BridgeSession {
         });
     }
 
-    fn remote_control_available(&mut self, remote: Arc<dyn shairplay::RemoteControl>) {
+    fn on_remote_control(&self, remote: Arc<dyn shairplay::RemoteControl>) {
         tracing::debug!("AirPlay remote control available");
         let _ = self.event_tx.try_send(ReceiverEvent::RemoteAvailable {
             remote: Arc::new(ShairplayRemoteBridge(remote)),
         });
     }
-}
 
-impl Drop for BridgeSession {
-    fn drop(&mut self) {
+    fn on_client_disconnected(&self, _addr: &str) {
         tracing::info!("AirPlay audio session ended");
         let _ = self.event_tx.try_send(ReceiverEvent::SessionEnded);
     }
 }
 
+// ── AudioSession bridge (hot path — PCM only) ────────────────
+
+struct BridgeSession {
+    audio_tx: AudioSender,
+}
+
+impl shairplay::AudioSession for BridgeSession {
+    fn audio_process(&mut self, samples: &[f32]) {
+        let _ = self.audio_tx.try_send(samples.to_vec());
+    }
+}
+
 // ── RemoteControl bridge ──────────────────────────────────────
 
-/// Bridges shairplay's [`RemoteControl`](shairplay::RemoteControl) to SnapDog's
-/// protocol-agnostic [`RemoteControl`](super::RemoteControl).
 struct ShairplayRemoteBridge(Arc<dyn shairplay::RemoteControl>);
 
 impl super::RemoteControl for ShairplayRemoteBridge {
@@ -259,63 +253,4 @@ pub(crate) fn detect_hwaddr() -> [u8; 6] {
         .flatten()
         .map(|mac| mac.bytes())
         .unwrap_or([0x02, 0x42, 0xAA, 0xBB, 0xCC, 0x00])
-}
-
-/// Parse DMAP metadata buffer. Returns (title, artist, album).
-pub fn parse_dmap(data: &[u8]) -> (String, String, String) {
-    let mut title = String::new();
-    let mut artist = String::new();
-    let mut album = String::new();
-
-    let mut i = 0;
-    while i + 8 <= data.len() {
-        let tag = &data[i..i + 4];
-        let len = u32::from_be_bytes([data[i + 4], data[i + 5], data[i + 6], data[i + 7]]) as usize;
-        i += 8;
-        if i + len > data.len() {
-            break;
-        }
-        let value = std::str::from_utf8(&data[i..i + len]).unwrap_or("");
-        match tag {
-            b"minm" => title = value.to_string(),
-            b"asar" => artist = value.to_string(),
-            b"asal" => album = value.to_string(),
-            b"mlit" => {
-                let (t, ar, al) = parse_dmap(&data[i..i + len]);
-                if !t.is_empty() {
-                    title = t;
-                }
-                if !ar.is_empty() {
-                    artist = ar;
-                }
-                if !al.is_empty() {
-                    album = al;
-                }
-            }
-            _ => {}
-        }
-        i += len;
-    }
-    (title, artist, album)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parses_dmap_metadata() {
-        let mut data = Vec::new();
-        data.extend_from_slice(b"minm");
-        data.extend_from_slice(&9u32.to_be_bytes());
-        data.extend_from_slice(b"Test Song");
-        data.extend_from_slice(b"asar");
-        data.extend_from_slice(&6u32.to_be_bytes());
-        data.extend_from_slice(b"Artist");
-
-        let (title, artist, album) = parse_dmap(&data);
-        assert_eq!(title, "Test Song");
-        assert_eq!(artist, "Artist");
-        assert_eq!(album, "");
-    }
 }
