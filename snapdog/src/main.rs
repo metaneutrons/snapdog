@@ -109,6 +109,23 @@ async fn main() -> Result<()> {
         None
     };
 
+    // KNX bridge
+    if config.knx.enabled {
+        let knx_notifications = notify_tx.subscribe();
+        match knx::start(
+            &config,
+            store.clone(),
+            knx_notifications,
+            zone_commands.clone(),
+            snap_cmd_tx.clone(),
+        )
+        .await
+        {
+            Ok(()) => {}
+            Err(e) => tracing::warn!(error = %e, "KNX connection failed — running without KNX"),
+        }
+    }
+
     // ── Main loop ─────────────────────────────────────────────
     let mqtt_zone_cmds = zone_commands.clone();
     let mqtt_store = store.clone();
