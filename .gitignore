@@ -15,3 +15,4 @@ state.json
 webui/out/
 webui/node_modules/
 webui/.next/
+snapdog.dev.toml

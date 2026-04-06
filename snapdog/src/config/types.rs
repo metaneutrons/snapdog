@@ -118,23 +118,13 @@ impl Default for SnapcastConfig {
     }
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Default)]
 pub struct AirplayConfig {
     pub password: Option<String>,
     /// Path to persist AirPlay pairing keys (required for AP2 reconnects).
     pub pairing_store: Option<std::path::PathBuf>,
     /// Bind to specific addresses (default: all interfaces).
     pub bind: Option<Vec<std::net::IpAddr>>,
-}
-
-impl Default for AirplayConfig {
-    fn default() -> Self {
-        Self {
-            password: None,
-            pairing_store: None,
-            bind: None,
-        }
-    }
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -183,22 +173,13 @@ pub struct MqttConfig {
     pub base_topic: String,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Default)]
 pub struct KnxConfig {
     #[serde(default)]
     pub enabled: bool,
     /// KNX connection URL. Unicast = tunnel, multicast = router.
     /// Examples: `udp://192.168.1.50:3671`, `udp://224.0.23.12:3671`
     pub url: Option<String>,
-}
-
-impl Default for KnxConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            url: None,
-        }
-    }
 }
 
 // ── Raw zone/client/radio (user-facing, optional fields) ──────
