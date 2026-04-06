@@ -6,6 +6,9 @@
 //! Bidirectional:
 //! - **Publisher**: writes zone/client status to KNX group addresses on state changes
 //! - **Listener**: receives KNX group writes and routes them as zone/client commands
+//!
+//! Uses knxkit's [`Multiplexer`] to fan out a single tunnel connection into
+//! independent publisher and listener handles.
 
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
@@ -13,19 +16,21 @@ use std::str::FromStr;
 
 use anyhow::{Context, Result};
 use knxkit::connection::KnxBusConnection;
+use knxkit::connection::multiplex::{MultiplexHandle, Multiplexer};
 use knxkit::connection::ops::GroupOps;
 use knxkit::core::DataPoint;
 use knxkit::core::address::GroupAddress;
 use knxkit::net::tunnel::TunnelConnection;
+use knxkit_dpt::specific::{DPT_1_1, DPT_5_1, DPT_16_1, SpecificDataPoint};
 
 use crate::config::AppConfig;
 use crate::player::{ClientAction, SnapcastCmd, ZoneCommand, ZoneCommandSender};
 use crate::state;
 
-// ── KNX Bridge ────────────────────────────────────────────────
+// ── Start ─────────────────────────────────────────────────────
 
-/// Start the KNX bridge. Spawns a single task that owns the connection
-/// and handles both publishing (state → KNX) and listening (KNX → commands).
+/// Start the KNX bridge. Connects to the gateway, creates a multiplexer,
+/// and spawns independent publisher and listener tasks.
 pub async fn start(
     config: &AppConfig,
     store: state::SharedState,
@@ -46,67 +51,194 @@ pub async fn start(
         .context("Failed to connect to KNX gateway")?;
     tracing::info!(gateway = gw, "KNX tunnel connected");
 
-    let config = config.clone();
+    let mux = Multiplexer::new(conn);
+    let pub_handle = mux.handle();
+    let listen_handle = mux.handle();
+
+    // Multiplexer task — fans out received frames, forwards sends
+    tokio::spawn(mux.run());
+
+    // Publisher task — state changes → KNX group writes
+    let pub_config = config.clone();
+    let pub_store = store.clone();
     tokio::spawn(async move {
-        run(conn, config, store, notify_rx, zone_commands, snap_tx).await;
+        publisher(pub_handle, pub_config, pub_store, notify_rx).await;
+    });
+
+    // Listener task — KNX group writes → zone/client commands
+    let listen_config = config.clone();
+    tokio::spawn(async move {
+        listener(listen_handle, listen_config, store, zone_commands, snap_tx).await;
     });
 
     Ok(())
 }
 
-/// Main KNX task: handles both publishing and listening on a single connection.
-async fn run(
-    mut conn: TunnelConnection,
+// ── Publisher ─────────────────────────────────────────────────
+
+async fn publisher(
+    mut handle: MultiplexHandle,
     config: AppConfig,
     store: state::SharedState,
     mut notify_rx: tokio::sync::broadcast::Receiver<crate::api::ws::Notification>,
+) {
+    tracing::info!("KNX publisher started");
+    loop {
+        match notify_rx.recv().await {
+            Ok(crate::api::ws::Notification::ZoneStateChanged { zone, .. }) => {
+                publish_zone_state(zone, &config, &store, &mut handle).await;
+            }
+            Ok(crate::api::ws::Notification::ZoneTrackChanged { zone, .. }) => {
+                publish_zone_track(zone, &config, &store, &mut handle).await;
+            }
+            Ok(crate::api::ws::Notification::ClientStateChanged { client, .. }) => {
+                publish_client_state(client, &config, &store, &mut handle).await;
+            }
+            Ok(_) => {}
+            Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                tracing::warn!(missed = n, "KNX publisher lagged");
+            }
+            Err(_) => break,
+        }
+    }
+}
+
+async fn publish_zone_state(
+    zone_index: usize,
+    config: &AppConfig,
+    store: &state::SharedState,
+    handle: &mut MultiplexHandle,
+) {
+    let s = store.read().await;
+    let Some(zone) = s.zones.get(&zone_index) else {
+        return;
+    };
+    let Some(zone_cfg) = config.zones.get(zone_index - 1) else {
+        return;
+    };
+    let knx = &zone_cfg.knx;
+
+    if let Some(ref ga) = knx.volume_status {
+        write(handle, ga, encode_percent(zone.volume.clamp(0, 100) as u8)).await;
+    }
+    if let Some(ref ga) = knx.mute_status {
+        write(handle, ga, encode_bool(zone.muted)).await;
+    }
+    if let Some(ref ga) = knx.shuffle_status {
+        write(handle, ga, encode_bool(zone.shuffle)).await;
+    }
+    if let Some(ref ga) = knx.repeat_status {
+        write(handle, ga, encode_bool(zone.repeat)).await;
+    }
+    if let Some(ref ga) = knx.track_playing_status {
+        write(
+            handle,
+            ga,
+            encode_bool(zone.playback.to_string() == "playing"),
+        )
+        .await;
+    }
+    if let Some(ref ga) = knx.track_repeat_status {
+        write(handle, ga, encode_bool(zone.track_repeat)).await;
+    }
+}
+
+async fn publish_zone_track(
+    zone_index: usize,
+    config: &AppConfig,
+    store: &state::SharedState,
+    handle: &mut MultiplexHandle,
+) {
+    let s = store.read().await;
+    let Some(zone) = s.zones.get(&zone_index) else {
+        return;
+    };
+    let Some(zone_cfg) = config.zones.get(zone_index - 1) else {
+        return;
+    };
+    let knx = &zone_cfg.knx;
+
+    if let Some(ref track) = zone.track {
+        if let Some(ref ga) = knx.track_title_status {
+            write(handle, ga, encode_string(&track.title)).await;
+        }
+        if let Some(ref ga) = knx.track_artist_status {
+            write(handle, ga, encode_string(&track.artist)).await;
+        }
+        if let Some(ref ga) = knx.track_album_status {
+            write(handle, ga, encode_string(&track.album)).await;
+        }
+    }
+}
+
+async fn publish_client_state(
+    client_index: usize,
+    config: &AppConfig,
+    store: &state::SharedState,
+    handle: &mut MultiplexHandle,
+) {
+    let s = store.read().await;
+    let Some(client) = s.clients.get(&client_index) else {
+        return;
+    };
+    let Some(client_cfg) = config.clients.get(client_index - 1) else {
+        return;
+    };
+    let knx = &client_cfg.knx;
+
+    if let Some(ref ga) = knx.volume_status {
+        write(
+            handle,
+            ga,
+            encode_percent(client.volume.clamp(0, 100) as u8),
+        )
+        .await;
+    }
+    if let Some(ref ga) = knx.mute_status {
+        write(handle, ga, encode_bool(client.muted)).await;
+    }
+    if let Some(ref ga) = knx.connected_status {
+        write(handle, ga, encode_bool(client.connected)).await;
+    }
+    if let Some(ref ga) = knx.zone_status {
+        write(handle, ga, encode_percent(client.zone_index as u8)).await;
+    }
+}
+
+// ── Listener ──────────────────────────────────────────────────
+
+async fn listener(
+    mut handle: MultiplexHandle,
+    config: AppConfig,
+    store: state::SharedState,
     zone_commands: HashMap<usize, ZoneCommandSender>,
     snap_tx: tokio::sync::mpsc::Sender<SnapcastCmd>,
 ) {
-    // Build GA → action lookup for incoming telegrams
     let zone_ga_map = build_zone_ga_map(&config);
     let client_ga_map = build_client_ga_map(&config);
 
     tracing::info!(
         zone_gas = zone_ga_map.len(),
         client_gas = client_ga_map.len(),
-        "KNX bridge active"
+        "KNX listener started"
     );
 
     loop {
-        tokio::select! {
-            // Incoming KNX telegram
-            cemi = KnxBusConnection::recv(&mut conn) => {
-                let Some(cemi) = cemi else {
-                    tracing::warn!("KNX connection closed");
-                    break;
-                };
-                handle_incoming(&cemi, &zone_ga_map, &client_ga_map, &zone_commands, &snap_tx, &store).await;
-            }
-            // Outgoing state notification → KNX group write
-            notification = notify_rx.recv() => {
-                match notification {
-                    Ok(crate::api::ws::Notification::ZoneStateChanged { zone, .. }) => {
-                        publish_zone_state(zone, &config, &store, &mut conn).await;
-                    }
-                    Ok(crate::api::ws::Notification::ZoneTrackChanged { zone, .. }) => {
-                        publish_zone_track(zone, &config, &store, &mut conn).await;
-                    }
-                    Ok(crate::api::ws::Notification::ClientStateChanged { client, .. }) => {
-                        publish_client_state(client, &config, &store, &mut conn).await;
-                    }
-                    Ok(_) => {}
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                        tracing::warn!(missed = n, "KNX publisher lagged");
-                    }
-                    Err(_) => break,
-                }
-            }
-        }
+        let Some(cemi) = handle.recv().await else {
+            tracing::warn!("KNX connection closed");
+            break;
+        };
+        handle_incoming(
+            &cemi,
+            &zone_ga_map,
+            &client_ga_map,
+            &zone_commands,
+            &snap_tx,
+            &store,
+        )
+        .await;
     }
 }
-
-// ── Incoming telegram handling ─────────────────────────────────
 
 fn build_zone_ga_map(config: &AppConfig) -> HashMap<String, (usize, &'static str)> {
     let mut map = HashMap::new();
@@ -127,6 +259,7 @@ fn build_zone_ga_map(config: &AppConfig) -> HashMap<String, (usize, &'static str
             (&knx.repeat_toggle, "repeat_toggle"),
             (&knx.track_repeat, "track_repeat"),
             (&knx.track_repeat_toggle, "track_repeat_toggle"),
+            (&knx.volume, "volume"),
         ];
         for (ga_opt, action) in pairs {
             if let Some(ga) = ga_opt {
@@ -142,8 +275,11 @@ fn build_client_ga_map(config: &AppConfig) -> HashMap<String, (usize, &'static s
     for client_cfg in &config.clients {
         let idx = client_cfg.index;
         let knx = &client_cfg.knx;
-        let pairs: &[(&Option<String>, &'static str)] =
-            &[(&knx.mute, "mute"), (&knx.mute_toggle, "mute_toggle")];
+        let pairs: &[(&Option<String>, &'static str)] = &[
+            (&knx.mute, "mute"),
+            (&knx.mute_toggle, "mute_toggle"),
+            (&knx.volume, "volume"),
+        ];
         for (ga_opt, action) in pairs {
             if let Some(ga) = ga_opt {
                 map.insert(ga.clone(), (idx, *action));
@@ -166,7 +302,6 @@ async fn handle_incoming(
         _ => return,
     };
 
-    // Extract APDU data from TPDU
     use knxkit::core::tpdu::TPDU;
     let data = match &cemi.npdu.tpdu {
         TPDU::DataGroup(apdu) | TPDU::DataBroadcast(apdu) => apdu.data.clone(),
@@ -195,6 +330,9 @@ async fn handle_incoming(
                 "track_repeat" => data
                     .as_ref()
                     .map(|d| ZoneCommand::SetTrackRepeat(decode_bool(d))),
+                "volume" => data
+                    .as_ref()
+                    .and_then(|d| decode_percent(d).map(|v| ZoneCommand::SetVolume(v as i32))),
                 _ => None,
             };
             if let Some(cmd) = cmd {
@@ -211,6 +349,9 @@ async fn handle_incoming(
                 let cmd = match action {
                     "mute_toggle" => Some(ClientAction::Mute(!client.muted)),
                     "mute" => data.as_ref().map(|d| ClientAction::Mute(decode_bool(d))),
+                    "volume" => data
+                        .as_ref()
+                        .and_then(|d| decode_percent(d).map(|v| ClientAction::Volume(v as i32))),
                     _ => None,
                 };
                 if let Some(action) = cmd {
@@ -229,106 +370,32 @@ async fn handle_incoming(
     }
 }
 
-// ── Publishing ────────────────────────────────────────────────
+// ── DPT encode/decode ─────────────────────────────────────────
 
-async fn publish_zone_state(
-    zone_index: usize,
-    config: &AppConfig,
-    store: &state::SharedState,
-    conn: &mut TunnelConnection,
-) {
-    let s = store.read().await;
-    let Some(zone) = s.zones.get(&zone_index) else {
-        return;
-    };
-    let Some(zone_cfg) = config.zones.get(zone_index - 1) else {
-        return;
-    };
-    let knx = &zone_cfg.knx;
-
-    if let Some(ref ga) = knx.volume_status {
-        write(conn, ga, encode_percent(zone.volume.clamp(0, 100) as u8)).await;
-    }
-    if let Some(ref ga) = knx.mute_status {
-        write(conn, ga, encode_bool(zone.muted)).await;
-    }
-    if let Some(ref ga) = knx.shuffle_status {
-        write(conn, ga, encode_bool(zone.shuffle)).await;
-    }
-    if let Some(ref ga) = knx.repeat_status {
-        write(conn, ga, encode_bool(zone.repeat)).await;
-    }
-    if let Some(ref ga) = knx.track_playing_status {
-        write(
-            conn,
-            ga,
-            encode_bool(zone.playback.to_string() == "playing"),
-        )
-        .await;
-    }
-    if let Some(ref ga) = knx.track_repeat_status {
-        write(conn, ga, encode_bool(zone.track_repeat)).await;
-    }
+fn encode_bool(value: bool) -> DataPoint {
+    DPT_1_1(value).to_data_point()
 }
 
-async fn publish_zone_track(
-    zone_index: usize,
-    config: &AppConfig,
-    store: &state::SharedState,
-    conn: &mut TunnelConnection,
-) {
-    let s = store.read().await;
-    let Some(zone) = s.zones.get(&zone_index) else {
-        return;
-    };
-    let Some(zone_cfg) = config.zones.get(zone_index - 1) else {
-        return;
-    };
-    let knx = &zone_cfg.knx;
-
-    if let Some(ref track) = zone.track {
-        if let Some(ref ga) = knx.track_title_status {
-            write(conn, ga, encode_string(&track.title)).await;
-        }
-        if let Some(ref ga) = knx.track_artist_status {
-            write(conn, ga, encode_string(&track.artist)).await;
-        }
-        if let Some(ref ga) = knx.track_album_status {
-            write(conn, ga, encode_string(&track.album)).await;
-        }
-    }
+fn encode_percent(percent: u8) -> DataPoint {
+    // DPT 5.001: 0-100% mapped to 0-255
+    DPT_5_1(((percent as u16) * 255 / 100) as u8).to_data_point()
 }
 
-async fn publish_client_state(
-    client_index: usize,
-    config: &AppConfig,
-    store: &state::SharedState,
-    conn: &mut TunnelConnection,
-) {
-    let s = store.read().await;
-    let Some(client) = s.clients.get(&client_index) else {
-        return;
-    };
-    let Some(client_cfg) = config.clients.get(client_index - 1) else {
-        return;
-    };
-    let knx = &client_cfg.knx;
-
-    if let Some(ref ga) = knx.volume_status {
-        write(conn, ga, encode_percent(client.volume.clamp(0, 100) as u8)).await;
-    }
-    if let Some(ref ga) = knx.mute_status {
-        write(conn, ga, encode_bool(client.muted)).await;
-    }
-    if let Some(ref ga) = knx.connected_status {
-        write(conn, ga, encode_bool(client.connected)).await;
-    }
-    if let Some(ref ga) = knx.zone_status {
-        write(conn, ga, encode_percent(client.zone_index as u8)).await;
-    }
+fn encode_string(value: &str) -> DataPoint {
+    DPT_16_1(value.to_string()).to_data_point()
 }
 
-async fn write(conn: &mut TunnelConnection, ga_str: &str, dp: DataPoint) {
+fn decode_bool(dp: &DataPoint) -> bool {
+    DPT_1_1::from_data_point(dp).map(|v| v.0).unwrap_or(false)
+}
+
+fn decode_percent(dp: &DataPoint) -> Option<u8> {
+    DPT_5_1::from_data_point(dp)
+        .ok()
+        .map(|v| ((v.0 as u16) * 100 / 255) as u8)
+}
+
+async fn write(handle: &mut MultiplexHandle, ga_str: &str, dp: DataPoint) {
     let ga = match GroupAddress::from_str(ga_str) {
         Ok(ga) => ga,
         Err(e) => {
@@ -336,34 +403,9 @@ async fn write(conn: &mut TunnelConnection, ga_str: &str, dp: DataPoint) {
             return;
         }
     };
-    if let Err(e) = conn.group_write(ga, dp).await {
+    if let Err(e) = handle.group_write(ga, dp).await {
         tracing::warn!(ga = ga_str, error = %e, "KNX write failed");
     }
-}
-
-// ── Helpers ───────────────────────────────────────────────────
-
-fn decode_bool(dp: &DataPoint) -> bool {
-    match dp {
-        DataPoint::Short(v) => *v != 0,
-        DataPoint::Long(v) => v.first().is_some_and(|b| *b != 0),
-    }
-}
-
-pub fn encode_bool(value: bool) -> DataPoint {
-    DataPoint::Short(u8::from(value))
-}
-
-pub fn encode_percent(percent: u8) -> DataPoint {
-    DataPoint::Short(((percent as u16) * 255 / 100) as u8)
-}
-
-pub fn encode_string(value: &str) -> DataPoint {
-    let mut bytes = vec![0u8; 14];
-    let src = value.as_bytes();
-    let len = src.len().min(14);
-    bytes[..len].copy_from_slice(&src[..len]);
-    DataPoint::Long(bytes)
 }
 
 #[cfg(test)]
@@ -371,30 +413,31 @@ mod tests {
     use super::*;
 
     #[test]
-    fn encodes_bool() {
+    fn encodes_bool_via_dpt() {
         assert_eq!(encode_bool(true), DataPoint::Short(1));
         assert_eq!(encode_bool(false), DataPoint::Short(0));
     }
 
     #[test]
-    fn encodes_percent() {
-        assert_eq!(encode_percent(0), DataPoint::Short(0));
-        assert_eq!(encode_percent(100), DataPoint::Short(255));
+    fn round_trips_bool() {
+        assert!(decode_bool(&encode_bool(true)));
+        assert!(!decode_bool(&encode_bool(false)));
     }
 
     #[test]
-    fn encodes_string_truncates_to_14() {
-        let dp = encode_string("Hello, World!!");
-        if let DataPoint::Long(bytes) = dp {
-            assert_eq!(bytes.len(), 14);
-        } else {
-            panic!("Expected Long");
-        }
+    fn round_trips_percent() {
+        // 0% and 100% must survive encode→decode
+        assert_eq!(decode_percent(&encode_percent(0)), Some(0));
+        assert_eq!(decode_percent(&encode_percent(100)), Some(100));
+        // 50% may have rounding — just check it's close
+        let mid = decode_percent(&encode_percent(50)).unwrap();
+        assert!((48..=52).contains(&mid), "50% round-tripped to {mid}");
     }
 
     #[test]
-    fn decodes_bool() {
-        assert!(decode_bool(&DataPoint::Short(1)));
-        assert!(!decode_bool(&DataPoint::Short(0)));
+    fn encodes_string_via_dpt() {
+        // DPT 16.1 produces a valid DataPoint — just verify it's Long
+        let dp = encode_string("Hello");
+        assert!(matches!(dp, DataPoint::Long(_)));
     }
 }

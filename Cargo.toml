@@ -39,7 +39,8 @@ rubato = "0.16"
 rumqttc = "0.24"
 
 # KNX
-knxkit = "0.1"
+knxkit = { git = "https://github.com/metaneutrons/knxkit", branch = "metaneutrons/v0.2-dev" }
+knxkit_dpt = { git = "https://github.com/metaneutrons/knxkit", branch = "metaneutrons/v0.2-dev" }
 
 # HTTP client (Subsonic API, radio streams)
 reqwest = { version = "0.12", features = ["json", "stream"] }
