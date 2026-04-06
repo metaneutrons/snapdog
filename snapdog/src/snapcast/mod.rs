@@ -244,9 +244,20 @@ use crate::state;
 use std::collections::HashMap;
 
 /// Sync initial client state from Snapcast server status.
-pub async fn sync_initial_state(status: &ServerStatus, store: &state::SharedState) {
+pub async fn sync_initial_state(
+    status: &ServerStatus,
+    config: &AppConfig,
+    store: &state::SharedState,
+) {
     let mut s = store.write().await;
     for group in &status.server.groups {
+        // Find zone by stream ID
+        let zone_idx = config
+            .zones
+            .iter()
+            .find(|zc| zc.stream_name == group.stream_id)
+            .map(|zc| zc.index);
+
         for snap_client in &group.clients {
             let mac = snap_client.host.mac.to_lowercase();
             let snap_id = snap_client.id.clone();
@@ -254,7 +265,10 @@ pub async fn sync_initial_state(status: &ServerStatus, store: &state::SharedStat
             if let Some(client) = s.clients.values_mut().find(|c| c.mac.to_lowercase() == mac) {
                 client.snapcast_id = Some(snap_id.clone());
                 client.connected = connected;
-                tracing::info!(client = %client.name, snap_id = %snap_id, connected, "Initial client state synced");
+                if let Some(idx) = zone_idx {
+                    client.zone_index = idx;
+                }
+                tracing::info!(client = %client.name, snap_id = %snap_id, connected, zone = client.zone_index, "Initial client state synced");
             }
         }
     }
