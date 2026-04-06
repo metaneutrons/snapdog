@@ -205,11 +205,15 @@ async fn run(
                             if let Some(ref rc) = remote_control {
                                 if let Err(e) = rc.send_command(crate::receiver::RemoteCommand::Play) { tracing::warn!(error = %e, "Remote play failed"); }
                             }
-                        } else if matches!(source, ActiveSource::Idle) {
+                        } else if matches!(source, ActiveSource::Radio { .. } | ActiveSource::Idle) {
+                            // Resume or start radio
                             let z_state = store.read().await;
-                            let radio_idx = z_state.zones.get(&zone_index).and_then(|z| {
-                                if z.playlist_index == Some(0) { z.playlist_track_index } else { None }
-                            }).unwrap_or(0);
+                            let radio_idx = match &source {
+                                ActiveSource::Radio { index } => *index,
+                                _ => z_state.zones.get(&zone_index).and_then(|z| {
+                                    if z.playlist_index == Some(0) { z.playlist_track_index } else { None }
+                                }).unwrap_or(0),
+                            };
                             drop(z_state);
                             if let Some(radio) = config.radios.get(radio_idx) {
                                 stop_decode(&mut current_decode, &mut decode_rx).await;
