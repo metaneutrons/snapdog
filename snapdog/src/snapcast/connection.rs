@@ -40,9 +40,22 @@ pub struct Connection {
 impl Connection {
     /// Connect to the Snapcast JSON-RPC server and spawn the background task.
     pub async fn connect(addr: SocketAddr) -> Result<Self> {
-        let stream = TcpStream::connect(addr)
-            .await
-            .context("Failed to connect to Snapcast JSON-RPC")?;
+        let stream = {
+            let mut attempts = 0;
+            loop {
+                match TcpStream::connect(addr).await {
+                    Ok(s) => break s,
+                    Err(e) => {
+                        attempts += 1;
+                        if attempts >= 10 {
+                            return Err(e).context("Failed to connect to Snapcast JSON-RPC");
+                        }
+                        tracing::debug!(attempt = attempts, "Snapcast not ready, retrying...");
+                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                    }
+                }
+            }
+        };
         tracing::info!(%addr, "Snapcast JSON-RPC connected");
 
         let (cmd_tx, cmd_rx) = mpsc::channel::<ConnCmd>(64);
