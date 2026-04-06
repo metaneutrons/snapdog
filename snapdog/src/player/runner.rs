@@ -391,6 +391,7 @@ async fn run(
                                     }
                                 }));
                                 update_and_notify(store, zone_index, notify, |z| {
+                                    z.playback = PlaybackState::Playing;
                                     if let Some(ref mut t) = z.track { t.position_ms = pos_ms; }
                                 }).await;
                                 position_offset_ms = pos_ms;
@@ -427,6 +428,7 @@ async fn run(
                                         }
                                     }));
                                     update_and_notify(store, zone_index, notify, |z| {
+                                        z.playback = PlaybackState::Playing;
                                         if let Some(ref mut t) = z.track { t.position_ms = pos_ms; }
                                     }).await;
                                     position_offset_ms = pos_ms;
