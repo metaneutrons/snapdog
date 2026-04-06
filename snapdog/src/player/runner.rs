@@ -230,6 +230,7 @@ async fn run(
                                     current_decode = Some(tokio::spawn(async move {
                                         if let Err(e) = audio::decode_http_stream(url, tx, ac, None).await { tracing::error!(error = %e, "Resume decode failed"); }
                                     }));
+                                    position_offset_ms = pos_ms;
                                     update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Playing; }).await;
                                 }
                             }
