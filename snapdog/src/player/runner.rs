@@ -467,8 +467,10 @@ async fn run(
                         tracing::debug!(source_rate = sample_rate, target_rate = config.audio.sample_rate, "Active source resampler configured");
                     }
                     Some(audio::PcmMessage::Audio(samples)) => {
-                        let samples = resampler.process(&samples).unwrap_or(samples);
-                        if samples.is_empty() { continue; }
+                        let samples = match resampler.process(&samples) {
+                            Some(resampled) => resampled,
+                            None => continue,
+                        };
                         let pcm = audio::resample::f32_to_pcm(&samples, output_bit_depth);
                         if let Err(e) = tcp.write_all(&pcm).await {
                             tracing::error!(zone = zone_index, error = %e, "TCP write failed");
@@ -495,7 +497,10 @@ async fn run(
                     update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Playing; z.source = SourceType::AirPlay; }).await;
                 }
                 let samples = match &mut receiver_resampler {
-                    Some(r) => r.process(&samples).unwrap_or(samples),
+                    Some(r) => match r.process(&samples) {
+                        Some(resampled) => resampled,
+                        None => continue, // buffering, not enough input yet
+                    },
                     None => samples,
                 };
                 if samples.is_empty() { continue; }
