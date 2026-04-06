@@ -164,13 +164,7 @@ async fn get_playlist_cover(
         .ok_or(ApiError::NotFound("resource"))?;
     match sub.get_cover_art(&cover_id).await {
         Ok(bytes) => {
-            let mime = if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
-                "image/jpeg"
-            } else if bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
-                "image/png"
-            } else {
-                "image/octet-stream"
-            };
+            let mime = crate::state::cover::detect_mime(&bytes);
             Ok((
                 [(axum::http::header::CONTENT_TYPE, mime.to_string())],
                 bytes,
@@ -326,13 +320,7 @@ async fn get_track_cover_art(
                 .get_cover_art(cover_id)
                 .await
                 .map_err(|e| ApiError::BadGateway(e.to_string()))?;
-            let mime = if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
-                "image/jpeg"
-            } else if bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
-                "image/png"
-            } else {
-                "image/octet-stream"
-            };
+            let mime = crate::state::cover::detect_mime(&bytes);
             Ok((
                 [
                     (axum::http::header::CONTENT_TYPE, mime.to_string()),

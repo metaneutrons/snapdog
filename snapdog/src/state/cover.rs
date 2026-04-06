@@ -76,7 +76,7 @@ fn percent_decode_bytes(input: &str) -> Vec<u8> {
     }
     out
 }
-fn detect_mime(bytes: &[u8]) -> &'static str {
+pub fn detect_mime(bytes: &[u8]) -> &'static str {
     match bytes {
         [0xFF, 0xD8, 0xFF, ..] => "image/jpeg",
         [0x89, 0x50, 0x4E, 0x47, ..] => "image/png",

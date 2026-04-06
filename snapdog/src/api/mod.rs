@@ -15,6 +15,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use axum::Router;
 use tokio::net::TcpListener;
+use tower_http::compression::CompressionLayer;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
@@ -62,6 +63,7 @@ pub async fn serve(
         .nest("/api/v1/media", routes::media::router(state.clone()))
         .nest("/api/v1/system", routes::system::router(state.clone()))
         .fallback(webui::fallback)
+        .layer(CompressionLayer::new())
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http());
 

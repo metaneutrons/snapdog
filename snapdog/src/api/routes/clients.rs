@@ -247,12 +247,8 @@ async fn set_zone(
         })
         .await;
 
-    // Update local state
-    crate::state::update_client_and_notify(&state.store, idx, &state.notifications, |c| {
-        c.zone_index = target_zone;
-    })
-    .await;
-    tracing::info!(client = idx, zone = target_zone, group = %target_group_id, clients = ?target_client_ids, "Client zone changed — group reassigned");
+    // State update comes from Snapcast Group.OnStreamChanged notification
+    tracing::info!(client = idx, zone = target_zone, group = %target_group_id, clients = ?target_client_ids, "Client zone change command sent");
     Ok::<_, ApiError>(Json(target_zone))
 }
 
