@@ -1,22 +1,7 @@
 services:
-  snapcast-server:
-    build: ./devcontainer/snapcast-server
-    ports:
-      - "1704:1704"
-      - "1705:1705"
-      - "1780:1780"
-      - "4953:4953"
-      - "4954:4954"
-    volumes:
-      - snapcast_sinks:/snapsinks
-    networks:
-      snapdog-dev:
-    restart: unless-stopped
-
   snapclient-living-room:
     build: ./devcontainer/snapcast-client
-    depends_on: [snapcast-server]
-    command: ["snapclient", "--host", "snapcast-server", "--player", "file:filename=/dev/null"]
+    command: ["snapclient", "--host", "host.docker.internal", "--player", "file:filename=/dev/null"]
     networks:
       snapdog-dev:
         mac_address: 02:42:ac:11:00:10
@@ -24,8 +9,7 @@ services:
 
   snapclient-kitchen:
     build: ./devcontainer/snapcast-client
-    depends_on: [snapcast-server]
-    command: ["snapclient", "--host", "snapcast-server", "--player", "file:filename=/dev/null"]
+    command: ["snapclient", "--host", "host.docker.internal", "--player", "file:filename=/dev/null"]
     networks:
       snapdog-dev:
         mac_address: 02:42:ac:11:00:11
@@ -33,8 +17,7 @@ services:
 
   snapclient-bedroom:
     build: ./devcontainer/snapcast-client
-    depends_on: [snapcast-server]
-    command: ["snapclient", "--host", "snapcast-server", "--player", "file:filename=/dev/null"]
+    command: ["snapclient", "--host", "host.docker.internal", "--player", "file:filename=/dev/null"]
     networks:
       snapdog-dev:
         mac_address: 02:42:ac:11:00:12
@@ -89,9 +72,6 @@ services:
     networks:
       snapdog-dev:
     restart: unless-stopped
-
-volumes:
-  snapcast_sinks:
 
 networks:
   snapdog-dev:
