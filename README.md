@@ -6,18 +6,18 @@ Multi-zone audio controller with AirPlay, Snapcast, MQTT, and KNX integration.
 
 SnapDog is a single binary that turns a Linux box (or Mac) into a multi-room audio system with smart home integration:
 
-- **AirPlay 1 + 2 receiver** — one per zone, stream from iPhone/Mac directly into multi-room audio (AirPlay 2 behind feature 'ap2')
+- **AirPlay 1 + 2 receiver** — one per zone, stream from iPhone/Mac directly into multi-room audio (AirPlay 2 behind feature `ap2`)
 - **Snapcast integration** — synchronized playback across rooms, managed as child process
 - **Subsonic/Navidrome** — play from your personal music library with playlist navigation and seek
 - **Internet radio** — configurable station list with live ICY metadata (current song title)
 - **HLS streaming** — segment-based streaming with retry logic and metadata extraction
 - **MQTT** — bidirectional smart home integration (commands + status)
-- **KNX** — building automation protocol support (explicit GA configuration)
-- **REST API** — ~90 endpoints, full zone/client/media control
-- **WebSocket** — real-time state notifications (server → client push)
+- **KNX** — bidirectional building automation (tunnel + router, typed DPT encoding via knxkit)
+- **REST API** — ~90 endpoints, full zone/client/media control, optional API key auth
+- **WebSocket** — real-time state notifications (server → client push only, 30s keepalive)
 - **Embedded WebUI** — responsive SPA with zone control, volume sliders, drag-and-drop client management
 - **Cover art** — unified endpoint per zone with content-addressed caching
-- **Spotify Connect** — receiver support (based on librespot behind feature 'spotify', WIP)
+- **Spotify Connect** — receiver support (based on librespot behind feature `spotify`, WIP)
 
 ## Quick Start
 
@@ -48,16 +48,27 @@ One file: `snapdog.toml`. See [snapdog.example.toml](snapdog.example.toml).
 Snapcast sink paths, stream names, and AirPlay names are auto-generated from zone/client definitions. KNX addresses are explicit (no auto-generation — fits into existing KNX installations).
 
 ```toml
+[http]
+port = 5555
+# api_key = "your-secret-key"    # Optional: protect API + WebSocket
+
 [audio]
 sample_rate = 48000
 bit_depth = 16        # 16, 24, or 32
 channels = 2
+
+[airplay]
+# password = ""                   # Optional: require password for AirPlay
 
 [subsonic]
 url = "https://music.example.com"
 username = "user"
 password = "pass"
 format = "flac"       # "flac" (default), "raw", "mp3", "opus"
+
+[knx]
+enabled = true
+url = "udp://192.168.1.50:3671"  # Tunnel (unicast) or router (multicast)
 
 [[zone]]
 name = "Ground Floor"
@@ -74,6 +85,13 @@ name = "Deutschlandfunk"
 url = "https://st01.sslstream.dlf.de/dlf/01/high/aac/stream.aac"
 cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/..."
 ```
+
+### API Authentication
+
+If `api_key` is set in `[http]`, all `/api/v1/*` and `/ws` endpoints require authentication:
+- REST: `Authorization: Bearer <key>` header
+- WebSocket: `ws://host:port/ws?token=<key>` query parameter
+- Health endpoints (`/health/*`) and the embedded WebUI are always accessible
 
 ### Subsonic Server Notes
 
@@ -92,10 +110,13 @@ When using Navidrome (or other Subsonic-compatible servers), ensure transcoding 
 - **Unified playlist model** — radio stations and Subsonic playlists in single numeric index
 - **AirPlay preemption** — AirPlay stops current source, zone goes idle when AirPlay ends
 - **Volume via Snapcast** — never PCM amplitude scaling, full dynamic range preserved
+- **Volume coalescing** — rapid volume commands debounced (50ms window per client) to protect Snapcast
 - **Resampling** — dynamic resampler creation from actual decoded sample rate (S16LE for active sources, F32 for receivers)
 - **Configurable output** — bit depth (16/24/32), sample rate, channels — SSOT with Snapcast
 - **Event-driven Snapcast** — own JSON-RPC client, fire-and-forget commands, state from server responses
 - **Cover art** — content-addressed caching with CRC32 hash, unified `/zones/{id}/cover` endpoint
+- **KNX bridge** — multiplexed tunnel/router connection, typed DPT encoding (knxkit_dpt), bidirectional
+- **API middleware** — CORS, gzip/brotli compression, request tracing, optional API key auth, typed JSON error responses
 
 ### WebUI
 
