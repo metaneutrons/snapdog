@@ -354,6 +354,7 @@ async fn get_track_metadata(
         "disc_number": zone.track.as_ref().and_then(|t| t.disc_number),
         "duration_ms": zone.track.as_ref().map_or(0, |t| t.duration_ms),
         "position_ms": zone.track.as_ref().map_or(0, |t| t.position_ms),
+        "seekable": zone.track.as_ref().is_some_and(|t| t.seekable),
         "bitrate_kbps": zone.track.as_ref().and_then(|t| t.bitrate_kbps),
         "content_type": zone.track.as_ref().and_then(|t| t.content_type.as_deref()),
         "sample_rate": zone.track.as_ref().and_then(|t| t.sample_rate),

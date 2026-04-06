@@ -18,7 +18,7 @@ export function SeekBar({ zone }: { zone: ZoneState }) {
   const serverPosition = track?.position_ms ?? 0;
   const isPlaying = zone.playback === "playing";
   const isIdle = zone.source === "idle" || !track;
-  const canSeek = zone.source === "subsonic_playlist" || zone.source === "subsonic_track";
+  const canSeek = track?.seekable ?? false;
 
   const [localPosition, setLocalPosition] = useState(serverPosition);
   const [dragging, setDragging] = useState(false);

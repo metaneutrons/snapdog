@@ -36,6 +36,7 @@ export interface TrackMetadata {
   disc_number: number | null;
   duration_ms: number;
   position_ms: number;
+  seekable: boolean;
   bitrate_kbps: number | null;
   content_type: string | null;
   sample_rate: number | null;
@@ -127,6 +128,7 @@ export interface WsZoneTrackChanged {
   album: string;
   duration_ms: number;
   position_ms: number;
+  seekable: boolean;
 }
 
 export interface WsZoneProgress {

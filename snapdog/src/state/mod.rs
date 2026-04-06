@@ -136,6 +136,7 @@ pub struct TrackInfo {
     // Playback
     pub duration_ms: i64,
     pub position_ms: i64,
+    pub seekable: bool,
     pub source: SourceType,
 
     // Technical

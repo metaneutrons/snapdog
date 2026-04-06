@@ -500,7 +500,7 @@ async fn run(
                     }
                     ReceiverEvent::Metadata { title, artist, album } => {
                         update_and_notify(store, zone_index, notify, |z| {
-                            z.track = Some(TrackInfo { title, artist, album, album_artist: None, genre: None, year: None, track_number: None, disc_number: None, duration_ms: 0, position_ms: 0, source: SourceType::AirPlay, bitrate_kbps: None, content_type: None, sample_rate: None });
+                            z.track = Some(TrackInfo { title, artist, album, album_artist: None, genre: None, year: None, track_number: None, disc_number: None, duration_ms: 0, position_ms: 0, seekable: false, source: SourceType::AirPlay, bitrate_kbps: None, content_type: None, sample_rate: None });
                         }).await;
                     }
                     ReceiverEvent::CoverArt { bytes } => {

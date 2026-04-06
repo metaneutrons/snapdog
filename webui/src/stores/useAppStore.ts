@@ -32,7 +32,7 @@ interface AppState {
   ) => void;
   updateZoneTrack: (
     id: number,
-    track: Pick<TrackMetadata, "title" | "artist" | "album" | "duration_ms" | "position_ms">,
+    track: Pick<TrackMetadata, "title" | "artist" | "album" | "duration_ms" | "position_ms" | "seekable">,
   ) => void;
   updateZoneProgress: (id: number, position_ms: number, duration_ms: number) => void;
 

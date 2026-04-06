@@ -117,6 +117,7 @@ pub async fn update_and_notify(
                     album: t.album.clone(),
                     duration_ms: t.duration_ms,
                     position_ms: t.position_ms,
+                    seekable: t.seekable,
                 });
             }
         }

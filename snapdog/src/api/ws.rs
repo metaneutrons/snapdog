@@ -34,6 +34,7 @@ pub enum Notification {
         album: String,
         duration_ms: i64,
         position_ms: i64,
+        seekable: bool,
     },
     ZoneProgress {
         zone: usize,
