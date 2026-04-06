@@ -7,8 +7,9 @@
 //! - **Publisher**: writes zone/client status to KNX group addresses on state changes
 //! - **Listener**: receives KNX group writes and routes them as zone/client commands
 //!
-//! Uses knxkit's [`Multiplexer`] to fan out a single tunnel connection into
-//! independent publisher and listener handles.
+//! Uses knxkit's [`Multiplexer`] to fan out a single connection into
+//! independent publisher and listener handles. Supports both tunnel
+//! (unicast) and router (multicast) connections via URL auto-detection.
 
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
@@ -18,9 +19,9 @@ use anyhow::{Context, Result};
 use knxkit::connection::KnxBusConnection;
 use knxkit::connection::multiplex::{MultiplexHandle, Multiplexer};
 use knxkit::connection::ops::GroupOps;
+use knxkit::connection::{RemoteSpec, parse_remote};
 use knxkit::core::DataPoint;
 use knxkit::core::address::GroupAddress;
-use knxkit::net::tunnel::TunnelConnection;
 use knxkit_dpt::specific::{DPT_1_1, DPT_5_1, DPT_16_1, SpecificDataPoint};
 
 use crate::config::AppConfig;
@@ -29,8 +30,8 @@ use crate::state;
 
 // ── Start ─────────────────────────────────────────────────────
 
-/// Start the KNX bridge. Connects to the gateway, creates a multiplexer,
-/// and spawns independent publisher and listener tasks.
+/// Start the KNX bridge. Parses the URL to auto-detect tunnel vs router,
+/// creates a multiplexer, and spawns independent publisher and listener tasks.
 pub async fn start(
     config: &AppConfig,
     store: state::SharedState,
@@ -38,40 +39,71 @@ pub async fn start(
     zone_commands: HashMap<usize, ZoneCommandSender>,
     snap_tx: tokio::sync::mpsc::Sender<SnapcastCmd>,
 ) -> Result<()> {
-    let gw = config
+    let url = config
         .knx
-        .gateway
+        .url
         .as_deref()
-        .context("KNX requires gateway address")?;
-    let addr: std::net::SocketAddrV4 = gw
-        .parse()
-        .context("Invalid KNX gateway address (expected ip:port)")?;
-    let conn = TunnelConnection::start(Ipv4Addr::from_str("0.0.0.0").unwrap(), addr)
-        .await
-        .context("Failed to connect to KNX gateway")?;
-    tracing::info!(gateway = gw, "KNX tunnel connected");
+        .context("KNX requires url (e.g. udp://192.168.1.50:3671)")?;
+    let remote = parse_remote(url).context("Invalid KNX URL")?;
+    let local = Ipv4Addr::UNSPECIFIED;
 
-    let mux = Multiplexer::new(conn);
+    match remote {
+        RemoteSpec::KnxIpTunnel(addr) => {
+            let conn = knxkit::net::tunnel::TunnelConnection::start(local, addr)
+                .await
+                .context("KNX tunnel connection failed")?;
+            tracing::info!(%url, "KNX tunnel connected");
+            spawn_bridge(
+                Multiplexer::new(conn),
+                config,
+                store,
+                notify_rx,
+                zone_commands,
+                snap_tx,
+            );
+        }
+        RemoteSpec::KnxIpMulticast(addr) => {
+            let conn = knxkit::net::router::RouterConnection::start(local, addr)
+                .await
+                .context("KNX router connection failed")?;
+            tracing::info!(%url, "KNX router connected");
+            spawn_bridge(
+                Multiplexer::new(conn),
+                config,
+                store,
+                notify_rx,
+                zone_commands,
+                snap_tx,
+            );
+        }
+        _ => anyhow::bail!("Unsupported KNX connection type — use udp:// URL"),
+    }
+
+    Ok(())
+}
+
+fn spawn_bridge<T: KnxBusConnection + Send + 'static>(
+    mux: Multiplexer<T>,
+    config: &AppConfig,
+    store: state::SharedState,
+    notify_rx: tokio::sync::broadcast::Receiver<crate::api::ws::Notification>,
+    zone_commands: HashMap<usize, ZoneCommandSender>,
+    snap_tx: tokio::sync::mpsc::Sender<SnapcastCmd>,
+) {
     let pub_handle = mux.handle();
     let listen_handle = mux.handle();
-
-    // Multiplexer task — fans out received frames, forwards sends
     tokio::spawn(mux.run());
 
-    // Publisher task — state changes → KNX group writes
     let pub_config = config.clone();
     let pub_store = store.clone();
     tokio::spawn(async move {
         publisher(pub_handle, pub_config, pub_store, notify_rx).await;
     });
 
-    // Listener task — KNX group writes → zone/client commands
     let listen_config = config.clone();
     tokio::spawn(async move {
         listener(listen_handle, listen_config, store, zone_commands, snap_tx).await;
     });
-
-    Ok(())
 }
 
 // ── Publisher ─────────────────────────────────────────────────
@@ -377,7 +409,6 @@ fn encode_bool(value: bool) -> DataPoint {
 }
 
 fn encode_percent(percent: u8) -> DataPoint {
-    // DPT 5.001: 0-100% mapped to 0-255
     DPT_5_1(((percent as u16) * 255 / 100) as u8).to_data_point()
 }
 
@@ -426,17 +457,14 @@ mod tests {
 
     #[test]
     fn round_trips_percent() {
-        // 0% and 100% must survive encode→decode
         assert_eq!(decode_percent(&encode_percent(0)), Some(0));
         assert_eq!(decode_percent(&encode_percent(100)), Some(100));
-        // 50% may have rounding — just check it's close
         let mid = decode_percent(&encode_percent(50)).unwrap();
         assert!((48..=52).contains(&mid), "50% round-tripped to {mid}");
     }
 
     #[test]
     fn encodes_string_via_dpt() {
-        // DPT 16.1 produces a valid DataPoint — just verify it's Long
         let dp = encode_string("Hello");
         assert!(matches!(dp, DataPoint::Long(_)));
     }

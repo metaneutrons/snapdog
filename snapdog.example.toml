@@ -34,10 +34,8 @@ password = "snapdog"
 base_topic = "snapdog/"
 
 [knx]
-enabled = false                       # Enable for KNX integration
-# connection = "tunnel"               # tunnel or router
-# gateway = "knxd:3671"              # For tunnel mode
-# multicast = "224.0.23.12"          # For router mode
+enabled = false
+# url = "udp://192.168.1.50:3671"    # Tunnel (unicast) or router (multicast)
 
 # ── Zones ──────────────────────────────────────────────────────
 # KNX addresses auto-generated: zone N → N/{1-4}/x

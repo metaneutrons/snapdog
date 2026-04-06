@@ -181,20 +181,16 @@ pub struct MqttConfig {
 pub struct KnxConfig {
     #[serde(default)]
     pub enabled: bool,
-    #[serde(default = "default_knx_connection")]
-    pub connection: String,
-    pub gateway: Option<String>,
-    #[serde(default = "default_knx_multicast")]
-    pub multicast: String,
+    /// KNX connection URL. Unicast = tunnel, multicast = router.
+    /// Examples: `udp://192.168.1.50:3671`, `udp://224.0.23.12:3671`
+    pub url: Option<String>,
 }
 
 impl Default for KnxConfig {
     fn default() -> Self {
         Self {
             enabled: false,
-            connection: default_knx_connection(),
-            gateway: None,
-            multicast: default_knx_multicast(),
+            url: None,
         }
     }
 }
@@ -456,12 +452,6 @@ fn default_streaming_port() -> u16 {
 }
 fn default_mqtt_base_topic() -> String {
     "snapdog/".into()
-}
-fn default_knx_connection() -> String {
-    "tunnel".into()
-}
-fn default_knx_multicast() -> String {
-    "224.0.23.12".into()
 }
 fn default_zone_icon() -> String {
     "🎵".into()
