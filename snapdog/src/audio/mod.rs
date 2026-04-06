@@ -359,7 +359,7 @@ fn decode_to_pcm(
     reader: impl MediaSource + 'static,
     content_type: &str,
     tx: PcmSender,
-    _audio_config: &AudioConfig,
+    audio_config: &AudioConfig,
 ) -> Result<()> {
     let mut hint = Hint::new();
     match content_type {
@@ -440,14 +440,10 @@ fn decode_to_pcm(
             format_sent = true;
         }
 
-        let mut sample_buf = SampleBuffer::<i16>::new(num_frames as u64, spec);
+        let mut sample_buf = SampleBuffer::<f32>::new(num_frames as u64, spec);
         sample_buf.copy_interleaved_ref(decoded);
 
-        let samples = sample_buf.samples();
-        let mut bytes = Vec::with_capacity(samples.len() * 2);
-        for s in samples {
-            bytes.extend_from_slice(&s.to_le_bytes());
-        }
+        let bytes = resample::f32_to_pcm(sample_buf.samples(), audio_config.bit_depth);
 
         if tx.blocking_send(PcmMessage::Audio(bytes)).is_err() {
             tracing::debug!("PCM consumer dropped, stopping decode");
