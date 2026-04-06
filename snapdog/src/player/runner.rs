@@ -205,6 +205,33 @@ async fn run(
                             if let Some(ref rc) = remote_control {
                                 if let Err(e) = rc.send_command(crate::receiver::RemoteCommand::Play) { tracing::warn!(error = %e, "Remote play failed"); }
                             }
+                        } else if matches!(source, ActiveSource::SubsonicPlaylist { .. } | ActiveSource::SubsonicTrack { .. }) {
+                            // Resume Subsonic from last position
+                            if let Some(sub) = &subsonic {
+                                let track_id = match &source {
+                                    ActiveSource::SubsonicPlaylist { playlist_id, track_index, .. } => {
+                                        sub.get_playlist(playlist_id).await.ok()
+                                            .and_then(|p| p.entry.get(*track_index).map(|t| t.id.clone()))
+                                    }
+                                    ActiveSource::SubsonicTrack { track_id } => Some(track_id.clone()),
+                                    _ => None,
+                                };
+                                if let Some(tid) = track_id {
+                                    let pos_ms = store.read().await.zones.get(&zone_index)
+                                        .and_then(|z| z.track.as_ref().map(|t| t.position_ms))
+                                        .unwrap_or(0);
+                                    stop_decode(&mut current_decode, &mut decode_rx).await;
+                                    let offset_secs = (pos_ms / 1000).max(0) as u64;
+                                    let url = sub.stream_url_with_offset(&tid, offset_secs);
+                                    let (tx, rx) = audio::pcm_channel(64);
+                                    decode_rx = Some(rx);
+                                    let ac = audio_config.clone();
+                                    current_decode = Some(tokio::spawn(async move {
+                                        if let Err(e) = audio::decode_http_stream(url, tx, ac, None).await { tracing::error!(error = %e, "Resume decode failed"); }
+                                    }));
+                                    update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Playing; }).await;
+                                }
+                            }
                         } else if matches!(source, ActiveSource::Radio { .. } | ActiveSource::Idle) {
                             // Resume or start radio
                             let z_state = store.read().await;
