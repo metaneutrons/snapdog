@@ -700,23 +700,23 @@ pub async fn handle_notification(
             tracing::debug!(group = %id, name = %name, "Group name changed");
         }
         Notification::ServerOnUpdate { server } => {
-            tracing::debug!("Snapcast server state updated — syncing zones and clients");
+            tracing::debug!("Snapcast server state updated — syncing group IDs");
             let mut s = store.write().await;
-            sync_zones_from_groups(&server.groups, config, &mut s);
-            let client_notifs: Vec<_> = s
-                .clients
-                .iter()
-                .map(|(&idx, c)| api::ws::Notification::ClientStateChanged {
-                    client: idx,
-                    volume: c.volume,
-                    muted: c.muted,
-                    connected: c.connected,
-                    zone: c.zone_index,
-                })
-                .collect();
-            drop(s);
-            for n in client_notifs {
-                let _ = notify.send(n);
+            // Only update group IDs, NOT zone_index (zone assignment is SnapDog-owned)
+            for zone_cfg in &config.zones {
+                let group = server
+                    .groups
+                    .iter()
+                    .filter(|g| g.stream_id == zone_cfg.stream_name)
+                    .max_by_key(|g| g.clients.len());
+                if let Some(group) = group {
+                    if let Some(zone) = s.zones.get_mut(&zone_cfg.index) {
+                        if zone.snapcast_group_id.as_deref() != Some(&group.id) {
+                            tracing::debug!(zone = zone_cfg.index, new = %group.id, "Zone group ID updated");
+                            zone.snapcast_group_id = Some(group.id.clone());
+                        }
+                    }
+                }
             }
         }
         Notification::StreamOnUpdate { id, stream } => {
