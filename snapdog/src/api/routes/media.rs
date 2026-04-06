@@ -12,7 +12,9 @@ use serde::Serialize;
 use crate::api::SharedState;
 use crate::api::error::ApiError;
 use crate::config::ResolvedPlaylist;
-use crate::subsonic::SubsonicClient;
+use crate::subsonic::{PlaylistEntry, SubsonicClient};
+
+const PLAYLIST_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(60);
 
 #[derive(Serialize)]
 struct PlaylistInfo {
@@ -52,6 +54,26 @@ fn subsonic(state: &SharedState) -> Result<SubsonicClient, ApiError> {
         .ok_or(ApiError::ServiceUnavailable("subsonic"))
 }
 
+/// Get Subsonic playlists with 60s cache.
+async fn cached_playlists(state: &SharedState) -> Vec<PlaylistEntry> {
+    // Check cache
+    {
+        let cache = state.playlist_cache.read().await;
+        if let Some((ts, ref entries)) = *cache {
+            if ts.elapsed() < PLAYLIST_CACHE_TTL {
+                return entries.clone();
+            }
+        }
+    }
+    // Fetch and cache
+    let entries = match subsonic(state).ok() {
+        Some(sub) => sub.get_playlists().await.unwrap_or_default(),
+        None => vec![],
+    };
+    *state.playlist_cache.write().await = Some((std::time::Instant::now(), entries.clone()));
+    entries
+}
+
 async fn get_playlists(State(state): State<SharedState>) -> impl IntoResponse {
     let mut result: Vec<PlaylistInfo> = Vec::new();
     let mut idx: usize = 0;
@@ -69,19 +91,15 @@ async fn get_playlists(State(state): State<SharedState>) -> impl IntoResponse {
     }
 
     // Playlist 1+: Subsonic playlists
-    if let Ok(sub) = subsonic(&state) {
-        if let Ok(playlists) = sub.get_playlists().await {
-            for p in playlists {
-                result.push(PlaylistInfo {
-                    id: idx,
-                    name: p.name,
-                    song_count: p.song_count,
-                    duration: p.duration,
-                    cover_art: p.cover_art,
-                });
-                idx += 1;
-            }
-        }
+    for p in cached_playlists(&state).await {
+        result.push(PlaylistInfo {
+            id: idx,
+            name: p.name,
+            song_count: p.song_count,
+            duration: p.duration,
+            cover_art: p.cover_art,
+        });
+        idx += 1;
     }
 
     Ok::<_, ApiError>(Json(result))
@@ -89,29 +107,18 @@ async fn get_playlists(State(state): State<SharedState>) -> impl IntoResponse {
 
 /// Resolve a unified playlist index using the shared config logic.
 async fn resolve_playlist(state: &SharedState, index: usize) -> Result<ResolvedPlaylist, ApiError> {
-    let sub_playlists = if let Ok(sub) = subsonic(state) {
-        sub.get_playlists().await.unwrap_or_default()
-    } else {
-        vec![]
-    };
+    let playlists = cached_playlists(state).await;
     state
         .config
-        .resolve_playlist_index(index, sub_playlists.len())
+        .resolve_playlist_index(index, playlists.len())
         .ok_or(ApiError::NotFound("resource"))
 }
 
 /// Resolve index and return the Subsonic playlist ID (or NOT_FOUND for radio/out-of-range).
 async fn resolve_subsonic_id(state: &SharedState, index: usize) -> Result<String, ApiError> {
-    let sub_playlists = if let Ok(sub) = subsonic(state) {
-        sub.get_playlists().await.unwrap_or_default()
-    } else {
-        vec![]
-    };
-    match state
-        .config
-        .resolve_playlist_index(index, sub_playlists.len())
-    {
-        Some(ResolvedPlaylist::Subsonic(sub_idx)) => sub_playlists
+    let playlists = cached_playlists(state).await;
+    match state.config.resolve_playlist_index(index, playlists.len()) {
+        Some(ResolvedPlaylist::Subsonic(sub_idx)) => playlists
             .get(sub_idx)
             .map(|p| p.id.clone())
             .ok_or(ApiError::NotFound("resource")),
@@ -153,11 +160,8 @@ async fn get_playlist_cover(
 ) -> impl IntoResponse {
     let id = resolve_subsonic_id(&state, index).await?;
     let sub = subsonic(&state)?;
-    let playlist = sub
-        .get_playlists()
-        .await
-        .map_err(|e| ApiError::BadGateway(e.to_string()))?;
-    let cover_id = playlist
+    let playlists = cached_playlists(&state).await;
+    let cover_id = playlists
         .iter()
         .find(|p| p.id == id)
         .and_then(|p| p.cover_art.clone())

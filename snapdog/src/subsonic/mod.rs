@@ -201,7 +201,7 @@ struct PlaylistsContainer {
     playlist: Vec<PlaylistEntry>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PlaylistEntry {
     pub id: String,

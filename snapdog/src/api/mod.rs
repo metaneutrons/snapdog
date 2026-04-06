@@ -3,6 +3,7 @@
 
 //! REST API and WebSocket server via axum.
 
+mod auth;
 pub mod error;
 mod health;
 mod routes;
@@ -32,6 +33,8 @@ pub struct AppState {
     pub snap_tx: player::SnapcastCmdSender,
     pub covers: state::cover::SharedCoverCache,
     pub notifications: tokio::sync::broadcast::Sender<ws::Notification>,
+    pub playlist_cache:
+        tokio::sync::RwLock<Option<(std::time::Instant, Vec<crate::subsonic::PlaylistEntry>)>>,
 }
 
 pub type SharedState = Arc<AppState>;
@@ -53,15 +56,29 @@ pub async fn serve(
         snap_tx,
         covers,
         notifications,
+        playlist_cache: tokio::sync::RwLock::new(None),
     });
 
-    let app = Router::new()
-        .merge(health::router(state.clone()))
+    let api_key = state.config.http.api_key.clone();
+
+    // Protected routes (API + WebSocket)
+    let mut protected = Router::new()
         .merge(ws::router(state.clone()))
         .nest("/api/v1/zones", routes::zones::router(state.clone()))
         .nest("/api/v1/clients", routes::clients::router(state.clone()))
         .nest("/api/v1/media", routes::media::router(state.clone()))
-        .nest("/api/v1/system", routes::system::router(state.clone()))
+        .nest("/api/v1/system", routes::system::router(state.clone()));
+
+    if let Some(key) = api_key {
+        tracing::info!("API key authentication enabled");
+        protected = protected
+            .layer(axum::Extension(auth::ApiKey(key)))
+            .layer(axum::middleware::from_fn(auth::require_api_key));
+    }
+
+    let app = Router::new()
+        .merge(health::router(state.clone()))
+        .merge(protected)
         .fallback(webui::fallback)
         .layer(CompressionLayer::new())
         .layer(CorsLayer::permissive())

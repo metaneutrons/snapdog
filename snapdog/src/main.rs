@@ -129,11 +129,41 @@ async fn main() -> Result<()> {
     // ── Main loop ─────────────────────────────────────────────
     let mqtt_zone_cmds = zone_commands.clone();
     let mqtt_store = store.clone();
+
+    // Volume coalescing: buffer rapid volume changes per client (50ms window)
+    let mut pending_volumes: std::collections::HashMap<String, i32> =
+        std::collections::HashMap::new();
+    let mut coalesce_deadline: Option<tokio::time::Instant> = None;
+
     loop {
+        let sleep = async {
+            match coalesce_deadline {
+                Some(d) => tokio::time::sleep_until(d).await,
+                None => std::future::pending().await,
+            }
+        };
+
         tokio::select! {
             // Snapcast commands from zone players / API
             Some(cmd) = snap_cmd_rx.recv() => {
-                snapcast::execute_command(&snap, cmd, &store, &notify_tx).await;
+                // Coalesce client volume commands
+                if let player::SnapcastCmd::Client { ref client_id, action: player::ClientAction::Volume(v) } = cmd {
+                    pending_volumes.insert(client_id.clone(), v);
+                    coalesce_deadline = Some(tokio::time::Instant::now() + std::time::Duration::from_millis(50));
+                } else {
+                    snapcast::execute_command(&snap, cmd, &store, &notify_tx).await;
+                }
+            }
+            // Coalesce timer fired — flush pending volumes
+            _ = sleep => {
+                for (client_id, volume) in pending_volumes.drain() {
+                    let cmd = player::SnapcastCmd::Client {
+                        client_id,
+                        action: player::ClientAction::Volume(volume),
+                    };
+                    snapcast::execute_command(&snap, cmd, &store, &notify_tx).await;
+                }
+                coalesce_deadline = None;
             }
             // Snapcast server notifications → state updates
             Ok(notification) = snap_notifications.recv() => {

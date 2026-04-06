@@ -79,12 +79,15 @@ impl Default for AudioConfig {
 pub struct HttpConfig {
     #[serde(default = "default_http_port")]
     pub port: u16,
+    /// Optional API key. If set, all API endpoints require `Authorization: Bearer <key>`.
+    pub api_key: Option<String>,
 }
 
 impl Default for HttpConfig {
     fn default() -> Self {
         Self {
             port: default_http_port(),
+            api_key: None,
         }
     }
 }
