@@ -81,12 +81,15 @@ async fn run(
         mpsc::channel::<crate::receiver::ReceiverEvent>(32);
     let mut _airplay_receiver = {
         let ap_config = crate::config::AirplayConfig {
-            name: zone_config.airplay_name.clone(),
             password: config.airplay.password.clone(),
             pairing_store: config.airplay.pairing_store.clone(),
             bind: config.airplay.bind.clone(),
         };
-        let mut receiver = crate::receiver::airplay::AirPlayReceiver::new(ap_config, zone_index);
+        let mut receiver = crate::receiver::airplay::AirPlayReceiver::new(
+            ap_config,
+            zone_index,
+            zone_config.airplay_name.clone(),
+        );
         match receiver.start(airplay_audio_tx, airplay_event_tx).await {
             Ok(()) => {
                 tracing::info!(zone = %zone_config.name, "AirPlay receiver active");

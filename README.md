@@ -2,14 +2,11 @@
 
 Multi-zone audio controller with AirPlay, Snapcast, MQTT, and KNX integration.
 
-> Enterprise-grade Rust rewrite of [SnapDog2](https://github.com/metaneutrons/snapdog) (.NET).
-> Sound. Everywhere.
-
 ## What it does
 
 SnapDog is a single binary that turns a Linux box (or Mac) into a multi-room audio system with smart home integration:
 
-- **AirPlay 1 + 2 receiver** — one per zone, stream from iPhone/Mac directly into multi-room audio
+- **AirPlay 1 + 2 receiver** — one per zone, stream from iPhone/Mac directly into multi-room audio (AirPlay 2 behind feature 'ap2')
 - **Snapcast integration** — synchronized playback across rooms, managed as child process
 - **Subsonic/Navidrome** — play from your personal music library with playlist navigation and seek
 - **Internet radio** — configurable station list with live ICY metadata (current song title)
@@ -20,7 +17,7 @@ SnapDog is a single binary that turns a Linux box (or Mac) into a multi-room aud
 - **WebSocket** — real-time state notifications (server → client push)
 - **Embedded WebUI** — responsive SPA with zone control, volume sliders, drag-and-drop client management
 - **Cover art** — unified endpoint per zone with content-addressed caching
-- **Spotify Connect** — receiver support planned (ADR-015, librespot integration)
+- **Spotify Connect** — receiver support (based on librespot behind feature 'spotify', WIP)
 
 ## Quick Start
 
@@ -65,7 +62,7 @@ format = "flac"       # "flac" (default), "raw", "mp3", "opus"
 [[zone]]
 name = "Ground Floor"
 # → sink: /snapsinks/zone1, stream: Zone1
-# → AirPlay: "SnapDog Ground Floor"
+# → AirPlay: "Ground Floor"
 
 [[client]]
 name = "Living Room"
@@ -83,7 +80,8 @@ cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/..."
 When using Navidrome (or other Subsonic-compatible servers), ensure transcoding is configured for the format specified in `format`. For example, with `format = "flac"`:
 
 - Navidrome: Settings → Transcoding → add a FLAC transcoding rule
-- Without transcoding, files in non-streamable containers (ALAC/AAC in MP4) will be downloaded fully before playback, causing significant latency
+
+> Without transcoding, files in non-streamable containers (ALAC/AAC in MP4) will be downloaded fully before playback, causing significant latency
 
 ## Architecture
 

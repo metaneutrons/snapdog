@@ -22,15 +22,17 @@ use crate::config::AirplayConfig;
 pub struct AirPlayReceiver {
     config: AirplayConfig,
     zone_index: usize,
+    airplay_name: String,
     server: Option<RaopServer>,
 }
 
 impl AirPlayReceiver {
     /// Create a new (stopped) AirPlay receiver for the given zone.
-    pub fn new(config: AirplayConfig, zone_index: usize) -> Self {
+    pub fn new(config: AirplayConfig, zone_index: usize, airplay_name: String) -> Self {
         Self {
             config,
             zone_index,
+            airplay_name,
             server: None,
         }
     }
@@ -48,7 +50,7 @@ impl ReceiverProvider for AirPlayReceiver {
         let handler = Arc::new(BridgeHandler { audio_tx, event_tx });
 
         let mut builder = RaopServer::builder()
-            .name(&self.config.name)
+            .name(&self.airplay_name)
             .hwaddr(hwaddr.to_vec())
             .port(7000 + self.zone_index as u16)
             .max_clients(1);
@@ -71,7 +73,7 @@ impl ReceiverProvider for AirPlayReceiver {
         server.start().await?;
 
         let port = server.service_info().port;
-        tracing::info!(name = %self.config.name, port, zone = self.zone_index, "AirPlay 2 receiver started");
+        tracing::info!(name = %self.airplay_name, port, zone = self.zone_index, "AirPlay 2 receiver started");
 
         self.server = Some(server);
         Ok(())

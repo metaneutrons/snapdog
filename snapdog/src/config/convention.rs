@@ -14,9 +14,7 @@ pub fn resolve_zone(index: usize, raw: RawZoneConfig, audio: &AudioConfig) -> Re
     let n = index;
     let _ = audio; // Reserved for future sample format in stream name
 
-    let airplay_name = raw
-        .airplay_name
-        .unwrap_or_else(|| format!("SnapDog {}", raw.name));
+    let airplay_name = raw.airplay_name.unwrap_or_else(|| raw.name.clone());
 
     Ok(ZoneConfig {
         index,

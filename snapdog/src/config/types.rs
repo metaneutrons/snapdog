@@ -114,8 +114,6 @@ impl Default for SnapcastConfig {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct AirplayConfig {
-    #[serde(default = "default_airplay_name")]
-    pub name: String,
     pub password: Option<String>,
     /// Path to persist AirPlay pairing keys (required for AP2 reconnects).
     pub pairing_store: Option<std::path::PathBuf>,
@@ -126,7 +124,6 @@ pub struct AirplayConfig {
 impl Default for AirplayConfig {
     fn default() -> Self {
         Self {
-            name: default_airplay_name(),
             password: None,
             pairing_store: None,
             bind: None,
@@ -456,9 +453,6 @@ fn default_jsonrpc_port() -> u16 {
 }
 fn default_streaming_port() -> u16 {
     1704
-}
-fn default_airplay_name() -> String {
-    "SnapDog".into()
 }
 fn default_mqtt_base_topic() -> String {
     "snapdog/".into()

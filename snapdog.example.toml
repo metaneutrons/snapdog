@@ -20,7 +20,6 @@ jsonrpc_port = 1780
 streaming_port = 1704
 
 [airplay]
-name = "SnapDog"                      # Visible name on AirPlay devices
 # password = ""                       # Optional: require password for AirPlay
 
 [subsonic]
