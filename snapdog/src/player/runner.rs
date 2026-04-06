@@ -122,7 +122,7 @@ async fn run(
             Some(cmd) = commands.recv() => {
                 match cmd {
                     ZoneCommand::PlaySubsonicPlaylist(playlist_id, track_idx) => {
-                        stop_decode(&mut current_decode, &mut decode_rx).await;
+                        stop_decode(&mut current_decode, &mut decode_rx).await; position_offset_ms = 0;
                         if let Some(sub) = &subsonic {
                             if let Ok(playlist) = sub.get_playlist(&playlist_id).await {
                                 let track_count = playlist.entry.len();
@@ -143,7 +143,7 @@ async fn run(
                         }
                     }
                     ZoneCommand::PlaySubsonicTrack(track_id) => {
-                        stop_decode(&mut current_decode, &mut decode_rx).await;
+                        stop_decode(&mut current_decode, &mut decode_rx).await; position_offset_ms = 0;
                         if let Some(sub) = &subsonic {
                             let url = sub.stream_url(&track_id);
                             let (tx, rx) = audio::pcm_channel(64);
@@ -159,7 +159,7 @@ async fn run(
                         }
                     }
                     ZoneCommand::PlayUrl(url) => {
-                        stop_decode(&mut current_decode, &mut decode_rx).await;
+                        stop_decode(&mut current_decode, &mut decode_rx).await; position_offset_ms = 0;
                         let (tx, rx) = audio::pcm_channel(64);
                         decode_rx = Some(rx);
                         let ac = audio_config.clone();
@@ -174,7 +174,7 @@ async fn run(
                         if let ActiveSource::Radio { .. } = source {
                             if track_idx < config.radios.len() {
                                 if let Some(radio) = config.radios.get(track_idx) {
-                                    stop_decode(&mut current_decode, &mut decode_rx).await;
+                                    stop_decode(&mut current_decode, &mut decode_rx).await; position_offset_ms = 0;
                                     start_radio_decode(radio, &mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers }).await;
                                     source = ActiveSource::Radio { index: track_idx };
                                     update_and_notify(store, zone_index, notify, |z| {
@@ -188,7 +188,7 @@ async fn run(
                         } else if let ActiveSource::SubsonicPlaylist { ref playlist_id, track_count, .. } = source {
                             if track_idx < track_count {
                                 let pid = playlist_id.clone();
-                                stop_decode(&mut current_decode, &mut decode_rx).await;
+                                stop_decode(&mut current_decode, &mut decode_rx).await; position_offset_ms = 0;
                                 if let Some(sub) = &subsonic {
                                     if let Ok(playlist) = sub.get_playlist(&pid).await {
                                         if let Some(track) = playlist.entry.get(track_idx) {
@@ -245,7 +245,7 @@ async fn run(
                             };
                             drop(z_state);
                             if let Some(radio) = config.radios.get(radio_idx) {
-                                stop_decode(&mut current_decode, &mut decode_rx).await;
+                                stop_decode(&mut current_decode, &mut decode_rx).await; position_offset_ms = 0;
                                 let (tx, rx) = audio::pcm_channel(64);
                                 decode_rx = Some(rx);
                                 let url = radio.url.clone();
@@ -264,12 +264,12 @@ async fn run(
                                 if let Err(e) = rc.send_command(crate::receiver::RemoteCommand::Pause) { tracing::warn!(error = %e, "Remote pause failed"); }
                             }
                         } else {
-                            stop_decode(&mut current_decode, &mut decode_rx).await;
+                            stop_decode(&mut current_decode, &mut decode_rx).await; position_offset_ms = 0;
                             update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Paused; }).await;
                         }
                     }
                     ZoneCommand::Stop => {
-                        stop_decode(&mut current_decode, &mut decode_rx).await;
+                        stop_decode(&mut current_decode, &mut decode_rx).await; position_offset_ms = 0;
                         source = ActiveSource::Idle;
                         update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Stopped; z.source = SourceType::Idle; z.track = None; z.cover_url = None; }).await;
                     }
@@ -321,7 +321,7 @@ async fn run(
                         match config.resolve_playlist_index(target_unified, subsonic_playlists.len()) {
                             Some(crate::config::ResolvedPlaylist::Radio) => {
                             let radio_idx = start_track.min(config.radios.len().saturating_sub(1));
-                            stop_decode(&mut current_decode, &mut decode_rx).await;
+                            stop_decode(&mut current_decode, &mut decode_rx).await; position_offset_ms = 0;
                             if let Some(radio) = config.radios.get(radio_idx) {
                                 start_radio_decode(radio, &mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers }).await;
                                 source = ActiveSource::Radio { index: radio_idx };
@@ -341,7 +341,7 @@ async fn run(
                             if let Some(sub) = &subsonic {
                                 if let Some(pl) = subsonic_playlists.get(sub_idx) {
                                     tracing::info!(zone = %zone_config.name, playlist = %pl.name, "Switching playlist");
-                                    stop_decode(&mut current_decode, &mut decode_rx).await;
+                                    stop_decode(&mut current_decode, &mut decode_rx).await; position_offset_ms = 0;
                                     if let Ok(playlist) = sub.get_playlist(&pl.id).await {
                                         let track_idx = start_track.min(playlist.entry.len().saturating_sub(1));
                                         if let Some(track) = playlist.entry.get(track_idx) {
@@ -490,7 +490,7 @@ async fn run(
             }
             Some(samples) = airplay_audio_rx.recv() => {
                 if !matches!(source, ActiveSource::AirPlay) {
-                    stop_decode(&mut current_decode, &mut decode_rx).await;
+                    stop_decode(&mut current_decode, &mut decode_rx).await; position_offset_ms = 0;
                     source = ActiveSource::AirPlay;
                     update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Playing; z.source = SourceType::AirPlay; }).await;
                 }
