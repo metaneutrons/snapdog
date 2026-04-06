@@ -33,11 +33,17 @@ impl SnapserverHandle {
         let config_path = generate_config(config)?;
         tracing::info!(path = %config_path.display(), "Generated snapserver.conf");
 
+        let stdio = if config.snapcast.verbose {
+            std::process::Stdio::inherit
+        } else {
+            std::process::Stdio::null
+        };
+
         let child = Command::new("snapserver")
             .arg("-c")
             .arg(&config_path)
-            .stdout(std::process::Stdio::inherit())
-            .stderr(std::process::Stdio::inherit())
+            .stdout(stdio())
+            .stderr(stdio())
             .kill_on_drop(true)
             .spawn()
             .context("Failed to start snapserver — is it installed?")?;

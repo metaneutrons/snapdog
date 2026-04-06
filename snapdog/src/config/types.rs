@@ -102,6 +102,8 @@ pub struct SnapcastConfig {
     pub streaming_port: u16,
     #[serde(default = "default_true")]
     pub managed: bool,
+    #[serde(default)]
+    pub verbose: bool,
 }
 
 impl Default for SnapcastConfig {
@@ -111,6 +113,7 @@ impl Default for SnapcastConfig {
             jsonrpc_port: default_jsonrpc_port(),
             streaming_port: default_streaming_port(),
             managed: true,
+            verbose: false,
         }
     }
 }
