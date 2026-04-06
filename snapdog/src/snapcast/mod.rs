@@ -40,7 +40,11 @@ impl SnapcastClient {
         let addr: SocketAddr = tokio::net::lookup_host(format!("{host}:{tcp_port}"))
             .await
             .context("Failed to resolve snapcast address")?
-            .next()
+            .find(|a| a.is_ipv4())
+            .or(tokio::net::lookup_host(format!("{host}:{tcp_port}"))
+                .await
+                .ok()
+                .and_then(|mut a| a.next()))
             .context("No address found for snapcast host")?;
         Self::connect(addr).await
     }

@@ -36,8 +36,8 @@ impl SnapserverHandle {
         let child = Command::new("snapserver")
             .arg("-c")
             .arg(&config_path)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
+            .stdout(std::process::Stdio::inherit())
+            .stderr(std::process::Stdio::inherit())
             .kill_on_drop(true)
             .spawn()
             .context("Failed to start snapserver — is it installed?")?;
@@ -89,20 +89,17 @@ fn generate_config(config: &AppConfig) -> Result<PathBuf> {
 fn render_config(config: &AppConfig) -> String {
     let mut out = String::new();
 
-    // HTTP / JSON-RPC (WebSocket)
-    out.push_str(&format!(
-        "[http]\nenabled = true\nbind_to_address = 127.0.0.1\nport = {}\n\n",
-        config.snapcast.jsonrpc_port
-    ));
+    // HTTP / JSON-RPC (WebSocket) — not used by SnapDog, disable or use separate port
+    out.push_str("[http]\nenabled = false\n\n");
 
-    // TCP control (JSON-RPC raw TCP — used by snapcast-control crate)
-    let tcp_control_port = config.snapcast.streaming_port + 1;
+    // TCP control (raw JSON-RPC — used by SnapDog)
     out.push_str(&format!(
-        "[tcp-control]\nenabled = true\nbind_to_address = 127.0.0.1\nport = {tcp_control_port}\n\n",
+        "[tcp-control]\nenabled = true\nport = {}\n\n",
+        config.snapcast.jsonrpc_port
     ));
     // Streaming server
     out.push_str(&format!(
-        "[tcp-streaming]\nbind_to_address = 0.0.0.0\nport = {}\n\n",
+        "[tcp-streaming]\nport = {}\n\n",
         config.snapcast.streaming_port
     ));
 
@@ -156,14 +153,22 @@ mod tests {
     }
 
     #[test]
-    fn binds_http_to_loopback() {
+    fn disables_http() {
         let conf = render_config(&test_config());
-        assert!(conf.contains("bind_to_address = 127.0.0.1"));
+        assert!(conf.contains("[http]\nenabled = false"));
     }
 
     #[test]
-    fn server_binds_to_all_interfaces() {
+    fn tcp_control_uses_jsonrpc_port() {
         let conf = render_config(&test_config());
-        assert!(conf.contains("bind_to_address = 0.0.0.0"));
+        assert!(conf.contains("[tcp-control]"));
+        assert!(conf.contains("port = 1705"));
+    }
+
+    #[test]
+    fn uses_default_bind_address() {
+        let conf = render_config(&test_config());
+        // No bind_to_address — snapserver uses default dual-stack (::)
+        assert!(!conf.contains("bind_to_address"));
     }
 }

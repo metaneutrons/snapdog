@@ -448,7 +448,7 @@ fn default_snapcast_address() -> String {
     "127.0.0.1".into()
 }
 fn default_jsonrpc_port() -> u16 {
-    1780
+    1705
 }
 fn default_streaming_port() -> u16 {
     1704
