@@ -29,6 +29,8 @@ pub enum PcmMessage {
     Format { sample_rate: u32, channels: u16 },
     /// Interleaved S16LE audio data.
     Audio(Vec<u8>),
+    /// Playback position from decoder (milliseconds).
+    Position(i64),
 }
 
 pub type PcmSender = mpsc::Sender<PcmMessage>;
@@ -394,7 +396,9 @@ fn decode_to_pcm(
         .make(&track.codec_params, &DecoderOptions::default())
         .context("Failed to create decoder")?;
 
+    let time_base = track.codec_params.time_base;
     let mut format_sent = false;
+    let mut last_position_sec: i64 = -1;
 
     loop {
         let packet = match format.next_packet() {
@@ -448,6 +452,17 @@ fn decode_to_pcm(
         if tx.blocking_send(PcmMessage::Audio(bytes)).is_err() {
             tracing::debug!("PCM consumer dropped, stopping decode");
             break;
+        }
+
+        // Send position ~once per second using symphonia's packet timestamp
+        if let Some(tb) = time_base {
+            let time = tb.calc_time(packet.ts());
+            let sec = time.seconds as i64;
+            if sec != last_position_sec {
+                last_position_sec = sec;
+                let ms = (time.seconds as i64) * 1000 + (time.frac * 1000.0) as i64;
+                let _ = tx.blocking_send(PcmMessage::Position(ms));
+            }
         }
     }
 

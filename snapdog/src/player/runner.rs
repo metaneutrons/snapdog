@@ -438,6 +438,11 @@ async fn run(
                             if let Ok(new_tcp) = snapcast::open_audio_source(zone_config.tcp_source_port).await { tcp = new_tcp; }
                         }
                     }
+                    Some(audio::PcmMessage::Position(ms)) => {
+                        update_and_notify(store, zone_index, notify, |z| {
+                            if let Some(ref mut t) = z.track { t.position_ms = ms; }
+                        }).await;
+                    }
                     None => {
                         current_decode = None;
                         decode_rx = None;
