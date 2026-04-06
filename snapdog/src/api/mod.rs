@@ -3,6 +3,7 @@
 
 //! REST API and WebSocket server via axum.
 
+pub mod error;
 mod health;
 mod routes;
 mod webui;
@@ -14,6 +15,8 @@ use std::sync::Arc;
 use anyhow::Result;
 use axum::Router;
 use tokio::net::TcpListener;
+use tower_http::cors::CorsLayer;
+use tower_http::trace::TraceLayer;
 
 use crate::config::AppConfig;
 use crate::player;
@@ -58,7 +61,9 @@ pub async fn serve(
         .nest("/api/v1/clients", routes::clients::router(state.clone()))
         .nest("/api/v1/media", routes::media::router(state.clone()))
         .nest("/api/v1/system", routes::system::router(state.clone()))
-        .fallback(webui::fallback);
+        .fallback(webui::fallback)
+        .layer(CorsLayer::permissive())
+        .layer(TraceLayer::new_for_http());
 
     let listener = TcpListener::bind(format!("0.0.0.0:{port}")).await?;
     tracing::info!(port, "API server listening");

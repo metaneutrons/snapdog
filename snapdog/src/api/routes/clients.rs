@@ -4,13 +4,13 @@
 //! Client endpoints: /api/v1/clients
 
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::Serialize;
 
 use crate::api::SharedState;
+use crate::api::error::ApiError;
 use crate::api::routes::zones::VolumeValue;
 use crate::player::{ClientAction, SnapcastCmd};
 use crate::state;
@@ -47,8 +47,8 @@ async fn read_client(state: &SharedState, idx: usize) -> Option<state::ClientSta
     state.store.read().await.clients.get(&idx).cloned()
 }
 
-fn not_found() -> StatusCode {
-    StatusCode::NOT_FOUND
+fn not_found() -> ApiError {
+    ApiError::NotFound("client")
 }
 
 async fn get_count(State(state): State<SharedState>) -> Json<usize> {
@@ -83,7 +83,7 @@ async fn get_client(State(state): State<SharedState>, Path(idx): Path<usize>) ->
     let store = state.store.read().await;
     let cfg = state.config.clients.get(idx - 1).ok_or(not_found())?;
     let cs = store.clients.get(&idx);
-    Ok::<_, StatusCode>(Json(ClientInfo {
+    Ok::<_, ApiError>(Json(ClientInfo {
         index: cfg.index,
         name: cfg.name.clone(),
         mac: cfg.mac.clone(),
@@ -111,7 +111,7 @@ async fn set_volume(
     let client = store.clients.get(&idx).ok_or(not_found())?;
     let volume = value
         .resolve(client.volume)
-        .map_err(|_| StatusCode::BAD_REQUEST)?;
+        .map_err(|e| ApiError::BadRequest(e.to_string()))?;
     let snap_id = client.snapcast_id.clone().ok_or(not_found())?;
     drop(store);
 
@@ -124,7 +124,7 @@ async fn set_volume(
         .await;
     // State update comes from Snapcast Client.OnVolumeChanged notification
     tracing::debug!(client = idx, volume, "Client volume command sent");
-    Ok::<_, StatusCode>(Json(volume))
+    Ok::<_, ApiError>(Json(volume))
 }
 
 async fn get_mute(State(state): State<SharedState>, Path(idx): Path<usize>) -> impl IntoResponse {
@@ -150,9 +150,8 @@ async fn set_mute(
             action: ClientAction::Mute(v),
         })
         .await;
-    // State update comes from Snapcast Client.OnVolumeChanged notification
     tracing::info!(client = idx, muted = v, "Client mute set");
-    Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
+    Ok::<_, ApiError>(Json(v))
 }
 
 async fn toggle_mute(
@@ -171,7 +170,7 @@ async fn toggle_mute(
         .await;
     // State update comes from Snapcast Client.OnVolumeChanged notification
     tracing::info!(client = %client.name, muted, "Client mute toggled");
-    Ok::<_, StatusCode>(Json(muted))
+    Ok::<_, ApiError>(Json(muted))
 }
 
 async fn get_latency(
@@ -200,9 +199,8 @@ async fn set_latency(
             action: ClientAction::Latency(v),
         })
         .await;
-    // State update comes from Snapcast Client.OnLatencyChanged notification
     tracing::info!(client = idx, latency = v, "Client latency set");
-    Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
+    Ok::<_, ApiError>(Json(v))
 }
 
 async fn get_zone(State(state): State<SharedState>, Path(idx): Path<usize>) -> impl IntoResponse {
@@ -255,7 +253,7 @@ async fn set_zone(
     })
     .await;
     tracing::info!(client = idx, zone = target_zone, group = %target_group_id, clients = ?target_client_ids, "Client zone changed — group reassigned");
-    Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
+    Ok::<_, ApiError>(Json(target_zone))
 }
 
 async fn get_name(State(state): State<SharedState>, Path(idx): Path<usize>) -> impl IntoResponse {
@@ -274,7 +272,7 @@ async fn set_name(
     crate::state::update_client_and_notify(&state.store, idx, &state.notifications, |c| c.name = v)
         .await;
     tracing::info!(client = idx, name = %name, "Client name set");
-    Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
+    Ok::<_, ApiError>(Json(name))
 }
 
 async fn get_icon(State(state): State<SharedState>, Path(idx): Path<usize>) -> impl IntoResponse {

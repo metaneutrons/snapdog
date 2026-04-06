@@ -4,13 +4,13 @@
 //! Media endpoints: /api/v1/media
 
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Json, Router};
 use serde::Serialize;
 
 use crate::api::SharedState;
+use crate::api::error::ApiError;
 use crate::config::ResolvedPlaylist;
 use crate::subsonic::SubsonicClient;
 
@@ -43,13 +43,13 @@ pub fn router(state: SharedState) -> Router {
         .with_state(state)
 }
 
-fn subsonic(state: &SharedState) -> Result<SubsonicClient, StatusCode> {
+fn subsonic(state: &SharedState) -> Result<SubsonicClient, ApiError> {
     state
         .config
         .subsonic
         .as_ref()
         .map(SubsonicClient::new)
-        .ok_or(StatusCode::SERVICE_UNAVAILABLE)
+        .ok_or(ApiError::ServiceUnavailable("subsonic"))
 }
 
 async fn get_playlists(State(state): State<SharedState>) -> impl IntoResponse {
@@ -84,14 +84,11 @@ async fn get_playlists(State(state): State<SharedState>) -> impl IntoResponse {
         }
     }
 
-    Ok::<_, StatusCode>(Json(result))
+    Ok::<_, ApiError>(Json(result))
 }
 
 /// Resolve a unified playlist index using the shared config logic.
-async fn resolve_playlist(
-    state: &SharedState,
-    index: usize,
-) -> Result<ResolvedPlaylist, StatusCode> {
+async fn resolve_playlist(state: &SharedState, index: usize) -> Result<ResolvedPlaylist, ApiError> {
     let sub_playlists = if let Ok(sub) = subsonic(state) {
         sub.get_playlists().await.unwrap_or_default()
     } else {
@@ -100,11 +97,11 @@ async fn resolve_playlist(
     state
         .config
         .resolve_playlist_index(index, sub_playlists.len())
-        .ok_or(StatusCode::NOT_FOUND)
+        .ok_or(ApiError::NotFound("resource"))
 }
 
 /// Resolve index and return the Subsonic playlist ID (or NOT_FOUND for radio/out-of-range).
-async fn resolve_subsonic_id(state: &SharedState, index: usize) -> Result<String, StatusCode> {
+async fn resolve_subsonic_id(state: &SharedState, index: usize) -> Result<String, ApiError> {
     let sub_playlists = if let Ok(sub) = subsonic(state) {
         sub.get_playlists().await.unwrap_or_default()
     } else {
@@ -117,8 +114,8 @@ async fn resolve_subsonic_id(state: &SharedState, index: usize) -> Result<String
         Some(ResolvedPlaylist::Subsonic(sub_idx)) => sub_playlists
             .get(sub_idx)
             .map(|p| p.id.clone())
-            .ok_or(StatusCode::NOT_FOUND),
-        _ => Err(StatusCode::NOT_FOUND),
+            .ok_or(ApiError::NotFound("resource")),
+        _ => Err(ApiError::NotFound("resource")),
     }
 }
 
@@ -143,7 +140,7 @@ async fn get_playlist(
                 }))),
                 Err(e) => {
                     tracing::error!(error = %e, "Failed to fetch playlist");
-                    Err(StatusCode::BAD_GATEWAY)
+                    Err(ApiError::BadGateway("upstream request failed".into()))
                 }
             }
         }
@@ -159,12 +156,12 @@ async fn get_playlist_cover(
     let playlist = sub
         .get_playlists()
         .await
-        .map_err(|_| StatusCode::BAD_GATEWAY)?;
+        .map_err(|e| ApiError::BadGateway(e.to_string()))?;
     let cover_id = playlist
         .iter()
         .find(|p| p.id == id)
         .and_then(|p| p.cover_art.clone())
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .ok_or(ApiError::NotFound("resource"))?;
     match sub.get_cover_art(&cover_id).await {
         Ok(bytes) => {
             let mime = if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
@@ -179,7 +176,7 @@ async fn get_playlist_cover(
                 bytes,
             ))
         }
-        Err(_) => Err(StatusCode::NOT_FOUND),
+        Err(_) => Err(ApiError::NotFound("resource")),
     }
 }
 
@@ -229,7 +226,7 @@ async fn get_playlist_tracks(
                 )),
                 Err(e) => {
                     tracing::error!(error = %e, "Failed to fetch tracks");
-                    Err(StatusCode::BAD_GATEWAY)
+                    Err(ApiError::BadGateway("upstream request failed".into()))
                 }
             }
         }
@@ -255,7 +252,7 @@ async fn get_playlist_track(
                     "track": track_index + 1,
                 }))
             })
-            .ok_or(StatusCode::NOT_FOUND),
+            .ok_or(ApiError::NotFound("resource")),
         ResolvedPlaylist::Subsonic(_) => {
             let id = resolve_subsonic_id(&state, index).await?;
             let sub = subsonic(&state)?;
@@ -270,9 +267,9 @@ async fn get_playlist_track(
                         "track": t.track,
                         "cover_art": t.cover_art,
                     }))),
-                    None => Err(StatusCode::NOT_FOUND),
+                    None => Err(ApiError::NotFound("resource")),
                 },
-                Err(_) => Err(StatusCode::BAD_GATEWAY),
+                Err(_) => Err(ApiError::BadGateway("upstream request failed".into())),
             }
         }
     }
@@ -286,7 +283,7 @@ async fn get_playlist_track(
 async fn get_track_cover_art(
     State(state): State<SharedState>,
     Path((index, track_index)): Path<(usize, usize)>,
-) -> Result<([(axum::http::header::HeaderName, String); 2], Vec<u8>), StatusCode> {
+) -> Result<([(axum::http::header::HeaderName, String); 2], Vec<u8>), ApiError> {
     match resolve_playlist(&state, index).await? {
         ResolvedPlaylist::Radio => {
             // Fetch cover from config URL
@@ -294,11 +291,11 @@ async fn get_track_cover_art(
                 .config
                 .radios
                 .get(track_index)
-                .ok_or(StatusCode::NOT_FOUND)?;
-            let cover_url = radio.cover.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+                .ok_or(ApiError::NotFound("resource"))?;
+            let cover_url = radio.cover.as_ref().ok_or(ApiError::NotFound("resource"))?;
             let (bytes, mime) = crate::state::cover::fetch_cover(cover_url)
                 .await
-                .ok_or(StatusCode::BAD_GATEWAY)?;
+                .ok_or(ApiError::BadGateway("cover fetch failed".into()))?;
             Ok((
                 [
                     (axum::http::header::CONTENT_TYPE, mime),
@@ -316,16 +313,19 @@ async fn get_track_cover_art(
             let playlist = sub
                 .get_playlist(&id)
                 .await
-                .map_err(|_| StatusCode::BAD_GATEWAY)?;
+                .map_err(|e| ApiError::BadGateway(e.to_string()))?;
             let track = playlist
                 .entry
                 .get(track_index)
-                .ok_or(StatusCode::NOT_FOUND)?;
-            let cover_id = track.cover_art.as_ref().ok_or(StatusCode::NOT_FOUND)?;
+                .ok_or(ApiError::NotFound("resource"))?;
+            let cover_id = track
+                .cover_art
+                .as_ref()
+                .ok_or(ApiError::NotFound("resource"))?;
             let bytes = sub
                 .get_cover_art(cover_id)
                 .await
-                .map_err(|_| StatusCode::BAD_GATEWAY)?;
+                .map_err(|e| ApiError::BadGateway(e.to_string()))?;
             let mime = if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
                 "image/jpeg"
             } else if bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {

@@ -4,13 +4,13 @@
 //! Zone endpoints: /api/v1/zones
 
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 
 use crate::api::SharedState;
+use crate::api::error::ApiError;
 use crate::player::ZoneCommand;
 use crate::state;
 
@@ -121,18 +121,18 @@ async fn read_zone(state: &SharedState, idx: usize) -> Option<state::ZoneState> 
     state.store.read().await.zones.get(&idx).cloned()
 }
 
-fn zone_not_found() -> StatusCode {
-    StatusCode::NOT_FOUND
+fn zone_not_found() -> ApiError {
+    ApiError::NotFound("zone")
 }
 
-async fn send_cmd(state: &SharedState, idx: usize, cmd: ZoneCommand) -> Result<(), StatusCode> {
+async fn send_cmd(state: &SharedState, idx: usize, cmd: ZoneCommand) -> Result<(), ApiError> {
     state
         .zone_commands
         .get(&idx)
-        .ok_or(StatusCode::NOT_FOUND)?
+        .ok_or(ApiError::NotFound("zone"))?
         .send(cmd)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+        .map_err(|e| ApiError::Internal(e.to_string()))
 }
 
 // ── Zone listing ──────────────────────────────────────────────
@@ -171,7 +171,7 @@ async fn get_zone(State(state): State<SharedState>, Path(idx): Path<usize>) -> i
     let store = state.store.read().await;
     let cfg = state.config.zones.get(idx - 1).ok_or(zone_not_found())?;
     let zs = store.zones.get(&idx);
-    Ok::<_, StatusCode>(Json(ZoneInfo {
+    Ok::<_, ApiError>(Json(ZoneInfo {
         index: cfg.index,
         name: cfg.name.clone(),
         icon: cfg.icon.clone(),
@@ -202,9 +202,9 @@ async fn set_volume(
     let current = read_zone(&state, idx).await.map_or(50, |z| z.volume);
     let volume = value
         .resolve(current)
-        .map_err(|_| StatusCode::BAD_REQUEST)?;
+        .map_err(|e| ApiError::BadRequest(e.to_string()))?;
     send_cmd(&state, idx, ZoneCommand::SetVolume(volume)).await?;
-    Ok::<_, StatusCode>(Json(volume))
+    Ok::<_, ApiError>(Json(volume))
 }
 
 async fn get_mute(State(state): State<SharedState>, Path(idx): Path<usize>) -> impl IntoResponse {
@@ -343,7 +343,7 @@ async fn get_track_metadata(
     Path(idx): Path<usize>,
 ) -> impl IntoResponse {
     let zone = read_zone(&state, idx).await.ok_or(zone_not_found())?;
-    Ok::<_, StatusCode>(Json(serde_json::json!({
+    Ok::<_, ApiError>(Json(serde_json::json!({
         "title": zone.track.as_ref().map_or("", |t| &t.title),
         "artist": zone.track.as_ref().map_or("", |t| &t.artist),
         "album": zone.track.as_ref().map_or("", |t| &t.album),
@@ -378,7 +378,7 @@ async fn get_zone_cover(
             ],
             entry.bytes.clone(),
         )),
-        None => Err(StatusCode::NOT_FOUND),
+        None => Err(ApiError::NotFound("zone")),
     }
 }
 async fn get_track_title(
@@ -445,7 +445,7 @@ async fn get_track_progress(
             0.0
         }
     });
-    Ok::<_, StatusCode>(Json(progress))
+    Ok::<_, ApiError>(Json(progress))
 }
 async fn seek_progress(
     State(state): State<SharedState>,
@@ -517,7 +517,7 @@ async fn play_subsonic_playlist(
 ) -> impl IntoResponse {
     // Single command: SetPlaylist with playlist index and starting track
     let _ = send_cmd(&state, idx, ZoneCommand::SetPlaylist(v.id, v.track)).await;
-    Ok::<_, StatusCode>(())
+    Ok::<_, ApiError>(())
 }
 async fn play_playlist_track(
     State(state): State<SharedState>,
@@ -564,7 +564,7 @@ async fn get_playlist_info(
     Path(idx): Path<usize>,
 ) -> impl IntoResponse {
     let zone = read_zone(&state, idx).await.ok_or(zone_not_found())?;
-    Ok::<_, StatusCode>(Json(serde_json::json!({
+    Ok::<_, ApiError>(Json(serde_json::json!({
         "index": zone.playlist_index,
         "name": zone.playlist_name,
         "track_index": zone.playlist_track_index,
