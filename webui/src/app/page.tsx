@@ -243,17 +243,7 @@ export default function Home() {
           });
           break;
         case "zone_track_changed":
-          updateZoneTrack(n.zone, n);
-          // Re-fetch full metadata for complete data
-          api.zones.getTrackMetadata(n.zone).then((meta) => {
-            const zones = useAppStore.getState().zones;
-            const z = zones.get(n.zone);
-            if (z) {
-              const updated = new Map(zones);
-              updated.set(n.zone, { ...z, track: meta });
-              useAppStore.setState({ zones: updated });
-            }
-          }).catch(() => {});
+          updateZoneTrack(n.zone, { ...n, cover_url: n.cover_url });
           break;
         case "zone_progress":
           updateZoneProgress(n.zone, n.position_ms, n.duration_ms);

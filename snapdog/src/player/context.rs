@@ -118,6 +118,7 @@ pub async fn update_and_notify(
                     duration_ms: t.duration_ms,
                     position_ms: t.position_ms,
                     seekable: t.seekable,
+                    cover_url: zone.cover_url.clone(),
                 });
             }
         }

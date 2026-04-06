@@ -35,6 +35,7 @@ pub enum Notification {
         duration_ms: i64,
         position_ms: i64,
         seekable: bool,
+        cover_url: Option<String>,
     },
     ZoneProgress {
         zone: usize,

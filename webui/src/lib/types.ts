@@ -129,6 +129,7 @@ export interface WsZoneTrackChanged {
   duration_ms: number;
   position_ms: number;
   seekable: boolean;
+  cover_url: string | null;
 }
 
 export interface WsZoneProgress {
