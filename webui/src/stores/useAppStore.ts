@@ -83,7 +83,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       const clients = new Map<number, ClientInfo>();
       for (const c of clientList) clients.set(c.index, c);
 
-      set({ zones, clients, selectedZone: zoneList[0]?.index ?? 1, isLoading: false });
+      const stored = typeof window !== "undefined" ? Number(sessionStorage.getItem("selectedZone")) : 0;
+      const initial = stored && zones.has(stored) ? stored : (zoneList[0]?.index ?? 1);
+      set({ zones, clients, selectedZone: initial, isLoading: false });
     } catch {
       set({ isLoading: false });
     }
@@ -142,7 +144,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ clients });
   },
 
-  selectZone: (id) => set({ selectedZone: id }),
+  selectZone: (id) => {
+    sessionStorage.setItem("selectedZone", String(id));
+    set({ selectedZone: id });
+  },
   setConnected: (v) => {
     const was = get().isConnected;
     set({ isConnected: v });
