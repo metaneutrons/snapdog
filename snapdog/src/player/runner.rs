@@ -108,7 +108,7 @@ async fn run(
     let mut source = ActiveSource::Idle;
     let mut remote_control: Option<std::sync::Arc<dyn crate::receiver::RemoteControl>> = None;
     let mut position_offset_ms: i64 = 0;
-    let mut resampler = audio::resample::Resampling::new(
+    let mut resampler = audio::resample::F32Resampling::new(
         config.audio.sample_rate,
         config.audio.sample_rate,
         config.audio.channels,
@@ -464,13 +464,14 @@ async fn run(
             pcm = async { match &mut decode_rx { Some(rx) => rx.recv().await, None => std::future::pending().await } } => {
                 match pcm {
                     Some(audio::PcmMessage::Format { sample_rate, channels }) => {
-                        resampler = audio::resample::Resampling::new(sample_rate, config.audio.sample_rate, channels);
+                        resampler = audio::resample::F32Resampling::new(sample_rate, config.audio.sample_rate, channels);
                         tracing::debug!(source_rate = sample_rate, target_rate = config.audio.sample_rate, "Active source resampler configured");
                     }
-                    Some(audio::PcmMessage::Audio(data)) => {
-                        let data = resampler.process(&data).unwrap_or(data);
-                        if data.is_empty() { continue; }
-                        if let Err(e) = tcp.write_all(&data).await {
+                    Some(audio::PcmMessage::Audio(samples)) => {
+                        let samples = resampler.process(&samples).unwrap_or(samples);
+                        if samples.is_empty() { continue; }
+                        let pcm = audio::resample::f32_to_pcm(&samples, output_bit_depth);
+                        if let Err(e) = tcp.write_all(&pcm).await {
                             tracing::error!(zone = zone_index, error = %e, "TCP write failed");
                             if let Ok(new_tcp) = snapcast::open_audio_source(zone_config.tcp_source_port).await { tcp = new_tcp; }
                         }

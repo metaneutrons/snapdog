@@ -27,8 +27,8 @@ use crate::config::AudioConfig;
 pub enum PcmMessage {
     /// Audio format detected/changed — receiver must (re)create resampler.
     Format { sample_rate: u32, channels: u16 },
-    /// Interleaved S16LE audio data.
-    Audio(Vec<u8>),
+    /// Interleaved f32 audio samples.
+    Audio(Vec<f32>),
     /// Playback position from decoder (milliseconds).
     Position(i64),
 }
@@ -359,7 +359,7 @@ fn decode_to_pcm(
     reader: impl MediaSource + 'static,
     content_type: &str,
     tx: PcmSender,
-    audio_config: &AudioConfig,
+    _audio_config: &AudioConfig,
 ) -> Result<()> {
     let mut hint = Hint::new();
     match content_type {
@@ -443,9 +443,10 @@ fn decode_to_pcm(
         let mut sample_buf = SampleBuffer::<f32>::new(num_frames as u64, spec);
         sample_buf.copy_interleaved_ref(decoded);
 
-        let bytes = resample::f32_to_pcm(sample_buf.samples(), audio_config.bit_depth);
-
-        if tx.blocking_send(PcmMessage::Audio(bytes)).is_err() {
+        if tx
+            .blocking_send(PcmMessage::Audio(sample_buf.samples().to_vec()))
+            .is_err()
+        {
             tracing::debug!("PCM consumer dropped, stopping decode");
             break;
         }
