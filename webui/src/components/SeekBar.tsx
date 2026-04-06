@@ -27,17 +27,17 @@ export function SeekBar({ zone }: { zone: ZoneState }) {
   const trackKey = `${track?.title}-${track?.artist}`;
   const lastTrackRef = useRef(trackKey);
 
-  // Sync from server when position changes externally, or reset on track change
+  // Sync from server when position changes externally, or reset on track/playback change
   useEffect(() => {
     if (trackKey !== lastTrackRef.current) {
       setLocalPosition(0);
       lastTrackRef.current = trackKey;
       lastServerRef.current = 0;
-    } else if (!dragging && serverPosition !== lastServerRef.current) {
+    } else if (!dragging) {
       setLocalPosition(serverPosition);
       lastServerRef.current = serverPosition;
     }
-  }, [serverPosition, dragging, trackKey]);
+  }, [serverPosition, dragging, trackKey, isPlaying]);
 
   const isEndless = duration === 0 && !isIdle && isPlaying;
 
