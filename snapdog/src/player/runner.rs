@@ -113,8 +113,7 @@ async fn run(
         config.audio.sample_rate,
         config.audio.channels,
     );
-    let mut receiver_resampler =
-        audio::resample::F32Resampling::new(44100, config.audio.sample_rate, config.audio.channels);
+    let mut receiver_resampler: Option<audio::resample::F32Resampling> = None;
     let output_bit_depth = config.audio.bit_depth;
 
     loop {
@@ -495,7 +494,10 @@ async fn run(
                     source = ActiveSource::AirPlay;
                     update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Playing; z.source = SourceType::AirPlay; }).await;
                 }
-                let samples = receiver_resampler.process(&samples).unwrap_or(samples);
+                let samples = match &mut receiver_resampler {
+                    Some(r) => r.process(&samples).unwrap_or(samples),
+                    None => samples,
+                };
                 if samples.is_empty() { continue; }
                 let pcm = audio::resample::f32_to_pcm(&samples, output_bit_depth);
                 if let Err(e) = tcp.write_all(&pcm).await { tracing::error!(zone = zone_index, error = %e, "TCP write failed (AirPlay)"); }
@@ -504,7 +506,7 @@ async fn run(
                 use crate::receiver::ReceiverEvent;
                 match event {
                     ReceiverEvent::SessionStarted { format } => {
-                        receiver_resampler = audio::resample::F32Resampling::new(format.sample_rate, config.audio.sample_rate, format.channels);
+                        receiver_resampler = Some(audio::resample::F32Resampling::new(format.sample_rate, config.audio.sample_rate, format.channels));
                     }
                     ReceiverEvent::Metadata { title, artist, album } => {
                         update_and_notify(store, zone_index, notify, |z| {

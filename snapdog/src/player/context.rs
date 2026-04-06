@@ -50,6 +50,8 @@ pub enum SnapcastCmd {
         client_id: String,
         action: ClientAction,
     },
+    /// Re-sync Snapcast groups to match zone assignments.
+    ReconcileZones,
 }
 
 #[derive(Debug)]

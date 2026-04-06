@@ -215,40 +215,23 @@ async fn set_zone(
     Path(idx): Path<usize>,
     Json(target_zone): Json<usize>,
 ) -> impl IntoResponse {
-    let store = state.store.read().await;
-    let client = store.clients.get(&idx).ok_or(not_found())?;
-    let snap_id = client.snapcast_id.clone().ok_or(not_found())?;
-
-    // Find target zone's group ID
-    let target_group_id = store
-        .zones
-        .get(&target_zone)
-        .and_then(|z| z.snapcast_group_id.clone())
-        .ok_or(not_found())?;
-
-    // Collect all snapcast IDs already in the target zone + the moving client
-    let mut target_client_ids: Vec<String> = store
-        .clients
-        .values()
-        .filter(|c| c.zone_index == target_zone && c.snapcast_id.is_some())
-        .filter_map(|c| c.snapcast_id.clone())
-        .collect();
-    if !target_client_ids.contains(&snap_id) {
-        target_client_ids.push(snap_id);
+    if !state.config.zones.iter().any(|z| z.index == target_zone) {
+        return Err(ApiError::NotFound("zone"));
     }
-    drop(store);
+    if state.store.read().await.clients.get(&idx).is_none() {
+        return Err(not_found());
+    }
 
-    // Move client by setting the target group's client list
-    let _ = state
-        .snap_tx
-        .send(SnapcastCmd::Group {
-            group_id: target_group_id.clone(),
-            action: crate::player::GroupAction::Clients(target_client_ids.clone()),
-        })
-        .await;
+    // Update state (zone assignment is SnapDog-owned)
+    crate::state::update_client_and_notify(&state.store, idx, &state.notifications, |c| {
+        c.zone_index = target_zone;
+    })
+    .await;
 
-    // State update comes from Snapcast Group.OnStreamChanged notification
-    tracing::info!(client = idx, zone = target_zone, group = %target_group_id, clients = ?target_client_ids, "Client zone change command sent");
+    // Tell main loop to reconcile Snapcast groups
+    let _ = state.snap_tx.send(SnapcastCmd::ReconcileZones).await;
+
+    tracing::info!(client = idx, zone = target_zone, "Client zone changed");
     Ok::<_, ApiError>(Json(target_zone))
 }
 

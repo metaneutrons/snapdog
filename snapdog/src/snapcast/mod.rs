@@ -267,19 +267,21 @@ pub async fn sync_initial_state(
     }
 }
 
-/// Match Snapcast groups to zones by stream ID and update zone group IDs + client zone assignments.
+/// Match Snapcast groups to zones by stream ID (read-only, no commands).
+/// Used at startup and on ServerOnUpdate.
 fn sync_zones_from_groups(groups: &[types::Group], config: &AppConfig, s: &mut state::Store) {
-    for group in groups {
-        if let Some((zone_idx, zone)) = s.zones.iter_mut().find(|(idx, _)| {
-            config
-                .zones
-                .get(**idx - 1)
-                .is_some_and(|zc| zc.stream_name == group.stream_id)
-        }) {
-            let zone_idx = *zone_idx;
-            if zone.snapcast_group_id.as_deref() != Some(&group.id) {
-                tracing::debug!(zone = zone_idx, new = %group.id, "Zone group ID updated");
-                zone.snapcast_group_id = Some(group.id.clone());
+    for zone_cfg in &config.zones {
+        let group = groups
+            .iter()
+            .filter(|g| g.stream_id == zone_cfg.stream_name)
+            .max_by_key(|g| g.clients.len());
+
+        if let Some(group) = group {
+            if let Some(zone) = s.zones.get_mut(&zone_cfg.index) {
+                if zone.snapcast_group_id.as_deref() != Some(&group.id) {
+                    tracing::debug!(zone = zone_cfg.index, new = %group.id, "Zone group ID updated");
+                    zone.snapcast_group_id = Some(group.id.clone());
+                }
             }
             for snap_client in &group.clients {
                 if let Some(client) = s
@@ -287,9 +289,88 @@ fn sync_zones_from_groups(groups: &[types::Group], config: &AppConfig, s: &mut s
                     .values_mut()
                     .find(|c| c.snapcast_id.as_deref() == Some(&snap_client.id))
                 {
-                    client.zone_index = zone_idx;
+                    client.zone_index = zone_cfg.index;
                 }
             }
+        }
+    }
+}
+
+/// Enforce the invariant: one Snapcast group per zone, all zone's clients in that group.
+/// Called after any client-zone assignment change.
+pub async fn reconcile_zone_groups(
+    snap: &SnapcastClient,
+    config: &AppConfig,
+    store: &state::SharedState,
+    notify: &tokio::sync::broadcast::Sender<api::ws::Notification>,
+) {
+    let status = match snap.server_get_status().await {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!(error = %e, "Failed to fetch server status for reconciliation");
+            return;
+        }
+    };
+
+    let s = store.read().await;
+
+    for zone_cfg in &config.zones {
+        // What clients should be in this zone?
+        let expected_snap_ids: Vec<String> = s
+            .clients
+            .values()
+            .filter(|c| c.zone_index == zone_cfg.index && c.snapcast_id.is_some())
+            .filter_map(|c| c.snapcast_id.clone())
+            .collect();
+
+        // Find the canonical group for this zone (by stream_id, prefer one with clients)
+        let group = status
+            .server
+            .groups
+            .iter()
+            .filter(|g| g.stream_id == zone_cfg.stream_name)
+            .max_by_key(|g| g.clients.len());
+
+        if let Some(group) = group {
+            let current_ids: Vec<&str> = group.clients.iter().map(|c| c.id.as_str()).collect();
+            let mut expected_sorted = expected_snap_ids.clone();
+            expected_sorted.sort();
+            let mut current_sorted: Vec<&str> = current_ids.clone();
+            current_sorted.sort();
+
+            // Only send command if the client list differs
+            if expected_sorted != current_sorted {
+                tracing::info!(
+                    zone = zone_cfg.index,
+                    group = %group.id,
+                    expected = ?expected_snap_ids,
+                    "Reconciling zone group clients"
+                );
+                let _ = snap.group_set_clients(&group.id, expected_snap_ids).await;
+            }
+        }
+    }
+
+    drop(s);
+
+    // Re-fetch and sync group IDs after reconciliation
+    if let Ok(status) = snap.server_get_status().await {
+        let mut s = store.write().await;
+        sync_zones_from_groups(&status.server.groups, config, &mut s);
+        let notifs: Vec<_> = s
+            .clients
+            .iter()
+            .map(|(&idx, c)| api::ws::Notification::ClientStateChanged {
+                client: idx,
+                volume: c.volume,
+                muted: c.muted,
+                connected: c.connected,
+                zone: c.zone_index,
+            })
+            .collect();
+        drop(s);
+        for n in notifs {
+            let _ = notify.send(n);
         }
     }
 }
@@ -362,17 +443,18 @@ pub async fn execute_command(
                 player::ClientAction::Latency(ms) => snap.client_set_latency(client_id, *ms).await,
             }
         }
+        player::SnapcastCmd::ReconcileZones => {
+            reconcile_zone_groups(snap, config, store, notify).await;
+            return;
+        }
     };
     match result {
         Ok(()) => {
             if let player::SnapcastCmd::Client { client_id, .. } = &cmd {
                 sync_client_after_command(snap, client_id, store, notify).await;
             }
-            if let player::SnapcastCmd::Group { group_id, action } = &cmd {
+            if let player::SnapcastCmd::Group { group_id, .. } = &cmd {
                 sync_group_after_command(snap, group_id, store, notify).await;
-                if matches!(action, player::GroupAction::Clients(_)) {
-                    sync_zones_and_clients(snap, config, store, notify).await;
-                }
             }
         }
         Err(e) => tracing::warn!(error = %e, "Snapcast command failed"),
@@ -423,38 +505,6 @@ async fn sync_group_after_command(
 }
 
 /// Re-fetch full server state and sync zone group IDs + client zone assignments.
-async fn sync_zones_and_clients(
-    snap: &SnapcastClient,
-    config: &AppConfig,
-    store: &state::SharedState,
-    notify: &tokio::sync::broadcast::Sender<api::ws::Notification>,
-) {
-    let status = match snap.server_get_status().await {
-        Ok(s) => s,
-        Err(e) => {
-            tracing::warn!(error = %e, "Failed to fetch server status for zone sync");
-            return;
-        }
-    };
-    let mut s = store.write().await;
-    sync_zones_from_groups(&status.server.groups, config, &mut s);
-    let notifs: Vec<_> = s
-        .clients
-        .iter()
-        .map(|(&idx, c)| api::ws::Notification::ClientStateChanged {
-            client: idx,
-            volume: c.volume,
-            muted: c.muted,
-            connected: c.connected,
-            zone: c.zone_index,
-        })
-        .collect();
-    drop(s);
-    for n in notifs {
-        let _ = notify.send(n);
-    }
-}
-
 /// After a client command, re-fetch the client's state and broadcast changes.
 async fn sync_client_after_command(
     snap: &SnapcastClient,
