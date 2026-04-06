@@ -578,8 +578,46 @@ pub async fn handle_notification(
         Notification::GroupOnNameChanged { id, name } => {
             tracing::debug!(group = %id, name = %name, "Group name changed");
         }
-        Notification::ServerOnUpdate { .. } => {
-            tracing::debug!("Snapcast server state updated");
+        Notification::ServerOnUpdate { server } => {
+            tracing::debug!("Snapcast server state updated — syncing client zones");
+            let mut s = store.write().await;
+            let group_to_zone: std::collections::HashMap<String, usize> = s
+                .zones
+                .iter()
+                .filter_map(|(&idx, z)| z.snapcast_group_id.clone().map(|g| (g, idx)))
+                .collect();
+            // Update client zone assignments from Snapcast group membership
+            for group in &server.groups {
+                if let Some(&zone_idx) = group_to_zone.get(group.id.as_str()) {
+                    for snap_client in &group.clients {
+                        if let Some(client) = s
+                            .clients
+                            .values_mut()
+                            .find(|c| c.snapcast_id.as_deref() == Some(&snap_client.id))
+                        {
+                            if client.zone_index != zone_idx {
+                                client.zone_index = zone_idx;
+                            }
+                        }
+                    }
+                }
+            }
+            // Broadcast updates for all clients
+            let client_notifs: Vec<_> = s
+                .clients
+                .iter()
+                .map(|(&idx, c)| api::ws::Notification::ClientStateChanged {
+                    client: idx,
+                    volume: c.volume,
+                    muted: c.muted,
+                    connected: c.connected,
+                    zone: c.zone_index,
+                })
+                .collect();
+            drop(s);
+            for n in client_notifs {
+                let _ = notify.send(n);
+            }
         }
         Notification::StreamOnUpdate { id, stream } => {
             tracing::debug!(stream = %id, status = ?stream.status, "Stream status updated");
