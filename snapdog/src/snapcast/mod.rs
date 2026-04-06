@@ -295,6 +295,7 @@ pub fn build_group_clients(status: &ServerStatus) -> HashMap<String, Vec<String>
 pub async fn execute_command(
     snap: &SnapcastClient,
     cmd: player::SnapcastCmd,
+    config: &AppConfig,
     store: &state::SharedState,
     notify: &tokio::sync::broadcast::Sender<api::ws::Notification>,
 ) {
@@ -333,8 +334,11 @@ pub async fn execute_command(
             if let player::SnapcastCmd::Client { client_id, .. } = &cmd {
                 sync_client_after_command(snap, client_id, store, notify).await;
             }
-            if let player::SnapcastCmd::Group { group_id, .. } = &cmd {
+            if let player::SnapcastCmd::Group { group_id, action } = &cmd {
                 sync_group_after_command(snap, group_id, store, notify).await;
+                if matches!(action, player::GroupAction::Clients(_)) {
+                    sync_zones_and_clients(snap, config, store, notify).await;
+                }
             }
         }
         Err(e) => tracing::warn!(error = %e, "Snapcast command failed"),
@@ -381,6 +385,61 @@ async fn sync_group_after_command(
             tracing::info!(zone = zone_idx, muted, "Zone mute synced from Snapcast");
             let _ = notify.send(notif);
         }
+    }
+}
+
+/// Re-fetch full server state and sync zone group IDs + client zone assignments.
+async fn sync_zones_and_clients(
+    snap: &SnapcastClient,
+    config: &AppConfig,
+    store: &state::SharedState,
+    notify: &tokio::sync::broadcast::Sender<api::ws::Notification>,
+) {
+    let status = match snap.server_get_status().await {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!(error = %e, "Failed to fetch server status for zone sync");
+            return;
+        }
+    };
+    let mut s = store.write().await;
+    for group in &status.server.groups {
+        let stream_id = &group.stream_id;
+        if let Some((zone_idx, zone)) = s.zones.iter_mut().find(|(idx, _)| {
+            config
+                .zones
+                .get(**idx - 1)
+                .is_some_and(|zc| zc.stream_name == *stream_id)
+        }) {
+            let zone_idx = *zone_idx;
+            if zone.snapcast_group_id.as_deref() != Some(&group.id) {
+                zone.snapcast_group_id = Some(group.id.clone());
+            }
+            for snap_client in &group.clients {
+                if let Some(client) = s
+                    .clients
+                    .values_mut()
+                    .find(|c| c.snapcast_id.as_deref() == Some(&snap_client.id))
+                {
+                    client.zone_index = zone_idx;
+                }
+            }
+        }
+    }
+    let notifs: Vec<_> = s
+        .clients
+        .iter()
+        .map(|(&idx, c)| api::ws::Notification::ClientStateChanged {
+            client: idx,
+            volume: c.volume,
+            muted: c.muted,
+            connected: c.connected,
+            zone: c.zone_index,
+        })
+        .collect();
+    drop(s);
+    for n in notifs {
+        let _ = notify.send(n);
     }
 }
 

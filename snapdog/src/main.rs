@@ -151,7 +151,7 @@ async fn main() -> Result<()> {
                     pending_volumes.insert(client_id.clone(), v);
                     coalesce_deadline = Some(tokio::time::Instant::now() + std::time::Duration::from_millis(50));
                 } else {
-                    snapcast::execute_command(&snap, cmd, &store, &notify_tx).await;
+                    snapcast::execute_command(&snap, cmd, &config, &store, &notify_tx).await;
                 }
             }
             // Coalesce timer fired — flush pending volumes
@@ -161,7 +161,7 @@ async fn main() -> Result<()> {
                         client_id,
                         action: player::ClientAction::Volume(volume),
                     };
-                    snapcast::execute_command(&snap, cmd, &store, &notify_tx).await;
+                    snapcast::execute_command(&snap, cmd, &config, &store, &notify_tx).await;
                 }
                 coalesce_deadline = None;
             }
