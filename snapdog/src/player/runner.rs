@@ -107,6 +107,7 @@ async fn run(
     let mut decode_rx: Option<mpsc::Receiver<audio::PcmMessage>> = None;
     let mut source = ActiveSource::Idle;
     let mut remote_control: Option<std::sync::Arc<dyn crate::receiver::RemoteControl>> = None;
+    let mut position_offset_ms: i64 = 0;
     let mut resampler = audio::resample::Resampling::new(
         config.audio.sample_rate,
         config.audio.sample_rate,
@@ -391,6 +392,7 @@ async fn run(
                                 update_and_notify(store, zone_index, notify, |z| {
                                     if let Some(ref mut t) = z.track { t.position_ms = pos_ms; }
                                 }).await;
+                                position_offset_ms = pos_ms;
                                 tracing::debug!(zone = %zone_config.name, position_ms = pos_ms, "Seeked");
                             }
                         }
@@ -426,6 +428,7 @@ async fn run(
                                     update_and_notify(store, zone_index, notify, |z| {
                                         if let Some(ref mut t) = z.track { t.position_ms = pos_ms; }
                                     }).await;
+                                    position_offset_ms = pos_ms;
                                 }
                             }
                         }
@@ -471,12 +474,13 @@ async fn run(
                     }
                     Some(audio::PcmMessage::Position(ms)) => {
                         update_and_notify(store, zone_index, notify, |z| {
-                            if let Some(ref mut t) = z.track { t.position_ms = ms; }
+                            if let Some(ref mut t) = z.track { t.position_ms = ms + position_offset_ms; }
                         }).await;
                     }
                     None => {
                         current_decode = None;
                         decode_rx = None;
+                        position_offset_ms = 0;
                         handle_track_complete(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers }).await;
                     }
                 }
