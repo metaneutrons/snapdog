@@ -50,7 +50,13 @@ Snapcast sink paths, stream names, and AirPlay names are auto-generated from zon
 ```toml
 [http]
 port = 5555
-# api_key = "your-secret-key"    # Optional: protect API + WebSocket
+# api_key = "your-secret-key" # Optional: protect API + WebSocket
+
+[snapcast]
+# Start snapserver as child process
+# managed = true               
+# Show snapserver console output
+# verbose = false              
 
 [audio]
 sample_rate = 48000
@@ -58,17 +64,20 @@ bit_depth = 16        # 16, 24, or 32
 channels = 2
 
 [airplay]
-# password = ""                   # Optional: require password for AirPlay
+# Optional: require password for AirPlay
+# password = ""       
 
 [subsonic]
 url = "https://music.example.com"
 username = "user"
 password = "pass"
-format = "flac"       # "flac" (default), "raw", "mp3", "opus"
+# "flac" (default), "raw", "mp3", "opus"
+format = "flac"       
 
 [knx]
 enabled = true
-url = "udp://192.168.1.50:3671"  # Tunnel (unicast) or router (multicast)
+# Tunnel (unicast) or router 
+url = "udp://192.168.1.50:3671"  (multicast)
 
 [[zone]]
 name = "Ground Floor"
