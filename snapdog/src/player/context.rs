@@ -94,6 +94,7 @@ pub async fn update_and_notify(
         let old_track_title = zone.track.as_ref().map(|t| t.title.clone());
         let old_track_artist = zone.track.as_ref().map(|t| t.artist.clone());
         let old_position = zone.track.as_ref().map(|t| t.position_ms);
+        let old_cover_url = zone.cover_url.clone();
         f(zone);
         let mut notifs = vec![crate::api::ws::Notification::ZoneStateChanged {
             zone: zone_index,
@@ -105,10 +106,13 @@ pub async fn update_and_notify(
             repeat: zone.repeat,
             track_repeat: zone.track_repeat,
         }];
-        // Send track changed if title or artist changed
+        // Send track changed if title, artist, or cover changed
         let new_track_title = zone.track.as_ref().map(|t| t.title.clone());
         let new_track_artist = zone.track.as_ref().map(|t| t.artist.clone());
-        if old_track_title != new_track_title || old_track_artist != new_track_artist {
+        if old_track_title != new_track_title
+            || old_track_artist != new_track_artist
+            || old_cover_url != zone.cover_url
+        {
             if let Some(ref t) = zone.track {
                 notifs.push(crate::api::ws::Notification::ZoneTrackChanged {
                     zone: zone_index,
