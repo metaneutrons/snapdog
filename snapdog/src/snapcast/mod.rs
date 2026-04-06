@@ -250,25 +250,45 @@ pub async fn sync_initial_state(
     store: &state::SharedState,
 ) {
     let mut s = store.write().await;
+    // Set snapcast_id and connected for known clients
     for group in &status.server.groups {
-        // Find zone by stream ID
-        let zone_idx = config
-            .zones
-            .iter()
-            .find(|zc| zc.stream_name == group.stream_id)
-            .map(|zc| zc.index);
-
         for snap_client in &group.clients {
             let mac = snap_client.host.mac.to_lowercase();
-            let snap_id = snap_client.id.clone();
-            let connected = snap_client.connected;
             if let Some(client) = s.clients.values_mut().find(|c| c.mac.to_lowercase() == mac) {
-                client.snapcast_id = Some(snap_id.clone());
-                client.connected = connected;
-                if let Some(idx) = zone_idx {
-                    client.zone_index = idx;
+                client.snapcast_id = Some(snap_client.id.clone());
+                client.connected = snap_client.connected;
+            }
+        }
+    }
+    // Sync zone assignments from group membership
+    sync_zones_from_groups(&status.server.groups, config, &mut s);
+    for (_, c) in s.clients.iter() {
+        tracing::info!(client = %c.name, zone = c.zone_index, connected = c.connected, "Initial client state synced");
+    }
+}
+
+/// Match Snapcast groups to zones by stream ID and update zone group IDs + client zone assignments.
+fn sync_zones_from_groups(groups: &[types::Group], config: &AppConfig, s: &mut state::Store) {
+    for group in groups {
+        if let Some((zone_idx, zone)) = s.zones.iter_mut().find(|(idx, _)| {
+            config
+                .zones
+                .get(**idx - 1)
+                .is_some_and(|zc| zc.stream_name == group.stream_id)
+        }) {
+            let zone_idx = *zone_idx;
+            if zone.snapcast_group_id.as_deref() != Some(&group.id) {
+                tracing::debug!(zone = zone_idx, new = %group.id, "Zone group ID updated");
+                zone.snapcast_group_id = Some(group.id.clone());
+            }
+            for snap_client in &group.clients {
+                if let Some(client) = s
+                    .clients
+                    .values_mut()
+                    .find(|c| c.snapcast_id.as_deref() == Some(&snap_client.id))
+                {
+                    client.zone_index = zone_idx;
                 }
-                tracing::info!(client = %client.name, snap_id = %snap_id, connected, zone = client.zone_index, "Initial client state synced");
             }
         }
     }
@@ -417,29 +437,7 @@ async fn sync_zones_and_clients(
         }
     };
     let mut s = store.write().await;
-    for group in &status.server.groups {
-        let stream_id = &group.stream_id;
-        if let Some((zone_idx, zone)) = s.zones.iter_mut().find(|(idx, _)| {
-            config
-                .zones
-                .get(**idx - 1)
-                .is_some_and(|zc| zc.stream_name == *stream_id)
-        }) {
-            let zone_idx = *zone_idx;
-            if zone.snapcast_group_id.as_deref() != Some(&group.id) {
-                zone.snapcast_group_id = Some(group.id.clone());
-            }
-            for snap_client in &group.clients {
-                if let Some(client) = s
-                    .clients
-                    .values_mut()
-                    .find(|c| c.snapcast_id.as_deref() == Some(&snap_client.id))
-                {
-                    client.zone_index = zone_idx;
-                }
-            }
-        }
-    }
+    sync_zones_from_groups(&status.server.groups, config, &mut s);
     let notifs: Vec<_> = s
         .clients
         .iter()
@@ -654,37 +652,7 @@ pub async fn handle_notification(
         Notification::ServerOnUpdate { server } => {
             tracing::debug!("Snapcast server state updated — syncing zones and clients");
             let mut s = store.write().await;
-
-            // Match groups to zones by stream ID (stable, we control it)
-            // Zone N uses stream "ZoneN"
-            for group in &server.groups {
-                let stream_id = &group.stream_id;
-                // Find zone that owns this stream
-                if let Some((zone_idx, zone)) = s.zones.iter_mut().find(|(idx, _)| {
-                    config
-                        .zones
-                        .get(**idx - 1)
-                        .is_some_and(|zc| zc.stream_name == *stream_id)
-                }) {
-                    let zone_idx = *zone_idx;
-                    // Update group ID if it changed
-                    if zone.snapcast_group_id.as_deref() != Some(&group.id) {
-                        tracing::info!(zone = zone_idx, old = ?zone.snapcast_group_id, new = %group.id, "Zone group ID updated");
-                        zone.snapcast_group_id = Some(group.id.clone());
-                    }
-                    // Update client zone assignments
-                    for snap_client in &group.clients {
-                        if let Some(client) = s
-                            .clients
-                            .values_mut()
-                            .find(|c| c.snapcast_id.as_deref() == Some(&snap_client.id))
-                        {
-                            client.zone_index = zone_idx;
-                        }
-                    }
-                }
-            }
-            // Broadcast updates for all clients
+            sync_zones_from_groups(&server.groups, config, &mut s);
             let client_notifs: Vec<_> = s
                 .clients
                 .iter()
