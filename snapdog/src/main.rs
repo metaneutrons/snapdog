@@ -48,7 +48,7 @@ async fn main() -> Result<()> {
     // Snapcast JSON-RPC client
     let snap = snapcast::SnapcastClient::from_config(&config).await?;
     let status = snap.server_get_status().await?;
-    snapcast::sync_initial_state(&status, &config, &store).await;
+    snapcast::sync_initial_state(&status, &config, &snap, &store).await;
     let mut snap_notifications = snap.subscribe();
 
     // Snapcast command channel

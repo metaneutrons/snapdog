@@ -247,23 +247,50 @@ use std::collections::HashMap;
 pub async fn sync_initial_state(
     status: &ServerStatus,
     config: &AppConfig,
+    snap: &SnapcastClient,
     store: &state::SharedState,
 ) {
     let mut s = store.write().await;
     // Set snapcast_id and connected for known clients
+    // Prefer connected entries when the same MAC appears multiple times
     for group in &status.server.groups {
         for snap_client in &group.clients {
             let mac = snap_client.host.mac.to_lowercase();
             if let Some(client) = s.clients.values_mut().find(|c| c.mac.to_lowercase() == mac) {
-                client.snapcast_id = Some(snap_client.id.clone());
-                client.connected = snap_client.connected;
+                if !client.connected || snap_client.connected {
+                    client.snapcast_id = Some(snap_client.id.clone());
+                    client.connected = snap_client.connected;
+                }
             }
         }
     }
     // Sync zone assignments from group membership
     sync_zones_from_groups(&status.server.groups, config, &mut s);
+
+    // Clean up stale Snapcast clients (disconnected duplicates of connected ones)
+    let connected_macs: Vec<String> = status
+        .server
+        .groups
+        .iter()
+        .flat_map(|g| &g.clients)
+        .filter(|c| c.connected)
+        .map(|c| c.host.mac.to_lowercase())
+        .collect();
+    let stale_ids: Vec<String> = status
+        .server
+        .groups
+        .iter()
+        .flat_map(|g| &g.clients)
+        .filter(|c| !c.connected && connected_macs.contains(&c.host.mac.to_lowercase()))
+        .map(|c| c.id.clone())
+        .collect();
     for (_, c) in s.clients.iter() {
         tracing::info!(client = %c.name, zone = c.zone_index, connected = c.connected, "Initial client state synced");
+    }
+    drop(s);
+    for id in &stale_ids {
+        tracing::info!(id = %id, "Deleting stale Snapcast client");
+        let _ = snap.server_delete_client(id).await;
     }
 }
 
