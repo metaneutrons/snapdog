@@ -15,6 +15,10 @@ function ClientCard({ client }: { client: ClientInfo }) {
       className="flex items-stretch gap-2 px-3 py-2.5 rounded-lg bg-muted shadow-[inset_0_2px_4px_rgba(0,0,0,0.15)] border border-border/50 cursor-grab hover:border-primary/30 transition-colors"
       draggable
       onDragStart={(e) => {
+        if ((e.target as HTMLElement).closest("[data-slot=slider]")) {
+          e.preventDefault();
+          return;
+        }
         e.dataTransfer.setData("application/x-snapdog-client", String(client.index));
         e.dataTransfer.effectAllowed = "move";
       }}
