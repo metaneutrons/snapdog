@@ -579,25 +579,34 @@ pub async fn handle_notification(
             tracing::debug!(group = %id, name = %name, "Group name changed");
         }
         Notification::ServerOnUpdate { server } => {
-            tracing::debug!("Snapcast server state updated — syncing client zones");
+            tracing::debug!("Snapcast server state updated — syncing zones and clients");
             let mut s = store.write().await;
-            let group_to_zone: std::collections::HashMap<String, usize> = s
-                .zones
-                .iter()
-                .filter_map(|(&idx, z)| z.snapcast_group_id.clone().map(|g| (g, idx)))
-                .collect();
-            // Update client zone assignments from Snapcast group membership
+
+            // Match groups to zones by stream ID (stable, we control it)
+            // Zone N uses stream "ZoneN"
             for group in &server.groups {
-                if let Some(&zone_idx) = group_to_zone.get(group.id.as_str()) {
+                let stream_id = &group.stream_id;
+                // Find zone that owns this stream
+                if let Some((zone_idx, zone)) = s.zones.iter_mut().find(|(idx, _)| {
+                    config
+                        .zones
+                        .get(**idx - 1)
+                        .is_some_and(|zc| zc.stream_name == *stream_id)
+                }) {
+                    let zone_idx = *zone_idx;
+                    // Update group ID if it changed
+                    if zone.snapcast_group_id.as_deref() != Some(&group.id) {
+                        tracing::info!(zone = zone_idx, old = ?zone.snapcast_group_id, new = %group.id, "Zone group ID updated");
+                        zone.snapcast_group_id = Some(group.id.clone());
+                    }
+                    // Update client zone assignments
                     for snap_client in &group.clients {
                         if let Some(client) = s
                             .clients
                             .values_mut()
                             .find(|c| c.snapcast_id.as_deref() == Some(&snap_client.id))
                         {
-                            if client.zone_index != zone_idx {
-                                client.zone_index = zone_idx;
-                            }
+                            client.zone_index = zone_idx;
                         }
                     }
                 }
