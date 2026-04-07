@@ -73,7 +73,7 @@ impl ReceiverProvider for AirPlayReceiver {
         server.start().await?;
 
         let port = server.service_info().port;
-        tracing::info!(zone = %self.airplay_name, port, "AirPlay receiver started");
+        tracing::info!(zone = %self.airplay_name, port, "AirPlay started");
 
         self.server = Some(server);
         Ok(())

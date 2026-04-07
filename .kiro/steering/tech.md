@@ -85,9 +85,26 @@ async fn set_zone_volume(&self, zone_id: u32, volume: u8) -> Result<()> {
 Log levels:
 - `error` — unrecoverable failures, service down
 - `warn` — recoverable issues, retries, degraded operation
-- `info` — significant state changes (zone playing, client connected, config loaded)
-- `debug` — detailed operational flow
-- `trace` — protocol-level detail (JSON-RPC messages, PCM buffer sizes)
+- `info` — startup lifecycle, zone/client state changes, connections
+- `debug` — Snapcast commands, stream status, resampler, WebSocket lifecycle, volume/mute ops
+- `trace` — individual JSON-RPC calls, PCM buffer sizes, protocol detail
+
+Log message style:
+- Short action + structured fields: `"Client synced" name=Kitchen zone=1 connected=true`
+- No redundant prefixes — the module path already identifies the subsystem
+- Counts not lists: `clients=3` not `clients=["id1","id2","id3"]` (full list at debug)
+- Truncate UUIDs to 8 chars in logs (only for correlation)
+- At `info` level, startup should read as a clean, scannable sequence:
+```
+INFO snapdog: Configuration loaded zones=2 clients=4 radios=11
+INFO snapdog::process: Snapserver started pid=12345
+INFO snapdog::snapcast::connection: Snapcast connected addr=127.0.0.1:1705
+INFO snapdog::snapcast: Client synced name=Kitchen zone=1 connected=true
+INFO snapdog::player::runner: Zone started zone="Ground Floor"
+INFO snapdog::mqtt: MQTT connected
+INFO snapdog::api: Listening port=5555
+INFO snapdog::receiver::airplay: AirPlay receiver started zone="Ground Floor" port=7001
+```
 
 ### Error Handling
 - Define domain errors with `thiserror` per module
