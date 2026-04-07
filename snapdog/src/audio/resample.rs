@@ -120,14 +120,23 @@ impl F32Resampling {
         }
     }
 
-    /// Returns resampled F32 data, or `None` for passthrough / buffering.
+    /// Returns resampled F32 data, or `None` when buffering (not enough input yet).
+    /// Passthrough returns the original data.
     pub fn process(&mut self, samples: &[f32]) -> Option<Vec<f32>> {
         match self {
-            Self::Passthrough => None,
+            Self::Passthrough => Some(samples.to_vec()),
             Self::Active(r) => {
                 let out = r.process(samples);
                 if out.is_empty() { None } else { Some(out) }
             }
+        }
+    }
+
+    /// Like `process`, but takes ownership to avoid cloning on passthrough.
+    pub fn process_or_passthrough(&mut self, samples: Vec<f32>) -> Vec<f32> {
+        match self {
+            Self::Passthrough => samples,
+            Self::Active(r) => r.process(&samples),
         }
     }
 }

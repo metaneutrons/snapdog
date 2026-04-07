@@ -480,10 +480,7 @@ async fn run(
                         tracing::debug!(from = sample_rate, to = config.audio.sample_rate, "Resampler configured");
                     }
                     Some(audio::PcmMessage::Audio(samples)) => {
-                        let mut samples = match resampler.process(&samples) {
-                            Some(resampled) => resampled,
-                            None => continue,
-                        };
+                        let mut samples = resampler.process_or_passthrough(samples);
                         zone_eq.process(&mut samples);
                         let pcm = audio::resample::f32_to_pcm(&samples, output_bit_depth);
                         if let Err(e) = tcp.write_all(&pcm).await {
@@ -517,7 +514,6 @@ async fn run(
                     },
                     None => samples,
                 };
-                if samples.is_empty() { continue; }
                 zone_eq.process(&mut samples);
                 let pcm = audio::resample::f32_to_pcm(&samples, output_bit_depth);
                 if let Err(e) = tcp.write_all(&pcm).await { tracing::error!(zone = zone_index, error = %e, "TCP write failed (AirPlay)"); }
