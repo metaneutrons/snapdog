@@ -23,7 +23,7 @@ impl SnapserverHandle {
     /// Start snapserver if managed=true, otherwise return a no-op handle.
     pub async fn start(config: &AppConfig) -> Result<Self> {
         if !config.snapcast.managed {
-            tracing::info!("Snapserver not managed (managed=false) — skipping");
+            tracing::info!("Snapserver not managed — skipping");
             return Ok(Self {
                 child: None,
                 config_path: PathBuf::new(),
@@ -31,7 +31,7 @@ impl SnapserverHandle {
         }
 
         let config_path = generate_config(config)?;
-        tracing::info!(path = %config_path.display(), "Generated snapserver.conf");
+        tracing::info!(path = %config_path.display(), "Snapserver config generated");
 
         let stdio = if config.snapcast.verbose {
             std::process::Stdio::inherit

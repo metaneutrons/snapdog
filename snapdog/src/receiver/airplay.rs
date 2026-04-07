@@ -103,7 +103,7 @@ impl shairplay::AudioHandler for BridgeHandler {
         tracing::info!(
             channels = format.channels,
             sample_rate = format.sample_rate,
-            "AirPlay audio session started"
+            "Session started"
         );
         let _ = self.event_tx.try_send(ReceiverEvent::SessionStarted {
             format: AudioFormat {
@@ -162,7 +162,7 @@ impl shairplay::AudioHandler for BridgeHandler {
     }
 
     fn on_client_disconnected(&self, _addr: &str) {
-        tracing::info!("AirPlay audio session ended");
+        tracing::info!("Session ended");
         let _ = self.event_tx.try_send(ReceiverEvent::SessionEnded);
     }
 }

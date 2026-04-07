@@ -68,7 +68,7 @@ impl MqttBridge {
                 .with_context(|| format!("Failed to subscribe to {topic}"))?;
         }
 
-        tracing::info!(count = topics.len(), "Subscribed to command topics");
+        tracing::info!(topics = topics.len(), "MQTT subscribed");
         Ok(())
     }
 

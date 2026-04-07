@@ -85,7 +85,7 @@ pub async fn serve(
         .layer(TraceLayer::new_for_http());
 
     let listener = TcpListener::bind(format!("0.0.0.0:{port}")).await?;
-    tracing::info!(port, "API server listening");
+    tracing::info!(port, "Listening");
     axum::serve(listener, app).await?;
     Ok(())
 }

@@ -178,7 +178,7 @@ async fn run(
                                         z.playlist_track_index = Some(track_idx);
                                         z.track = Some(radio_track_info(&radio.name));
                                     }).await;
-                                    tracing::info!(zone = %zone_config.name, radio = %radio.name, "Set radio station");
+                                    tracing::info!(zone = %zone_config.name, radio = %radio.name, "Radio set");
                                 }
                             }
                         } else if let ActiveSource::SubsonicPlaylist { ref playlist_id, track_count, .. } = source {
@@ -330,13 +330,13 @@ async fn run(
                                     z.playlist_track_count = Some(config.radios.len());
                                     z.track = Some(radio_track_info(&radio.name));
                                 }).await;
-                                tracing::info!(zone = %zone_config.name, radio = %radio.name, "Playing radio");
+                                tracing::info!(zone = %zone_config.name, radio = %radio.name, "Radio playing");
                             }
                         }
                             Some(crate::config::ResolvedPlaylist::Subsonic(sub_idx)) => {
                             if let Some(sub) = &subsonic {
                                 if let Some(pl) = subsonic_playlists.get(sub_idx) {
-                                    tracing::info!(zone = %zone_config.name, playlist = %pl.name, "Playlist changed");
+                                    tracing::info!(zone = %zone_config.name, playlist = %pl.name, "Playlist set");
                                     stop_decode(&mut current_decode, &mut decode_rx).await; position_offset_ms = 0;
                                     if let Ok(playlist) = sub.get_playlist(&pl.id).await {
                                         let track_idx = start_track.min(playlist.entry.len().saturating_sub(1));

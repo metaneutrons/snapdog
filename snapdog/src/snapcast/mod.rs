@@ -531,7 +531,7 @@ async fn sync_group_after_command(
                 track_repeat: zone.track_repeat,
             };
             drop(s);
-            tracing::info!(zone = zone_idx, muted, "Zone mute synced from Snapcast");
+            tracing::info!(zone = zone_idx, muted, "Mute synced");
             let _ = notify.send(notif);
         }
     }
@@ -621,7 +621,7 @@ pub async fn handle_notification(
                 };
                 let name = client.name.clone();
                 drop(s);
-                tracing::info!(client = %name, snap_id = %snap_id, "Snapcast client connected");
+                tracing::info!(client = %name, id = %snap_id, "Client connected");
                 let _ = notify.send(notif);
 
                 setup_zone_group_for_client(zone_index, &snap_id, config, snap).await;
@@ -644,7 +644,7 @@ pub async fn handle_notification(
                 };
                 let name = client.name.clone();
                 drop(s);
-                tracing::info!(client = %name, "Snapcast client disconnected");
+                tracing::info!(client = %name, "Client disconnected");
                 let _ = notify.send(notif);
             }
         }
@@ -696,7 +696,7 @@ pub async fn handle_notification(
                 };
                 let name = client.name.clone();
                 drop(s);
-                tracing::info!(client = %name, latency = lat, "Client latency changed");
+                tracing::info!(client = %name, latency = lat, "Latency changed");
                 let _ = notify.send(notif);
             }
         }
@@ -719,7 +719,7 @@ pub async fn handle_notification(
                     zone: client.zone_index,
                 };
                 drop(s);
-                tracing::info!(client = %new_name, "Client name changed");
+                tracing::info!(client = %new_name, "Name changed");
                 let _ = notify.send(notif);
             }
         }
