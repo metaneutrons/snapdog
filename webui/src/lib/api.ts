@@ -11,7 +11,7 @@ import type {
   VolumeValue,
 } from "./types";
 
-import { getApiKey } from "./auth";
+import { getApiKey, clearApiKey } from "./auth";
 
 const BASE = "";
 
@@ -29,9 +29,17 @@ function authHeaders(): Record<string, string> {
   return key ? { Authorization: `Bearer ${key}` } : {};
 }
 
+function check401(res: Response) {
+  if (res.status === 401) {
+    clearApiKey();
+    // Trigger re-auth by reloading — the store will detect 401 on loadAll
+    window.location.reload();
+  }
+}
+
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`, { headers: authHeaders() });
-  if (!res.ok) throw new ApiError(res.status, `GET ${path}: ${res.status}`);
+  if (!res.ok) { check401(res); throw new ApiError(res.status, `GET ${path}: ${res.status}`); }
   return res.json();
 }
 
@@ -41,7 +49,7 @@ async function put<T>(path: string, body: unknown): Promise<T> {
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new ApiError(res.status, `PUT ${path}: ${res.status}`);
+  if (!res.ok) { check401(res); throw new ApiError(res.status, `PUT ${path}: ${res.status}`); }
   const text = await res.text();
   return text ? JSON.parse(text) : (undefined as T);
 }
@@ -52,7 +60,7 @@ async function post<T = void>(path: string, body?: unknown): Promise<T> {
     headers: { ...(body !== undefined ? { "Content-Type": "application/json" } : {}), ...authHeaders() },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) throw new ApiError(res.status, `POST ${path}: ${res.status}`);
+  if (!res.ok) { check401(res); throw new ApiError(res.status, `POST ${path}: ${res.status}`); }
   const text = await res.text();
   return text ? JSON.parse(text) : (undefined as T);
 }
