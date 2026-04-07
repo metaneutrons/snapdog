@@ -59,7 +59,7 @@ pub async fn serve(
         playlist_cache: tokio::sync::RwLock::new(None),
     });
 
-    let api_key = state.config.http.api_key.clone();
+    let api_keys = state.config.http.api_keys.clone();
 
     // Protected routes (API + WebSocket)
     let mut protected = Router::new()
@@ -69,10 +69,10 @@ pub async fn serve(
         .nest("/api/v1/media", routes::media::router(state.clone()))
         .nest("/api/v1/system", routes::system::router(state.clone()));
 
-    if let Some(key) = api_key {
-        tracing::info!("API key authentication enabled");
+    if !api_keys.is_empty() {
+        tracing::info!(keys = api_keys.len(), "API authentication enabled");
         protected = protected
-            .layer(axum::Extension(auth::ApiKey(key)))
+            .layer(axum::Extension(auth::ApiKeys(api_keys)))
             .layer(axum::middleware::from_fn(auth::require_api_key));
     }
 

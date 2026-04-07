@@ -50,7 +50,7 @@ Snapcast sink paths, stream names, and AirPlay names are auto-generated from zon
 ```toml
 [http]
 port = 5555
-# api_key = "your-secret-key" # Optional: protect API + WebSocket
+# api_keys = ["key-for-homeassistant", "key-for-webui"] # Optional: protect API + WebSocket
 
 [snapcast]
 # Start snapserver as child process
@@ -97,7 +97,7 @@ cover = "https://upload.wikimedia.org/wikipedia/commons/thumb/..."
 
 ### API Authentication
 
-If `api_key` is set in `[http]`, all `/api/v1/*` and `/ws` endpoints require authentication:
+If `api_keys` is set in `[http]`, all `/api/v1/*` and `/ws` endpoints require authentication:
 - REST: `Authorization: Bearer <key>` header
 - WebSocket: `ws://host:port/ws?token=<key>` query parameter
 - Health endpoints (`/health/*`) and the embedded WebUI are always accessible
