@@ -11,6 +11,8 @@ import type {
   VolumeValue,
 } from "./types";
 
+import { getApiKey } from "./auth";
+
 const BASE = "";
 
 export class ApiError extends Error {
@@ -22,8 +24,13 @@ export class ApiError extends Error {
   }
 }
 
+function authHeaders(): Record<string, string> {
+  const key = getApiKey();
+  return key ? { Authorization: `Bearer ${key}` } : {};
+}
+
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`);
+  const res = await fetch(`${BASE}${path}`, { headers: authHeaders() });
   if (!res.ok) throw new ApiError(res.status, `GET ${path}: ${res.status}`);
   return res.json();
 }
@@ -31,7 +38,7 @@ async function get<T>(path: string): Promise<T> {
 async function put<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new ApiError(res.status, `PUT ${path}: ${res.status}`);
@@ -42,7 +49,7 @@ async function put<T>(path: string, body: unknown): Promise<T> {
 async function post<T = void>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: "POST",
-    headers: body !== undefined ? { "Content-Type": "application/json" } : {},
+    headers: { ...(body !== undefined ? { "Content-Type": "application/json" } : {}), ...authHeaders() },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) throw new ApiError(res.status, `POST ${path}: ${res.status}`);

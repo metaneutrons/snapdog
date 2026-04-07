@@ -5,6 +5,7 @@ import { useAppStore, type ZoneState } from "@/stores/useAppStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { api, zones } from "@/lib/api";
 import type { WsNotification } from "@/lib/types";
+import { ApiKeyPrompt } from "@/components/ApiKeyPrompt";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NowPlaying } from "@/components/NowPlaying";
 import { TransportControls } from "@/components/TransportControls";
@@ -219,6 +220,7 @@ export default function Home() {
     selectedZone,
     selectZone,
     isLoading,
+    needsAuth,
     isConnected,
     setConnected,
     loadAll,
@@ -268,6 +270,10 @@ export default function Home() {
 
   const zoneList = Array.from(zoneMap.values());
   const currentZone = zoneMap.get(selectedZone) ?? zoneList[0];
+
+  if (needsAuth) {
+    return <ApiKeyPrompt onAuthenticated={() => loadAll()} />;
+  }
 
   if (isLoading) {
     return (

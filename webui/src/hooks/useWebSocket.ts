@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useCallback, useState } from "react";
 import type { WsNotification, WsCommand } from "@/lib/types";
+import { getApiKey } from "@/lib/auth";
 
 const MAX_BACKOFF = 30_000;
 
@@ -15,7 +16,11 @@ export function useWebSocket(onNotification: (n: WsNotification) => void, onReco
 
   const connect = useCallback(() => {
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(`${proto}//${location.host}/ws`);
+    const key = getApiKey();
+    const wsUrl = key
+      ? `${proto}//${location.host}/ws?token=${encodeURIComponent(key)}`
+      : `${proto}//${location.host}/ws`;
+    const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {

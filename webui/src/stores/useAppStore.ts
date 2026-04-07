@@ -20,6 +20,7 @@ interface AppState {
   selectedZone: number;
   isConnected: boolean;
   isLoading: boolean;
+  needsAuth: boolean;
 
   // Init
   loadAll: () => Promise<void>;
@@ -54,6 +55,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectedZone: 1,
   isConnected: false,
   isLoading: true,
+  needsAuth: false,
 
   loadAll: async () => {
     set({ isLoading: true });
@@ -85,9 +87,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       const stored = typeof window !== "undefined" ? Number(sessionStorage.getItem("selectedZone")) : 0;
       const initial = stored && zones.has(stored) ? stored : (zoneList[0]?.index ?? 1);
-      set({ zones, clients, selectedZone: initial, isLoading: false });
-    } catch {
-      set({ isLoading: false });
+      set({ zones, clients, selectedZone: initial, isLoading: false, needsAuth: false });
+    } catch (e) {
+      const status = e instanceof Error && "status" in e ? (e as { status: number }).status : 0;
+      set({ isLoading: false, needsAuth: status === 401 });
     }
   },
 
