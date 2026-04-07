@@ -3,8 +3,8 @@
 
 //! Audio decoding and PCM pipeline.
 //!
-//! Fetches HTTP audio streams, decodes via symphonia to raw PCM (S16LE),
-//! and sends PCM chunks to a consumer (Snapcast TCP source).
+//! Fetches HTTP audio streams, decodes via symphonia to interleaved f32 samples,
+//! and sends them to a consumer (ZonePlayer) for resampling, EQ, and output.
 
 pub mod eq;
 pub mod icy;
@@ -150,11 +150,9 @@ pub async fn decode_http_stream(
             "Buffered MP4 stream for seekable decode"
         );
         let cursor = std::io::Cursor::new(bytes.to_vec());
-        tokio::task::spawn_blocking(move || {
-            decode_to_pcm(cursor, &content_type, tx, &audio_config)
-        })
-        .await
-        .context("Decoder task panicked")??;
+        tokio::task::spawn_blocking(move || decode_to_pcm(cursor, &content_type, tx))
+            .await
+            .context("Decoder task panicked")??;
         return Ok(());
     }
 
@@ -194,7 +192,7 @@ pub async fn decode_http_stream(
     // Decode in blocking thread (symphonia is sync + CPU-bound)
     let decode_task = tokio::task::spawn_blocking(move || {
         let reader = SyncReader(tokio::runtime::Handle::current(), pipe_rx);
-        decode_to_pcm(reader, &content_type, tx, &audio_config)
+        decode_to_pcm(reader, &content_type, tx)
     });
 
     // Wait for either task to finish
@@ -216,7 +214,7 @@ pub async fn decode_http_stream(
 async fn decode_hls_stream(
     playlist_url: String,
     tx: PcmSender,
-    audio_config: AudioConfig,
+    _audio_config: AudioConfig,
     icy_meta_tx: Option<tokio::sync::mpsc::Sender<icy::IcyMetadata>>,
 ) -> Result<()> {
     let client = http_client()?;
@@ -344,7 +342,7 @@ async fn decode_hls_stream(
 
     let decode_task = tokio::task::spawn_blocking(move || {
         let reader = SyncReader(tokio::runtime::Handle::current(), pipe_rx);
-        decode_to_pcm(reader, &content_type, tx, &audio_config)
+        decode_to_pcm(reader, &content_type, tx)
     });
 
     tokio::select! {
@@ -360,7 +358,6 @@ fn decode_to_pcm(
     reader: impl MediaSource + 'static,
     content_type: &str,
     tx: PcmSender,
-    _audio_config: &AudioConfig,
 ) -> Result<()> {
     let mut hint = Hint::new();
     match content_type {
@@ -428,7 +425,7 @@ fn decode_to_pcm(
             }
         };
 
-        // Convert to interleaved S16LE
+        // Convert to interleaved f32
         let spec = *decoded.spec();
         let num_frames = decoded.frames();
 
