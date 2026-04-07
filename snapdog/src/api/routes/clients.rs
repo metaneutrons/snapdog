@@ -123,7 +123,7 @@ async fn set_volume(
         })
         .await;
     // State update comes from Snapcast Client.OnVolumeChanged notification
-    tracing::debug!(client = idx, volume, "Client volume command sent");
+    tracing::debug!(client = idx, volume, "Volume set");
     Ok::<_, ApiError>(Json(volume))
 }
 
@@ -150,7 +150,7 @@ async fn set_mute(
             action: ClientAction::Mute(v),
         })
         .await;
-    tracing::info!(client = idx, muted = v, "Client mute set");
+    tracing::debug!(client = idx, muted = v, "Mute set");
     Ok::<_, ApiError>(Json(v))
 }
 
@@ -169,7 +169,7 @@ async fn toggle_mute(
         })
         .await;
     // State update comes from Snapcast Client.OnVolumeChanged notification
-    tracing::info!(client = %client.name, muted, "Client mute toggled");
+    tracing::debug!(client = %client.name, muted, "Mute toggled");
     Ok::<_, ApiError>(Json(muted))
 }
 
@@ -199,7 +199,7 @@ async fn set_latency(
             action: ClientAction::Latency(v),
         })
         .await;
-    tracing::info!(client = idx, latency = v, "Client latency set");
+    tracing::debug!(client = idx, latency = v, "Latency set");
     Ok::<_, ApiError>(Json(v))
 }
 
@@ -250,7 +250,7 @@ async fn set_name(
     let name = v.clone();
     crate::state::update_client_and_notify(&state.store, idx, &state.notifications, |c| c.name = v)
         .await;
-    tracing::info!(client = idx, name = %name, "Client name set");
+    tracing::debug!(client = idx, name = %name, "Name set");
     Ok::<_, ApiError>(Json(name))
 }
 

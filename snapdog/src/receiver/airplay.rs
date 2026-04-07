@@ -73,7 +73,7 @@ impl ReceiverProvider for AirPlayReceiver {
         server.start().await?;
 
         let port = server.service_info().port;
-        tracing::info!(name = %self.airplay_name, port, zone = self.zone_index, "AirPlay 2 receiver started");
+        tracing::info!(zone = %self.airplay_name, port, "AirPlay receiver started");
 
         self.server = Some(server);
         Ok(())
@@ -139,7 +139,7 @@ impl shairplay::AudioHandler for BridgeHandler {
     }
 
     fn on_coverart(&self, coverart: &[u8]) {
-        tracing::debug!(size = coverart.len(), "AirPlay cover art");
+        tracing::debug!(size = coverart.len() / 1024, "AirPlay cover art (KB)");
         let _ = self.event_tx.try_send(ReceiverEvent::CoverArt {
             bytes: coverart.to_vec(),
         });

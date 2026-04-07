@@ -72,7 +72,7 @@ async fn ws_handler(ws: WebSocketUpgrade, State(state): State<SharedState>) -> i
 async fn handle_socket(mut socket: WebSocket, state: SharedState) {
     let mut rx = state.notifications.subscribe();
     let mut ping_interval = tokio::time::interval(std::time::Duration::from_secs(30));
-    tracing::info!("WebSocket client connected");
+    tracing::debug!("WebSocket client connected");
 
     loop {
         tokio::select! {
@@ -99,5 +99,5 @@ async fn handle_socket(mut socket: WebSocket, state: SharedState) {
         }
     }
 
-    tracing::info!("WebSocket client disconnected");
+    tracing::debug!("WebSocket client disconnected");
 }

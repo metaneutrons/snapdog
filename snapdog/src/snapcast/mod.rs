@@ -232,7 +232,7 @@ pub async fn open_audio_source(port: u16) -> Result<TcpStream> {
     let stream = TcpStream::connect(format!("127.0.0.1:{port}"))
         .await
         .context("Failed to connect audio source")?;
-    tracing::info!(port, "Audio source connected");
+    tracing::debug!(port, "Snapcast TCP source connected");
     Ok(stream)
 }
 
@@ -285,11 +285,11 @@ pub async fn sync_initial_state(
         .map(|c| c.id.clone())
         .collect();
     for (_, c) in s.clients.iter() {
-        tracing::info!(client = %c.name, zone = c.zone_index, connected = c.connected, "Initial client state synced");
+        tracing::info!(client = %c.name, zone = c.zone_index, connected = c.connected, "Client synced");
     }
     drop(s);
     for id in &stale_ids {
-        tracing::info!(id = %id, "Deleting stale Snapcast client");
+        tracing::info!(id = %id, "Deleting stale client");
         let _ = snap.server_delete_client(id).await;
     }
 }
@@ -374,10 +374,10 @@ pub async fn reconcile_zone_groups(
             if expected_sorted != current_sorted {
                 tracing::info!(
                     zone = zone_cfg.index,
-                    group = %group.id,
-                    expected = ?expected_snap_ids,
-                    "Reconciling zone group clients"
+                    clients = expected_snap_ids.len(),
+                    "Reconcile: updating zone group"
                 );
+                tracing::debug!(zone = zone_cfg.index, expected = ?expected_snap_ids, "Reconcile details");
                 let _ = snap.group_set_clients(&group.id, expected_snap_ids).await;
             }
         }
@@ -448,7 +448,7 @@ pub async fn execute_command(
 ) {
     let result = match &cmd {
         player::SnapcastCmd::Group { group_id, action } => {
-            tracing::debug!(%group_id, ?action, "Snapcast group command");
+            tracing::trace!(%group_id, ?action, "Snapcast group command");
             match action {
                 player::GroupAction::Stream(stream_id) => {
                     snap.group_set_stream(group_id, stream_id).await
@@ -581,7 +581,7 @@ async fn sync_client_after_command(
             };
             let name = client.name.clone();
             drop(s);
-            tracing::debug!(client = %name, volume, muted, "Client state synced");
+            tracing::debug!(client = %name, volume, muted, "Client synced");
             let _ = notify.send(notif);
         }
     }
@@ -671,7 +671,7 @@ pub async fn handle_notification(
                 };
                 let name = client.name.clone();
                 drop(s);
-                tracing::debug!(client = %name, volume = vol, muted, "Client volume changed");
+                tracing::debug!(client = %name, volume = vol, muted, "Volume changed");
                 let _ = notify.send(notif);
             }
         }
@@ -733,7 +733,7 @@ pub async fn handle_notification(
             tracing::debug!(group = %id, name = %name, "Group name changed");
         }
         Notification::ServerOnUpdate { server } => {
-            tracing::debug!("Snapcast server state updated — syncing group IDs");
+            tracing::debug!("Server update — syncing group IDs");
             let mut s = store.write().await;
             // Only update group IDs, NOT zone_index (zone assignment is SnapDog-owned)
             for zone_cfg in &config.zones {
@@ -753,10 +753,10 @@ pub async fn handle_notification(
             }
         }
         Notification::StreamOnUpdate { id, stream } => {
-            tracing::debug!(stream = %id, status = ?stream.status, "Stream status updated");
+            tracing::trace!(stream = %id, status = ?stream.status, "Stream status updated");
         }
         Notification::StreamOnProperties { id, .. } => {
-            tracing::debug!(stream = %id, "Stream properties updated");
+            tracing::trace!(stream = %id, "Stream properties updated");
         }
         Notification::Unknown { method, .. } => {
             tracing::debug!(method = %method, "Unknown Snapcast notification");

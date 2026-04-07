@@ -205,6 +205,10 @@ pub async fn setup_zone_group(zone_index: usize, ctx: &ZonePlayerContext) -> Opt
         })
         .await;
 
-    tracing::info!(zone = zone_index, group = %gid, clients = ?snap_client_ids, "Zone group configured");
+    tracing::info!(
+        zone = zone_index,
+        clients = snap_client_ids.len(),
+        "Zone group assigned"
+    );
     Some(gid)
 }

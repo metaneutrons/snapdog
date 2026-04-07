@@ -41,7 +41,7 @@ pub async fn spawn_zone_players(
             }
         });
 
-        tracing::info!(zone = zone.index, name = %zone.name, "ZonePlayer started");
+        tracing::info!(zone = %zone.name, "Zone started");
     }
 
     Ok(senders)
@@ -91,10 +91,7 @@ async fn run(
             zone_config.airplay_name.clone(),
         );
         match receiver.start(airplay_audio_tx, airplay_event_tx).await {
-            Ok(()) => {
-                tracing::info!(zone = %zone_config.name, "AirPlay receiver active");
-                Some(receiver)
-            }
+            Ok(()) => Some(receiver),
             Err(e) => {
                 tracing::warn!(zone = zone_index, error = %e, "AirPlay receiver failed to start");
                 None
@@ -339,7 +336,7 @@ async fn run(
                             Some(crate::config::ResolvedPlaylist::Subsonic(sub_idx)) => {
                             if let Some(sub) = &subsonic {
                                 if let Some(pl) = subsonic_playlists.get(sub_idx) {
-                                    tracing::info!(zone = %zone_config.name, playlist = %pl.name, "Switching playlist");
+                                    tracing::info!(zone = %zone_config.name, playlist = %pl.name, "Playlist changed");
                                     stop_decode(&mut current_decode, &mut decode_rx).await; position_offset_ms = 0;
                                     if let Ok(playlist) = sub.get_playlist(&pl.id).await {
                                         let track_idx = start_track.min(playlist.entry.len().saturating_sub(1));
@@ -464,7 +461,7 @@ async fn run(
                 match pcm {
                     Some(audio::PcmMessage::Format { sample_rate, channels }) => {
                         resampler = audio::resample::F32Resampling::new(sample_rate, config.audio.sample_rate, channels);
-                        tracing::debug!(source_rate = sample_rate, target_rate = config.audio.sample_rate, "Active source resampler configured");
+                        tracing::debug!(from = sample_rate, to = config.audio.sample_rate, "Resampler configured");
                     }
                     Some(audio::PcmMessage::Audio(samples)) => {
                         let samples = match resampler.process(&samples) {
