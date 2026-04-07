@@ -597,67 +597,39 @@ playlist_providers = ["spotify", "subsonic"]
 
 ---
 
-## ADR-017: Built-in Per-Zone DSP (EQ + Compressor/Limiter)
+## ADR-017: Built-in Per-Zone DSP (Parametric EQ)
 
-**Status:** Proposed (future)
+**Status:** Implemented
 
-**Decision:** Implement per-zone audio DSP (parametric EQ and compressor/limiter) as
-built-in pure Rust code, drawing on algorithms from established open-source LV2 plugins.
-No plugin host system (LV2/LADSPA/AU).
+**Decision:** Per-zone parametric EQ using the `biquad` crate. Compressor/limiter deferred.
+Per-client EQ not possible due to Snapcast architecture (one stream per group).
 
-**Rationale:**
-- SnapDog targets headless appliances (RPi, NAS, Docker) — installing plugin packages
-  is impractical, and LV2/LADSPA don't work on macOS
-- Only two DSP effects are needed: parametric EQ and compressor/limiter
-- High-quality algorithms are well-documented in open-source LV2 plugins:
-  - **LSP Plugins** (GPL-3.0) — parametric EQ with precise filter curves
-  - **ZamPlugins** (GPL-2.0) — broadcast-grade compressor/limiter
-  - **x42 plugins** (GPL-2.0) — reference biquad EQ implementations
-- The `biquad` Rust crate provides standard IIR filter primitives (peaking, shelving,
-  high/low pass) — the building blocks for any parametric EQ
-- A compressor/limiter is ~50-100 lines of Rust (envelope follower + gain reduction)
-- Pure Rust = works everywhere, no FFI, no shared libraries, no system dependencies
+**Implementation:**
+- `audio/eq.rs` — `ZoneEq` struct: 1-10 biquad bands per zone, in-place f32 processing
+- Filter types: `low_shelf`, `high_shelf`, `peaking`, `low_pass`, `high_pass`
+- 5 built-in presets: flat, bass_boost, treble_boost, vocal, loudness
+- Persistence: `eq.json` (separate from state.json, keyed by zone index)
+- Pipeline: `f32 → Resampler → EQ → f32_to_pcm → TCP → Snapserver`
 
-**Pipeline change (when implemented):**
-```
-Current:  Decode → S16LE → Resampler → S16LE → TCP → Snapserver
-Future:   Decode → F32 → Resampler → [EQ → Compressor/Limiter] → S16LE → TCP → Snapserver
-```
+**API:**
+- `GET/PUT /api/v1/zones/{id}/eq` — full config
+- `PUT /api/v1/zones/{id}/eq/{band}` — single band update
+- `POST /api/v1/zones/{id}/eq/preset` — apply named preset
+- WebSocket: `zone_eq_changed` notification
 
-Internal format switches from S16LE to F32 to avoid precision loss during DSP.
-S16LE conversion happens once at the final output stage.
+**WebUI:**
+- Blurred overlay (reusable component for future client EQ)
+- Enable toggle, A/B comparison, preset dropdown
+- Per-band: type, frequency (log scale), gain (±12dB), Q sliders
+- SVG frequency response curve (client-side biquad transfer function)
 
-**Config:**
-```toml
-[zone.eq]
-enabled = true
-bands = [
-    { type = "low_shelf", freq = 80, gain = 3.0, q = 0.7 },
-    { type = "peaking", freq = 1000, gain = -1.5, q = 1.0 },
-    { type = "high_shelf", freq = 8000, gain = -2.0, q = 0.7 },
-]
+**Why not per-client EQ:**
+Snapcast syncs audio within a group via a single stream. Per-client EQ would require
+separate streams per client = separate groups = no sync. This is a fundamental Snapcast
+limitation. Per-zone EQ is the only option that preserves synchronized playback.
 
-[zone.compressor]
-enabled = true
-threshold = -20.0  # dBFS
-ratio = 4.0
-attack_ms = 10.0
-release_ms = 100.0
-makeup_gain = 0.0
-
-[zone.limiter]
-enabled = true
-threshold = -1.0  # dBFS — brick-wall ceiling
-```
-
-**API + WebUI:**
-- `GET/PUT /api/v1/zones/{id}/eq` — read/update EQ bands
-- `GET/PUT /api/v1/zones/{id}/compressor` — read/update compressor settings
-- WebUI: EQ curve visualization + compressor gain reduction meter per zone
-
-**Persistence:**
-- DSP settings are persisted in `snapdog.toml` (SSOT — one config file for everything)
-- API `PUT` updates live DSP parameters in memory for real-time tweaking (instant effect)
+**Future:** Compressor/limiter (~50 lines, envelope follower + gain reduction). No external
+dependency needed.
 - WebUI "save" writes current settings back to TOML for persistence across restarts
 - On startup, DSP chain is initialized from TOML config
 
