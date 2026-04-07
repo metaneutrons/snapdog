@@ -56,6 +56,11 @@ async fn main() -> Result<()> {
 
     // ── Wire subsystems ───────────────────────────────────────
 
+    // EQ store
+    let eq_store = std::sync::Arc::new(std::sync::Mutex::new(audio::eq::EqStore::load(
+        std::path::Path::new("eq.json"),
+    )));
+
     // Zone players
     let zone_commands = player::spawn_zone_players(player::ZonePlayerContext {
         config: config.clone(),
@@ -63,6 +68,7 @@ async fn main() -> Result<()> {
         covers: covers.clone(),
         notify: notify_tx.clone(),
         snap_tx: snap_cmd_tx.clone(),
+        eq_store: eq_store.clone(),
         client_mac_map: snapcast::build_client_mac_map(&status),
         group_ids: snapcast::build_group_ids(&status),
         group_clients: snapcast::build_group_clients(&status),
@@ -84,6 +90,7 @@ async fn main() -> Result<()> {
             api_snap_tx,
             api_covers,
             api_notify,
+            eq_store.clone(),
         )
         .await
         {

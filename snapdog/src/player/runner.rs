@@ -113,6 +113,13 @@ async fn run(
     let mut receiver_resampler: Option<audio::resample::F32Resampling> = None;
     let output_bit_depth = config.audio.bit_depth;
 
+    // Per-zone EQ
+    let mut zone_eq = audio::eq::ZoneEq::new(config.audio.sample_rate, config.audio.channels);
+    {
+        let eq_config = ctx.eq_store.lock().unwrap().get(zone_index);
+        zone_eq.set_config(&eq_config);
+    }
+
     loop {
         tokio::select! {
             Some(cmd) = commands.recv() => {
@@ -455,6 +462,15 @@ async fn run(
                     ZoneCommand::ToggleRepeat => { update_and_notify(store, zone_index, notify, |z| z.repeat = !z.repeat).await; }
                     ZoneCommand::SetTrackRepeat(v) => { update_and_notify(store, zone_index, notify, |z| z.track_repeat = v).await; }
                     ZoneCommand::ToggleTrackRepeat => { update_and_notify(store, zone_index, notify, |z| z.track_repeat = !z.track_repeat).await; }
+                    ZoneCommand::SetEq(eq_config) => {
+                        zone_eq.set_config(&eq_config);
+                        ctx.eq_store.lock().unwrap().set(zone_index, eq_config.clone());
+                        let _ = notify.send(crate::api::ws::Notification::ZoneEqChanged {
+                            zone: zone_index,
+                            config: eq_config,
+                        });
+                        tracing::debug!(zone = zone_index, "EQ updated");
+                    }
                 }
             }
             pcm = async { match &mut decode_rx { Some(rx) => rx.recv().await, None => std::future::pending().await } } => {
@@ -464,10 +480,11 @@ async fn run(
                         tracing::debug!(from = sample_rate, to = config.audio.sample_rate, "Resampler configured");
                     }
                     Some(audio::PcmMessage::Audio(samples)) => {
-                        let samples = match resampler.process(&samples) {
+                        let mut samples = match resampler.process(&samples) {
                             Some(resampled) => resampled,
                             None => continue,
                         };
+                        zone_eq.process(&mut samples);
                         let pcm = audio::resample::f32_to_pcm(&samples, output_bit_depth);
                         if let Err(e) = tcp.write_all(&pcm).await {
                             tracing::error!(zone = zone_index, error = %e, "TCP write failed");
@@ -493,14 +510,15 @@ async fn run(
                     source = ActiveSource::AirPlay;
                     update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Playing; z.source = SourceType::AirPlay; }).await;
                 }
-                let samples = match &mut receiver_resampler {
+                let mut samples = match &mut receiver_resampler {
                     Some(r) => match r.process(&samples) {
                         Some(resampled) => resampled,
-                        None => continue, // buffering, not enough input yet
+                        None => continue,
                     },
                     None => samples,
                 };
                 if samples.is_empty() { continue; }
+                zone_eq.process(&mut samples);
                 let pcm = audio::resample::f32_to_pcm(&samples, output_bit_depth);
                 if let Err(e) = tcp.write_all(&pcm).await { tracing::error!(zone = zone_index, error = %e, "TCP write failed (AirPlay)"); }
             }

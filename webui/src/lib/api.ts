@@ -190,4 +190,26 @@ export const health = {
   live: () => get<string>("/health/live"),
 };
 
-export const api = { zones, clients, media, system, health };
+// ── EQ ────────────────────────────────────────────────────────
+
+export interface EqBand {
+  freq: number;
+  gain: number;
+  q: number;
+  type: "low_shelf" | "high_shelf" | "peaking" | "low_pass" | "high_pass";
+}
+
+export interface EqConfig {
+  enabled: boolean;
+  bands: EqBand[];
+  preset?: string | null;
+}
+
+export const eq = {
+  get: (zoneId: number) => get<EqConfig>(`${Z}/${zoneId}/eq`),
+  set: (zoneId: number, config: EqConfig) => put<EqConfig>(`${Z}/${zoneId}/eq`, config),
+  setBand: (zoneId: number, idx: number, band: EqBand) => put<EqConfig>(`${Z}/${zoneId}/eq/${idx}`, band),
+  applyPreset: (zoneId: number, name: string) => post<EqConfig>(`${Z}/${zoneId}/eq/preset`, name),
+};
+
+export const api = { zones, clients, media, system, health, eq };

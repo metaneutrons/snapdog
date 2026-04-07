@@ -33,6 +33,7 @@ pub struct AppState {
     pub snap_tx: player::SnapcastCmdSender,
     pub covers: state::cover::SharedCoverCache,
     pub notifications: tokio::sync::broadcast::Sender<ws::Notification>,
+    pub eq_store: std::sync::Arc<std::sync::Mutex<crate::audio::eq::EqStore>>,
     pub playlist_cache:
         tokio::sync::RwLock<Option<(std::time::Instant, Vec<crate::subsonic::PlaylistEntry>)>>,
 }
@@ -47,6 +48,7 @@ pub async fn serve(
     snap_tx: player::SnapcastCmdSender,
     covers: state::cover::SharedCoverCache,
     notifications: tokio::sync::broadcast::Sender<ws::Notification>,
+    eq_store: std::sync::Arc<std::sync::Mutex<crate::audio::eq::EqStore>>,
 ) -> Result<()> {
     let port = config.http.port;
     let state = Arc::new(AppState {
@@ -56,6 +58,7 @@ pub async fn serve(
         snap_tx,
         covers,
         notifications,
+        eq_store,
         playlist_cache: tokio::sync::RwLock::new(None),
     });
 
@@ -65,6 +68,7 @@ pub async fn serve(
     let mut protected = Router::new()
         .merge(ws::router(state.clone()))
         .nest("/api/v1/zones", routes::zones::router(state.clone()))
+        .nest("/api/v1/zones", routes::eq::router(state.clone()))
         .nest("/api/v1/clients", routes::clients::router(state.clone()))
         .nest("/api/v1/media", routes::media::router(state.clone()))
         .nest("/api/v1/system", routes::system::router(state.clone()));

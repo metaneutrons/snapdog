@@ -6,6 +6,7 @@
 //! Fetches HTTP audio streams, decodes via symphonia to raw PCM (S16LE),
 //! and sends PCM chunks to a consumer (Snapcast TCP source).
 
+pub mod eq;
 pub mod icy;
 pub mod resample;
 

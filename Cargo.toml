@@ -34,6 +34,7 @@ symphonia = { version = "0.5", features = ["aac", "mp3", "flac", "alac", "isomp4
 
 # Audio resampling
 rubato = "0.16"
+biquad = "0.6"
 
 # MQTT
 rumqttc = "0.24"

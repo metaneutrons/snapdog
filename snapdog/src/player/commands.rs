@@ -38,6 +38,9 @@ pub enum ZoneCommand {
     ToggleRepeat,
     SetTrackRepeat(bool),
     ToggleTrackRepeat,
+
+    // ── DSP ───────────────────────────────────────────────────
+    SetEq(crate::audio::eq::EqConfig),
 }
 
 /// What the ZonePlayer is currently doing.

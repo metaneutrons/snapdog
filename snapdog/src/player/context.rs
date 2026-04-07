@@ -25,6 +25,7 @@ pub struct ZonePlayerContext {
     pub covers: SharedCoverCache,
     pub notify: NotifySender,
     pub snap_tx: SnapcastCmdSender,
+    pub eq_store: Arc<std::sync::Mutex<crate::audio::eq::EqStore>>,
     /// Pre-extracted: Snapcast client MAC (lowercase) → Snapcast client ID.
     pub client_mac_map: HashMap<String, String>,
     /// Pre-extracted: all Snapcast group IDs.

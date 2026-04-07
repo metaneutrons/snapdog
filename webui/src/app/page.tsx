@@ -9,6 +9,8 @@ import { ApiKeyPrompt } from "@/components/ApiKeyPrompt";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NowPlaying } from "@/components/NowPlaying";
 import { TransportControls } from "@/components/TransportControls";
+import { EqOverlay } from "@/components/EqOverlay";
+import { Button } from "@/components/ui/button";
 import { VolumeSlider } from "@/components/VolumeSlider";
 import { SeekBar } from "@/components/SeekBar";
 import { ShuffleRepeat } from "@/components/ShuffleRepeat";
@@ -181,6 +183,7 @@ function TrackInfo({ zone }: { zone: ZoneState }) {
 }
 
 function ZoneDetail({ zone }: { zone: ZoneState }) {
+  const [showEq, setShowEq] = useState(false);
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       <div className="w-full max-w-[calc(100%-2rem)] mx-auto md:max-w-[600px] space-y-3 px-4 py-4 md:px-5 md:py-4">
@@ -193,7 +196,10 @@ function ZoneDetail({ zone }: { zone: ZoneState }) {
           <div className="space-y-3 md:flex-1 md:min-w-0 md:max-w-sm md:min-h-56 md:justify-between">
             <TrackInfo zone={zone} />
             <SeekBar zone={zone} />
-            <TransportControls zone={zone} />
+            <div className="flex items-center gap-2">
+              <div className="flex-1"><TransportControls zone={zone} /></div>
+              <Button variant="ghost" size="sm" onClick={() => setShowEq(true)} className="text-xs px-2">EQ</Button>
+            </div>
             <ShuffleRepeat zone={zone} />
             <VolumeSlider
               volume={zone.volume}
@@ -208,6 +214,7 @@ function ZoneDetail({ zone }: { zone: ZoneState }) {
         <ClientList zone={zone} />
         <PlaylistBrowser zone={zone} />
       </div>
+      {showEq && <EqOverlay zoneId={zone.index} zoneName={zone.name} onClose={() => setShowEq(false)} />}
     </div>
   );
 }

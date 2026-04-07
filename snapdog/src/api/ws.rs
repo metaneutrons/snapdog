@@ -49,6 +49,11 @@ pub enum Notification {
         connected: bool,
         zone: usize,
     },
+    ZoneEqChanged {
+        zone: usize,
+        #[serde(flatten)]
+        config: crate::audio::eq::EqConfig,
+    },
 }
 
 /// Create a broadcast channel for notifications.

@@ -26,6 +26,7 @@ tracing-appender = { workspace = true }
 # snapcast-control removed — using own JSON-RPC client (ADR-018)
 symphonia = { workspace = true }
 rubato = { workspace = true }
+biquad = { workspace = true }
 rumqttc = { workspace = true }
 knxkit = { workspace = true }
 knxkit_dpt = { workspace = true }
