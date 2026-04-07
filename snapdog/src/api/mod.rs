@@ -67,8 +67,10 @@ pub async fn serve(
     // Protected routes (API + WebSocket)
     let mut protected = Router::new()
         .merge(ws::router(state.clone()))
-        .nest("/api/v1/zones", routes::zones::router(state.clone()))
-        .nest("/api/v1/zones", routes::eq::router(state.clone()))
+        .nest(
+            "/api/v1/zones",
+            routes::zones::router(state.clone()).merge(routes::eq::router(state.clone())),
+        )
         .nest("/api/v1/clients", routes::clients::router(state.clone()))
         .nest("/api/v1/media", routes::media::router(state.clone()))
         .nest("/api/v1/system", routes::system::router(state.clone()));

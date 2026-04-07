@@ -19,7 +19,7 @@ const DEFAULT_BAND: EqBand = { freq: 1000, gain: 0, q: 1.0, type: "peaking" };
 
 export function EqOverlay({ zoneId, zoneName, onClose }: EqOverlayProps) {
   const [config, setConfig] = useState<EqConfig>({ enabled: false, bands: [], preset: "flat" });
-  const [abState, setAbState] = useState<EqConfig | null>(null); // stored config for A/B
+  const [abBypass, setAbBypass] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Load current EQ
@@ -70,25 +70,17 @@ export function EqOverlay({ zoneId, zoneName, onClose }: EqOverlayProps) {
   };
 
   const toggleAB = () => {
-    if (abState) {
-      // Restore A
-      const restored = abState;
-      setAbState(null);
-      setConfig(restored);
-      pushConfig(restored);
-    } else {
-      // Store A, apply flat (B)
-      setAbState(config);
-      const flat: EqConfig = { enabled: false, bands: [], preset: "flat" };
-      setConfig(flat);
-      pushConfig(flat);
-    }
+    const next = !abBypass;
+    setAbBypass(next);
+    // Send enabled=false to bypass, restore on un-bypass
+    const c = { ...config, enabled: !next };
+    pushConfig(c);
   };
 
   // Frequency response curve
   const response = useMemo(
-    () => (config.enabled ? computeResponse(config.bands) : []),
-    [config.enabled, config.bands],
+    () => (config.bands.length > 0 ? computeResponse(config.bands) : []),
+    [config.bands],
   );
 
   if (loading) return null;
@@ -101,7 +93,7 @@ export function EqOverlay({ zoneId, zoneName, onClose }: EqOverlayProps) {
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">EQ — {zoneName}</h2>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={toggleAB} className={abState ? "text-primary" : ""}>
+            <Button variant="ghost" size="sm" onClick={toggleAB} className={abBypass ? "text-muted-foreground" : "text-primary font-semibold"}>
               A/B
             </Button>
             <Button variant="ghost" size="sm" onClick={onClose}>✕</Button>
@@ -132,10 +124,12 @@ export function EqOverlay({ zoneId, zoneName, onClose }: EqOverlayProps) {
         </div>
 
         {/* Frequency Response Curve */}
-        <FrequencyResponseCurve response={response} />
+        <div className={abBypass ? "opacity-40 transition-opacity" : "transition-opacity"}>
+          <FrequencyResponseCurve response={response} />
+        </div>
 
         {/* Bands */}
-        <div className="space-y-3">
+        <div className={`space-y-3 ${abBypass ? "opacity-40 pointer-events-none" : ""}`}>
           {config.bands.map((band, idx) => (
             <BandRow
               key={idx}
@@ -242,11 +236,15 @@ function FrequencyResponseCurve({ response }: { response: { freq: number; db: nu
     ? response.map((p, i) => `${i === 0 ? "M" : "L"}${freqToX(p.freq).toFixed(1)},${dbToY(p.db).toFixed(1)}`).join("")
     : "";
 
+  if (response.length > 0 && !path) {
+    console.warn("EQ: response has data but path is empty", response);
+  }
+
   const gridFreqs = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
   const gridDbs = [-12, -6, 0, 6, 12];
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="w-full rounded-lg bg-muted/30 border border-border">
+    <svg viewBox={`0 0 ${width} ${height}`} className="w-full rounded-lg bg-muted/30 border border-border" style={{ minHeight: 120 }}>
       {/* Grid lines */}
       {gridFreqs.map((f) => (
         <line key={`f${f}`} x1={freqToX(f)} x2={freqToX(f)} y1={pad.top} y2={pad.top + plotH} stroke="currentColor" strokeOpacity={0.1} />
@@ -266,8 +264,8 @@ function FrequencyResponseCurve({ response }: { response: { freq: number; db: nu
       {/* Response curve */}
       {path && (
         <>
-          <path d={path + `L${freqToX(20000)},${dbToY(0)}L${freqToX(20)},${dbToY(0)}Z`} fill="hsl(var(--primary))" fillOpacity={0.1} />
-          <path d={path} fill="none" stroke="hsl(var(--primary))" strokeWidth={2} />
+          <path d={path + `L${freqToX(20000)},${dbToY(0)}L${freqToX(20)},${dbToY(0)}Z`} fill="oklch(0.65 0.18 40)" fillOpacity={0.15} />
+          <path d={path} fill="none" stroke="oklch(0.65 0.18 40)" strokeWidth={2} />
         </>
       )}
       {/* 0 dB label */}
