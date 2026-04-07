@@ -316,9 +316,14 @@ fn sync_zones_from_groups(groups: &[types::Group], config: &AppConfig, s: &mut s
                     .values_mut()
                     .find(|c| c.snapcast_id.as_deref() == Some(&snap_client.id))
                 {
+                    if client.zone_index != zone_cfg.index {
+                        tracing::debug!(client = %client.name, from = client.zone_index, to = zone_cfg.index, "Client zone synced from Snapcast group");
+                    }
                     client.zone_index = zone_cfg.index;
                 }
             }
+        } else {
+            tracing::warn!(zone = zone_cfg.index, stream = %zone_cfg.stream_name, "No Snapcast group found for zone");
         }
     }
 }
@@ -471,6 +476,7 @@ pub async fn execute_command(
             }
         }
         player::SnapcastCmd::ReconcileZones => {
+            tracing::debug!("Reconciling zone groups");
             reconcile_zone_groups(snap, config, store, notify).await;
             return;
         }
