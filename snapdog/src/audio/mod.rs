@@ -422,7 +422,7 @@ fn decode_to_pcm(
         let decoded = match decoder.decode(&packet) {
             Ok(d) => d,
             Err(e) => {
-                tracing::warn!(error = %e, "Decode error, skipping packet");
+                tracing::debug!(error = %e, "Decode error, skipping packet");
                 continue;
             }
         };
