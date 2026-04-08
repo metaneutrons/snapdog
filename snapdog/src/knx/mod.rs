@@ -123,6 +123,9 @@ async fn publisher(
             Ok(crate::api::ws::Notification::ZoneTrackChanged { zone, .. }) => {
                 publish_zone_track(zone, &config, &store, &mut handle).await;
             }
+            Ok(crate::api::ws::Notification::ZoneProgress { zone, .. }) => {
+                publish_zone_progress(zone, &config, &store, &mut handle).await;
+            }
             Ok(crate::api::ws::Notification::ClientStateChanged { client, .. }) => {
                 publish_client_state(client, &config, &store, &mut handle).await;
             }
@@ -173,6 +176,22 @@ async fn publish_zone_state(
     if let Some(ref ga) = knx.track_repeat_status {
         write(handle, ga, encode_bool(zone.track_repeat)).await;
     }
+    if let Some(ref ga) = knx.control_status {
+        write(
+            handle,
+            ga,
+            encode_bool(zone.playback.to_string() == "playing"),
+        )
+        .await;
+    }
+    if let Some(ref ga) = knx.playlist_status {
+        write(
+            handle,
+            ga,
+            encode_percent(zone.playlist_index.unwrap_or(0) as u8),
+        )
+        .await;
+    }
 }
 
 async fn publish_zone_track(
@@ -200,6 +219,40 @@ async fn publish_zone_track(
         if let Some(ref ga) = knx.track_album_status {
             write(handle, ga, encode_string(&track.album)).await;
         }
+        if let Some(ref ga) = knx.track_progress_status {
+            let pct = if track.duration_ms > 0 {
+                ((track.position_ms as f64 / track.duration_ms as f64) * 100.0).clamp(0.0, 100.0)
+                    as u8
+            } else {
+                0
+            };
+            write(handle, ga, encode_percent(pct)).await;
+        }
+    }
+}
+
+async fn publish_zone_progress(
+    zone_index: usize,
+    config: &AppConfig,
+    store: &state::SharedState,
+    handle: &mut MultiplexHandle,
+) {
+    let s = store.read().await;
+    let Some(zone) = s.zones.get(&zone_index) else {
+        return;
+    };
+    let Some(zone_cfg) = config.zones.get(zone_index - 1) else {
+        return;
+    };
+    if let Some(ref ga) = zone_cfg.knx.track_progress_status {
+        let pct = zone.track.as_ref().map_or(0u8, |t| {
+            if t.duration_ms > 0 {
+                ((t.position_ms as f64 / t.duration_ms as f64) * 100.0).clamp(0.0, 100.0) as u8
+            } else {
+                0
+            }
+        });
+        write(handle, ga, encode_percent(pct)).await;
     }
 }
 
@@ -234,6 +287,14 @@ async fn publish_client_state(
     }
     if let Some(ref ga) = knx.zone_status {
         write(handle, ga, encode_percent(client.zone_index as u8)).await;
+    }
+    if let Some(ref ga) = knx.latency_status {
+        write(
+            handle,
+            ga,
+            encode_percent(client.latency_ms.clamp(0, 255) as u8),
+        )
+        .await;
     }
 }
 
@@ -292,6 +353,9 @@ fn build_zone_ga_map(config: &AppConfig) -> HashMap<String, (usize, &'static str
             (&knx.track_repeat, "track_repeat"),
             (&knx.track_repeat_toggle, "track_repeat_toggle"),
             (&knx.volume, "volume"),
+            (&knx.playlist, "playlist"),
+            (&knx.playlist_next, "playlist_next"),
+            (&knx.playlist_previous, "playlist_previous"),
         ];
         for (ga_opt, action) in pairs {
             if let Some(ga) = ga_opt {
@@ -311,6 +375,8 @@ fn build_client_ga_map(config: &AppConfig) -> HashMap<String, (usize, &'static s
             (&knx.mute, "mute"),
             (&knx.mute_toggle, "mute_toggle"),
             (&knx.volume, "volume"),
+            (&knx.latency, "latency"),
+            (&knx.zone, "zone"),
         ];
         for (ga_opt, action) in pairs {
             if let Some(ga) = ga_opt {
@@ -365,6 +431,11 @@ async fn handle_incoming(
                 "volume" => data
                     .as_ref()
                     .and_then(|d| decode_percent(d).map(|v| ZoneCommand::SetVolume(v as i32))),
+                "playlist" => data.as_ref().and_then(|d| {
+                    decode_percent(d).map(|v| ZoneCommand::SetPlaylist(v as usize, 0))
+                }),
+                "playlist_next" => Some(ZoneCommand::NextPlaylist),
+                "playlist_previous" => Some(ZoneCommand::PreviousPlaylist),
                 _ => None,
             };
             if let Some(cmd) = cmd {
@@ -384,6 +455,23 @@ async fn handle_incoming(
                     "volume" => data
                         .as_ref()
                         .and_then(|d| decode_percent(d).map(|v| ClientAction::Volume(v as i32))),
+                    "latency" => data
+                        .as_ref()
+                        .and_then(|d| decode_percent(d).map(|v| ClientAction::Latency(v as i32))),
+                    "zone" => {
+                        if let Some(target_zone) = data.as_ref().and_then(|d| decode_percent(d)) {
+                            drop(s);
+                            store
+                                .write()
+                                .await
+                                .clients
+                                .get_mut(&client_idx)
+                                .map(|c| c.zone_index = target_zone as usize);
+                            let _ = snap_tx.send(SnapcastCmd::ReconcileZones).await;
+                            tracing::debug!(client = client_idx, zone = target_zone, ga = %ga, "KNX → client zone change");
+                        }
+                        return;
+                    }
                     _ => None,
                 };
                 if let Some(action) = cmd {
