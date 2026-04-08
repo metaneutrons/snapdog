@@ -10,36 +10,51 @@ use serde::Deserialize;
 /// Root of the TOML config file. Optional fields use defaults.
 #[derive(Debug, Deserialize)]
 pub struct RawConfig {
+    /// System settings (log level, log file).
     #[serde(default)]
     pub system: SystemConfig,
+    /// Audio output format (sample rate, bit depth, channels, codec).
     #[serde(default)]
     pub audio: AudioConfig,
+    /// HTTP server settings (port, API keys).
     #[serde(default)]
     pub http: HttpConfig,
+    /// Snapcast connection and management settings.
     #[serde(default)]
     pub snapcast: SnapcastConfig,
+    /// AirPlay receiver settings.
     #[serde(default)]
     pub airplay: AirplayConfig,
+    /// Subsonic/Navidrome server connection.
     #[serde(default)]
     pub subsonic: Option<SubsonicConfig>,
+    /// Spotify Connect receiver settings.
     #[serde(default)]
     pub spotify: Option<SpotifyConfig>,
+    /// MQTT bridge settings.
     #[serde(default)]
     pub mqtt: Option<MqttConfig>,
+    /// KNX/IP integration settings.
     #[serde(default)]
     pub knx: KnxConfig,
+    /// Zone definitions.
     #[serde(default)]
     pub zone: Vec<RawZoneConfig>,
+    /// Client (speaker) definitions.
     #[serde(default)]
     pub client: Vec<RawClientConfig>,
+    /// Radio station definitions.
     #[serde(default)]
     pub radio: Vec<RawRadioConfig>,
 }
 
+/// System-level settings.
 #[derive(Debug, Deserialize, Clone)]
 pub struct SystemConfig {
+    /// Tracing log level: trace, debug, info, warn, error.
     #[serde(default = "default_log_level")]
     pub log_level: String,
+    /// Optional log file path (daily rotation).
     pub log_file: Option<String>,
 }
 
@@ -52,14 +67,19 @@ impl Default for SystemConfig {
     }
 }
 
+/// Audio output format — SSOT with Snapcast stream configuration.
 #[derive(Debug, Clone, Deserialize)]
 pub struct AudioConfig {
+    /// Output sample rate in Hz (e.g., 44100, 48000, 96000).
     #[serde(default = "default_sample_rate")]
     pub sample_rate: u32,
+    /// Output bit depth: 16, 24, or 32.
     #[serde(default = "default_bit_depth")]
     pub bit_depth: u16,
+    /// Number of audio channels (typically 2 for stereo).
     #[serde(default = "default_channels")]
     pub channels: u16,
+    /// Snapcast codec: "flac", "pcm", "opus", "ogg".
     #[serde(default = "default_codec")]
     pub codec: String,
 }
@@ -75,8 +95,10 @@ impl Default for AudioConfig {
     }
 }
 
+/// HTTP server configuration.
 #[derive(Debug, Deserialize, Clone)]
 pub struct HttpConfig {
+    /// Port for the REST API, WebSocket, and embedded WebUI.
     #[serde(default = "default_http_port")]
     pub port: u16,
     /// Optional API keys. If set, all API endpoints require `Authorization: Bearer <key>`.
@@ -93,16 +115,22 @@ impl Default for HttpConfig {
     }
 }
 
+/// Snapcast server connection and management.
 #[derive(Debug, Deserialize, Clone)]
 pub struct SnapcastConfig {
+    /// Snapcast server address (hostname or IP).
     #[serde(default = "default_snapcast_address")]
     pub address: String,
+    /// TCP JSON-RPC control port (default: 1705).
     #[serde(default = "default_jsonrpc_port")]
     pub jsonrpc_port: u16,
+    /// Audio streaming port (default: 1704).
     #[serde(default = "default_streaming_port")]
     pub streaming_port: u16,
+    /// Start snapserver as a managed child process.
     #[serde(default = "default_true")]
     pub managed: bool,
+    /// Show snapserver console output.
     #[serde(default)]
     pub verbose: bool,
 }
@@ -119,8 +147,10 @@ impl Default for SnapcastConfig {
     }
 }
 
+/// AirPlay receiver settings (shared across all zones).
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct AirplayConfig {
+    /// Optional password for AirPlay connections.
     pub password: Option<String>,
     /// Path to persist AirPlay pairing keys (required for AP2 reconnects).
     pub pairing_store: Option<std::path::PathBuf>,
@@ -128,6 +158,7 @@ pub struct AirplayConfig {
     pub bind: Option<Vec<std::net::IpAddr>>,
 }
 
+/// Spotify Connect receiver settings.
 #[derive(Debug, Deserialize, Clone)]
 pub struct SpotifyConfig {
     /// Device name shown in Spotify app (e.g., "SnapDog Ground Floor").
@@ -148,10 +179,14 @@ fn default_spotify_bitrate() -> u32 {
     320
 }
 
+/// Subsonic/Navidrome server connection.
 #[derive(Debug, Deserialize, Clone)]
 pub struct SubsonicConfig {
+    /// Server base URL (e.g., `https://music.example.com`).
     pub url: String,
+    /// Authentication username.
     pub username: String,
+    /// Authentication password.
     pub password: String,
     /// Stream format: "raw" (original file), "flac", "mp3", "opus".
     /// Default: "flac" (lossless, streamable, no buffering delay).
@@ -163,19 +198,26 @@ fn default_subsonic_format() -> String {
     "flac".into()
 }
 
+/// MQTT bridge configuration.
 #[derive(Debug, Deserialize, Clone)]
 pub struct MqttConfig {
+    /// Broker address (host:port).
     pub broker: String,
+    /// MQTT username (empty for anonymous).
     #[serde(default)]
     pub username: String,
+    /// MQTT password.
     #[serde(default)]
     pub password: String,
+    /// Base topic prefix (e.g., "snapdog/").
     #[serde(default = "default_mqtt_base_topic")]
     pub base_topic: String,
 }
 
+/// KNX/IP integration settings.
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct KnxConfig {
+    /// Enable KNX integration.
     #[serde(default)]
     pub enabled: bool,
     /// KNX connection URL. Unicast = tunnel, multicast = router.
@@ -185,18 +227,26 @@ pub struct KnxConfig {
 
 // ── Raw zone/client/radio (user-facing, optional fields) ──────
 
+/// Zone definition as written in TOML.
 #[derive(Debug, Deserialize)]
 pub struct RawZoneConfig {
+    /// Human-readable zone name (also used as AirPlay name).
     pub name: String,
+    /// Emoji icon for the zone.
     #[serde(default = "default_zone_icon")]
     pub icon: String,
+    /// Override Snapcast sink path (default: auto-generated).
     pub sink: Option<String>,
+    /// Override AirPlay receiver name (default: zone name).
     pub airplay_name: Option<String>,
+    /// KNX group addresses for this zone.
     #[serde(default)]
     pub knx: RawZoneKnxConfig,
 }
 
+/// KNX group addresses for zone control (all optional, explicit config only).
 #[derive(Debug, Default, Deserialize)]
+#[allow(missing_docs)]
 pub struct RawZoneKnxConfig {
     pub play: Option<String>,
     pub pause: Option<String>,
@@ -230,18 +280,26 @@ pub struct RawZoneKnxConfig {
     pub repeat_toggle: Option<String>,
 }
 
+/// Client (speaker) definition as written in TOML.
 #[derive(Debug, Deserialize)]
 pub struct RawClientConfig {
+    /// Human-readable client name.
     pub name: String,
+    /// Snapcast client MAC address (used to match `host.mac`).
     pub mac: String,
+    /// Zone name this client belongs to.
     pub zone: String,
+    /// Emoji icon for the client.
     #[serde(default = "default_client_icon")]
     pub icon: String,
+    /// KNX group addresses for this client.
     #[serde(default)]
     pub knx: RawClientKnxConfig,
 }
 
+/// KNX group addresses for client control (all optional, explicit config only).
 #[derive(Debug, Default, Deserialize)]
+#[allow(missing_docs)]
 pub struct RawClientKnxConfig {
     pub volume: Option<String>,
     pub volume_status: Option<String>,
@@ -256,10 +314,14 @@ pub struct RawClientKnxConfig {
     pub connected_status: Option<String>,
 }
 
+/// Radio station definition.
 #[derive(Debug, Deserialize)]
 pub struct RawRadioConfig {
+    /// Station name.
     pub name: String,
+    /// Stream URL (direct, M3U, PLS, or HLS).
     pub url: String,
+    /// Cover art URL.
     pub cover: Option<String>,
 }
 
@@ -268,16 +330,27 @@ pub struct RawRadioConfig {
 /// Fully resolved application configuration. All conventions applied.
 #[derive(Debug, Clone)]
 pub struct AppConfig {
+    /// System settings.
     pub system: SystemConfig,
+    /// Audio output format.
     pub audio: AudioConfig,
+    /// HTTP server settings.
     pub http: HttpConfig,
+    /// Snapcast connection settings.
     pub snapcast: SnapcastConfig,
+    /// AirPlay receiver settings.
     pub airplay: AirplayConfig,
+    /// Subsonic connection (if configured).
     pub subsonic: Option<SubsonicConfig>,
+    /// MQTT bridge (if configured).
     pub mqtt: Option<MqttConfig>,
+    /// KNX settings.
     pub knx: KnxConfig,
+    /// Resolved zone configurations (1-indexed).
     pub zones: Vec<ZoneConfig>,
+    /// Resolved client configurations (1-indexed).
     pub clients: Vec<ClientConfig>,
+    /// Radio station list.
     pub radios: Vec<RadioConfig>,
 }
 
@@ -321,19 +394,30 @@ impl AppConfig {
     }
 }
 
+/// Resolved zone configuration with all conventions applied.
 #[derive(Debug, Clone)]
 pub struct ZoneConfig {
+    /// Zone index (1-based).
     pub index: usize,
+    /// Zone name.
     pub name: String,
+    /// Emoji icon.
     pub icon: String,
+    /// Snapcast sink path (e.g., `/snapsinks/zone1`).
     pub sink: String,
+    /// Snapcast stream name (e.g., `Zone1`).
     pub stream_name: String,
+    /// TCP source port for audio data to snapserver.
     pub tcp_source_port: u16,
+    /// AirPlay receiver name (shown in AirPlay picker).
     pub airplay_name: String,
+    /// KNX group addresses.
     pub knx: ZoneKnxAddresses,
 }
 
+/// Resolved KNX group addresses for a zone (all optional, explicit config only).
 #[derive(Debug, Clone)]
+#[allow(missing_docs)]
 pub struct ZoneKnxAddresses {
     pub play: Option<String>,
     pub pause: Option<String>,
@@ -367,17 +451,26 @@ pub struct ZoneKnxAddresses {
     pub repeat_toggle: Option<String>,
 }
 
+/// Resolved client configuration.
 #[derive(Debug, Clone)]
 pub struct ClientConfig {
+    /// Client index (1-based).
     pub index: usize,
+    /// Client name.
     pub name: String,
+    /// Snapcast client MAC address.
     pub mac: String,
+    /// Zone index this client belongs to.
     pub zone_index: usize,
+    /// Emoji icon.
     pub icon: String,
+    /// KNX group addresses.
     pub knx: ClientKnxAddresses,
 }
 
+/// Resolved KNX group addresses for a client (all optional, explicit config only).
 #[derive(Debug, Clone)]
+#[allow(missing_docs)]
 pub struct ClientKnxAddresses {
     pub volume: Option<String>,
     pub volume_status: Option<String>,
@@ -392,10 +485,14 @@ pub struct ClientKnxAddresses {
     pub connected_status: Option<String>,
 }
 
+/// Resolved radio station configuration.
 #[derive(Debug, Clone)]
 pub struct RadioConfig {
+    /// Station name.
     pub name: String,
+    /// Stream URL.
     pub url: String,
+    /// Cover art URL.
     pub cover: Option<String>,
 }
 

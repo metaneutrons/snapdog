@@ -14,17 +14,26 @@ use crate::config::AppConfig;
 use crate::state;
 use crate::state::cover::SharedCoverCache;
 
+/// Broadcast sender for WebSocket notifications.
 pub type NotifySender = tokio::sync::broadcast::Sender<crate::api::ws::Notification>;
+/// Channel sender for zone player commands.
 pub type ZoneCommandSender = mpsc::Sender<super::ZoneCommand>;
+/// Channel sender for Snapcast JSON-RPC commands.
 pub type SnapcastCmdSender = mpsc::Sender<SnapcastCmd>;
 
 /// Shared context for all ZonePlayers. Cloned (Arc) per zone task.
 pub struct ZonePlayerContext {
+    /// Application configuration (zones, clients, audio settings, etc.).
     pub config: Arc<AppConfig>,
+    /// Shared application state (zone states, client states).
     pub store: state::SharedState,
+    /// Content-addressed cover art cache (AirPlay only).
     pub covers: SharedCoverCache,
+    /// Broadcast sender for WebSocket notifications.
     pub notify: NotifySender,
+    /// Channel to send Snapcast JSON-RPC commands to the main task.
     pub snap_tx: SnapcastCmdSender,
+    /// Shared parametric EQ configuration store.
     pub eq_store: Arc<std::sync::Mutex<crate::audio::eq::EqStore>>,
     /// Pre-extracted: Snapcast client MAC (lowercase) → Snapcast client ID.
     pub client_mac_map: HashMap<String, String>,
@@ -34,7 +43,6 @@ pub struct ZonePlayerContext {
     pub group_clients: HashMap<String, Vec<String>>,
 }
 
-/// Commands sent to the Snapcast manager task (runs on main thread because
 /// Command sent to the main loop for Snapcast JSON-RPC execution.
 ///
 /// The Snapcast connection is `!Send`, so all JSON-RPC calls must happen
@@ -43,31 +51,45 @@ pub struct ZonePlayerContext {
 pub enum SnapcastCmd {
     /// Group-level command (volume, mute, stream, clients, name).
     Group {
+        /// Snapcast group ID to target.
         group_id: String,
+        /// The group action to perform.
         action: GroupAction,
     },
     /// Client-level command (volume, mute, latency).
     Client {
+        /// Snapcast client ID to target.
         client_id: String,
+        /// The client action to perform.
         action: ClientAction,
     },
-    /// Re-sync Snapcast groups to match zone assignments.
+    /// Re-sync Snapcast groups to match zone assignments from config.
     ReconcileZones,
 }
 
+/// Actions that can be performed on a Snapcast group.
 #[derive(Debug)]
 pub enum GroupAction {
+    /// Set the group's audio stream by name.
     Stream(String),
+    /// Assign a list of client IDs to the group.
     Clients(Vec<String>),
+    /// Set the group's display name.
     Name(String),
+    /// Set the group volume (0–100).
     Volume(i32),
+    /// Set the group mute state.
     Mute(bool),
 }
 
+/// Actions that can be performed on a Snapcast client.
 #[derive(Debug)]
 pub enum ClientAction {
+    /// Set the client volume (0–100).
     Volume(i32),
+    /// Set the client mute state.
     Mute(bool),
+    /// Set the client latency offset in milliseconds.
     Latency(i32),
 }
 

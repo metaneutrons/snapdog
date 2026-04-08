@@ -107,12 +107,16 @@ impl F32Resampler {
 }
 
 /// Passthrough or resample F32.
+/// Passthrough or active resampling for F32 audio.
 pub enum F32Resampling {
+    /// Source and target rates match — no processing needed.
     Passthrough,
+    /// Active resampling via rubato.
     Active(F32Resampler),
 }
 
 impl F32Resampling {
+    /// Create a new resampler, or passthrough if rates match.
     pub fn new(source_rate: u32, target_rate: u32, channels: u16) -> Self {
         match F32Resampler::new(source_rate, target_rate, channels) {
             Some(r) => Self::Active(r),

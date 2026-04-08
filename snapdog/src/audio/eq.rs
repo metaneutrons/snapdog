@@ -15,19 +15,28 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum FilterType {
+    /// Boosts or cuts frequencies below the cutoff.
     LowShelf,
+    /// Boosts or cuts frequencies above the cutoff.
     HighShelf,
+    /// Boosts or cuts a narrow band around the center frequency.
     Peaking,
+    /// Passes frequencies below the cutoff, attenuates above.
     LowPass,
+    /// Passes frequencies above the cutoff, attenuates below.
     HighPass,
 }
 
 /// Single EQ band configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EqBand {
+    /// Center frequency in Hz.
     pub freq: f32,
+    /// Gain in dB (positive = boost, negative = cut). Ignored for low/high pass.
     pub gain: f32,
+    /// Q factor controlling bandwidth. Higher values = narrower band.
     pub q: f32,
+    /// Filter type (low shelf, high shelf, peaking, low pass, high pass).
     #[serde(rename = "type")]
     pub filter_type: FilterType,
 }
@@ -35,8 +44,11 @@ pub struct EqBand {
 /// Full EQ configuration for a zone.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EqConfig {
+    /// Whether the EQ is active. When `false`, audio passes through unmodified.
     pub enabled: bool,
+    /// Ordered list of biquad filter bands applied in series.
     pub bands: Vec<EqBand>,
+    /// Name of the preset this config was loaded from, if any.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub preset: Option<String>,
 }
@@ -106,6 +118,7 @@ impl EqStore {
 
 // ── Presets ───────────────────────────────────────────────────
 
+/// Return the EQ bands for a named preset, or `None` if unknown.
 pub fn preset(name: &str) -> Option<Vec<EqBand>> {
     Some(match name {
         "flat" => vec![],

@@ -27,14 +27,21 @@ use crate::config::AudioConfig;
 #[derive(Debug)]
 pub enum PcmMessage {
     /// Audio format detected/changed — receiver must (re)create resampler.
-    Format { sample_rate: u32, channels: u16 },
+    Format {
+        /// Decoded sample rate in Hz.
+        sample_rate: u32,
+        /// Number of audio channels.
+        channels: u16,
+    },
     /// Interleaved f32 audio samples.
     Audio(Vec<f32>),
     /// Playback position from decoder (milliseconds).
     Position(i64),
 }
 
+/// Sending half of a PCM channel.
 pub type PcmSender = mpsc::Sender<PcmMessage>;
+/// Receiving half of a PCM channel.
 pub type PcmReceiver = mpsc::Receiver<PcmMessage>;
 
 /// Create a PCM channel pair.

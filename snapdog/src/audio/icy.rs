@@ -12,7 +12,9 @@ use tokio::sync::mpsc;
 /// Parsed ICY metadata update.
 #[derive(Debug, Clone)]
 pub struct IcyMetadata {
+    /// Current stream title (e.g. "Artist - Song").
     pub title: Option<String>,
+    /// Stream URL, if provided by the server.
     pub url: Option<String>,
 }
 

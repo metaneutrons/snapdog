@@ -29,7 +29,7 @@ pub type AudioSender = mpsc::Sender<Vec<f32>>;
 /// F32 interleaved PCM samples.
 pub type AudioReceiver = mpsc::Receiver<Vec<f32>>;
 
-/// Create a bounded F32 audio channel pair.
+/// Create a bounded F32 audio channel pair with the given buffer capacity.
 pub fn audio_channel(buffer: usize) -> (AudioSender, AudioReceiver) {
     mpsc::channel(buffer)
 }
@@ -39,7 +39,9 @@ pub fn audio_channel(buffer: usize) -> (AudioSender, AudioReceiver) {
 /// Audio format descriptor reported by a receiver session.
 #[derive(Debug, Clone, Copy)]
 pub struct AudioFormat {
+    /// Sample rate in Hz (e.g., 44100, 48000).
     pub sample_rate: u32,
+    /// Number of audio channels (e.g., 2 for stereo).
     pub channels: u16,
 }
 
@@ -48,26 +50,48 @@ pub struct AudioFormat {
 /// Events emitted by a receiver to the zone player.
 pub enum ReceiverEvent {
     /// A new audio session started with the given format.
-    SessionStarted { format: AudioFormat },
+    SessionStarted {
+        /// Audio format of the session.
+        format: AudioFormat,
+    },
     /// The audio session ended (client disconnected).
     SessionEnded,
     /// Track metadata changed.
     Metadata {
+        /// Track title.
         title: String,
+        /// Track artist.
         artist: String,
+        /// Track album.
         album: String,
     },
     /// Cover art received (JPEG or PNG bytes).
-    CoverArt { bytes: Vec<u8> },
+    CoverArt {
+        /// Raw image bytes.
+        bytes: Vec<u8>,
+    },
     /// Playback progress update.
-    Progress { position_ms: u64, duration_ms: u64 },
+    Progress {
+        /// Current position in milliseconds.
+        position_ms: u64,
+        /// Total duration in milliseconds.
+        duration_ms: u64,
+    },
     /// Volume change (0–100).
-    Volume { percent: i32 },
+    Volume {
+        /// Volume percentage.
+        percent: i32,
+    },
     /// A remote control interface became available.
-    RemoteAvailable { remote: Arc<dyn RemoteControl> },
+    RemoteAvailable {
+        /// Remote control handle.
+        remote: Arc<dyn RemoteControl>,
+    },
 }
 
+/// Channel sender for receiver events (receiver → zone player).
 pub type ReceiverEventTx = mpsc::Sender<ReceiverEvent>;
+/// Channel receiver for receiver events (receiver → zone player).
 pub type ReceiverEventRx = mpsc::Receiver<ReceiverEvent>;
 
 // ── Remote control (zone player → source device) ─────────────
@@ -75,13 +99,21 @@ pub type ReceiverEventRx = mpsc::Receiver<ReceiverEvent>;
 /// Command sent from SnapDog to the source device.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RemoteCommand {
+    /// Resume playback.
     Play,
+    /// Pause playback.
     Pause,
+    /// Skip to the next track.
     NextTrack,
+    /// Skip to the previous track.
     PreviousTrack,
+    /// Stop playback.
     Stop,
+    /// Set the source device volume (0–100).
     SetVolume(u8),
+    /// Toggle shuffle mode on the source device.
     ToggleShuffle,
+    /// Toggle repeat mode on the source device.
     ToggleRepeat,
 }
 

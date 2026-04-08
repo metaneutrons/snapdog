@@ -10,15 +10,21 @@ use super::types;
 
 // ── Generic JSON-RPC 2.0 ─────────────────────────────────────
 
+/// A JSON-RPC 2.0 request sent to the Snapcast server.
 #[derive(Debug, Clone, Serialize)]
 pub struct Request {
+    /// Protocol version (always `"2.0"`).
     pub jsonrpc: &'static str,
+    /// Unique request identifier for correlating responses.
     pub id: uuid::Uuid,
+    /// RPC method name (e.g. `"Client.SetVolume"`).
     pub method: &'static str,
+    /// Method parameters as a JSON value.
     pub params: Value,
 }
 
 impl Request {
+    /// Create a new JSON-RPC 2.0 request with a random UUID.
     pub fn new(method: &'static str, params: Value) -> Self {
         Self {
             jsonrpc: "2.0",
@@ -33,21 +39,32 @@ impl Request {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 pub enum RawMessage {
+    /// A response to a previously sent request.
     Response {
+        /// Request identifier this response correlates to.
         id: uuid::Uuid,
+        /// Successful result payload, if any.
         result: Option<Value>,
+        /// Error payload, if the request failed.
         error: Option<RpcError>,
     },
+    /// An unsolicited server notification.
     Notification {
+        /// Notification method name (e.g. `"Client.OnConnect"`).
         method: String,
+        /// Notification parameters.
         params: Value,
     },
 }
 
+/// JSON-RPC 2.0 error object returned by the Snapcast server.
 #[derive(Debug, Clone, Deserialize)]
 pub struct RpcError {
+    /// Numeric error code.
     pub code: i64,
+    /// Human-readable error description.
     pub message: String,
+    /// Optional additional error data.
     pub data: Option<Value>,
 }
 
@@ -64,50 +81,80 @@ impl std::error::Error for RpcError {}
 /// Typed Snapcast server notification.
 #[derive(Debug, Clone)]
 pub enum Notification {
-    ClientOnConnect {
-        id: String,
-        client: types::Client,
-    },
+    /// Client connected to Snapcast server.
+    #[allow(missing_docs)]
+    ClientOnConnect { id: String, client: types::Client },
+    /// Client disconnected from Snapcast server.
     ClientOnDisconnect {
+        /// Snapcast client identifier.
         id: String,
     },
+    /// Client volume changed.
     ClientOnVolumeChanged {
+        /// Snapcast client identifier.
         id: String,
+        /// New volume state.
         volume: types::ClientVolume,
     },
+    /// Client playback latency changed.
     ClientOnLatencyChanged {
+        /// Snapcast client identifier.
         id: String,
+        /// New latency in milliseconds.
         latency: usize,
     },
+    /// Client display name changed.
     ClientOnNameChanged {
+        /// Snapcast client identifier.
         id: String,
+        /// New client name.
         name: String,
     },
+    /// Group mute state changed.
     GroupOnMute {
+        /// Snapcast group identifier.
         id: String,
+        /// Whether the group is now muted.
         mute: bool,
     },
+    /// Group switched to a different audio stream.
     GroupOnStreamChanged {
+        /// Snapcast group identifier.
         id: String,
+        /// New stream identifier.
         stream_id: String,
     },
+    /// Group display name changed.
     GroupOnNameChanged {
+        /// Snapcast group identifier.
         id: String,
+        /// New group name.
         name: String,
     },
+    /// Full server state update (groups, clients, streams).
     ServerOnUpdate {
+        /// Complete server state snapshot.
         server: types::Server,
     },
+    /// Audio stream metadata or status updated.
     StreamOnUpdate {
+        /// Snapcast stream identifier.
         id: String,
+        /// Updated stream state.
         stream: types::Stream,
     },
+    /// Audio stream properties changed (e.g. now-playing metadata).
     StreamOnProperties {
+        /// Snapcast stream identifier.
         id: String,
+        /// Updated stream properties.
         properties: types::StreamProperties,
     },
+    /// Unrecognized notification method.
     Unknown {
+        /// Raw method name from the server.
         method: String,
+        /// Raw parameters.
         params: Value,
     },
 }

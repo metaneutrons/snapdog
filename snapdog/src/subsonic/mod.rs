@@ -24,6 +24,7 @@ pub struct SubsonicClient {
 }
 
 impl SubsonicClient {
+    /// Create a client from the `[subsonic]` config section.
     pub fn new(config: &SubsonicConfig) -> Self {
         Self {
             base_url: config.url.trim_end_matches('/').to_string(),
@@ -201,36 +202,54 @@ struct PlaylistsContainer {
     playlist: Vec<PlaylistEntry>,
 }
 
+/// Summary of a Subsonic playlist (without tracks).
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PlaylistEntry {
+    /// Subsonic playlist ID.
     pub id: String,
+    /// Display name.
     pub name: String,
+    /// Number of songs in the playlist.
     #[serde(default)]
     pub song_count: u32,
+    /// Total duration in seconds.
     #[serde(default)]
     pub duration: u64,
+    /// Cover art ID for [`SubsonicClient::cover_art_fetch_url`].
     pub cover_art: Option<String>,
 }
 
+/// Full Subsonic playlist including its tracks.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Playlist {
+    /// Subsonic playlist ID.
     pub id: String,
+    /// Display name.
     pub name: String,
+    /// Tracks in playlist order.
     #[serde(default)]
     pub entry: Vec<Track>,
 }
 
+/// A single track from a Subsonic playlist.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Track {
+    /// Subsonic track ID.
     pub id: String,
+    /// Track title.
     pub title: String,
+    /// Artist name.
     pub artist: Option<String>,
+    /// Album name.
     pub album: Option<String>,
+    /// Duration in seconds.
     #[serde(default)]
     pub duration: u64,
+    /// Cover art ID for [`SubsonicClient::cover_art_fetch_url`].
     pub cover_art: Option<String>,
+    /// Track number within the album.
     pub track: Option<u32>,
 }

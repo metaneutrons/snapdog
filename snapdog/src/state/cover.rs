@@ -12,18 +12,24 @@ use tokio::sync::RwLock;
 /// Thread-safe cover cache handle.
 pub type SharedCoverCache = Arc<RwLock<CoverCache>>;
 
+/// Create a new empty shared cover cache.
 pub fn new_cache() -> SharedCoverCache {
     Arc::new(RwLock::new(CoverCache::default()))
 }
 
+/// In-memory store mapping zone indices to their current cover art.
 #[derive(Default)]
 pub struct CoverCache {
     entries: HashMap<usize, CoverEntry>,
 }
 
+/// A single cached cover image with its MIME type and content hash.
 pub struct CoverEntry {
+    /// Raw image bytes.
     pub bytes: Vec<u8>,
+    /// MIME type (e.g. `image/jpeg`).
     pub mime: String,
+    /// CRC32 hex hash for ETag / cache validation.
     pub hash: String,
 }
 
@@ -76,6 +82,7 @@ fn percent_decode_bytes(input: &str) -> Vec<u8> {
     }
     out
 }
+/// Detect image MIME type from magic bytes. Falls back to `application/octet-stream`.
 pub fn detect_mime(bytes: &[u8]) -> &'static str {
     match bytes {
         [0xFF, 0xD8, 0xFF, ..] => "image/jpeg",

@@ -27,17 +27,26 @@ use crate::state;
 
 /// Shared application state accessible from all handlers.
 pub struct AppState {
+    /// Resolved application configuration.
     pub config: AppConfig,
+    /// In-memory zone/client state store.
     pub store: state::SharedState,
+    /// Command senders keyed by zone index (1-based).
     pub zone_commands: HashMap<usize, ZoneCommandSender>,
+    /// Sender for Snapcast JSON-RPC commands.
     pub snap_tx: player::SnapcastCmdSender,
+    /// Content-addressed cover art cache.
     pub covers: state::cover::SharedCoverCache,
+    /// Broadcast sender for WebSocket notifications.
     pub notifications: tokio::sync::broadcast::Sender<ws::Notification>,
+    /// Shared parametric EQ store.
     pub eq_store: std::sync::Arc<std::sync::Mutex<crate::audio::eq::EqStore>>,
+    /// Cached Subsonic playlist list with expiry timestamp.
     pub playlist_cache:
         tokio::sync::RwLock<Option<(std::time::Instant, Vec<crate::subsonic::PlaylistEntry>)>>,
 }
 
+/// Thread-safe shared reference to [`AppState`].
 pub type SharedState = Arc<AppState>;
 
 /// Start the HTTP server.

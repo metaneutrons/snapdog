@@ -8,7 +8,7 @@
 #![warn(clippy::implicit_clone)]
 #![warn(clippy::uninlined_format_args)]
 // TODO: enable once public API is documented
-// #![warn(missing_docs)]
+#![warn(missing_docs)]
 
 pub mod api;
 pub mod audio;

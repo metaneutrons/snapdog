@@ -17,6 +17,8 @@ use crate::api::SharedState;
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Notification {
+    /// Zone playback state changed (play/pause/stop, volume, mute, source, shuffle, repeat).
+    #[allow(missing_docs)]
     ZoneStateChanged {
         zone: usize,
         playback: String,
@@ -27,6 +29,8 @@ pub enum Notification {
         repeat: bool,
         track_repeat: bool,
     },
+    /// Current track metadata changed for a zone.
+    #[allow(missing_docs)]
     ZoneTrackChanged {
         zone: usize,
         title: String,
@@ -37,20 +41,33 @@ pub enum Notification {
         seekable: bool,
         cover_url: Option<String>,
     },
+    /// Periodic playback position update for a zone.
     ZoneProgress {
+        /// Zone index (1-based).
         zone: usize,
+        /// Current playback position in milliseconds.
         position_ms: i64,
+        /// Total track duration in milliseconds.
         duration_ms: i64,
     },
+    /// Client connection or volume state changed.
     ClientStateChanged {
+        /// Client index (1-based).
         client: usize,
+        /// Client volume (0–100).
         volume: i32,
+        /// Whether the client is muted.
         muted: bool,
+        /// Whether the client is connected to Snapcast.
         connected: bool,
+        /// Zone the client belongs to (1-based).
         zone: usize,
     },
+    /// Zone equalizer configuration changed.
     ZoneEqChanged {
+        /// Zone index (1-based).
         zone: usize,
+        /// Updated EQ configuration (flattened into the JSON object).
         #[serde(flatten)]
         config: crate::audio::eq::EqConfig,
     },
@@ -64,6 +81,7 @@ pub fn notification_channel() -> (
     broadcast::channel(256)
 }
 
+/// Build the WebSocket router.
 pub fn router(state: SharedState) -> Router {
     Router::new()
         .route("/ws", get(ws_handler))

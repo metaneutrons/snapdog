@@ -16,10 +16,15 @@ struct ErrorBody {
 
 /// API error with JSON body.
 pub enum ApiError {
+    /// Resource not found (404).
     NotFound(&'static str),
+    /// Invalid request parameters (400).
     BadRequest(String),
+    /// Required service not configured (503).
     ServiceUnavailable(&'static str),
+    /// Upstream service error (502).
     BadGateway(String),
+    /// Unexpected internal error (500).
     Internal(String),
 }
 

@@ -2,6 +2,9 @@
 // Copyright (C) 2025 Fabian Schmieder
 
 //! Snapcast domain types.
+//!
+//! These types mirror the Snapcast JSON-RPC API wire format.
+//! Field names match the Snapcast protocol specification.
 
 use std::collections::HashMap;
 
@@ -9,7 +12,9 @@ use serde::{Deserialize, Serialize};
 
 // ── Client ────────────────────────────────────────────────────
 
+/// A Snapcast client (speaker endpoint).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(missing_docs)]
 pub struct Client {
     pub id: String,
     pub connected: bool,
@@ -20,7 +25,9 @@ pub struct Client {
     pub last_seen: LastSeen,
 }
 
+/// Host information for a Snapcast client.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(missing_docs)]
 pub struct Host {
     pub arch: String,
     pub ip: String,
@@ -29,7 +36,9 @@ pub struct Host {
     pub os: String,
 }
 
+/// Client-side configuration (instance, latency, volume).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(missing_docs)]
 pub struct ClientConfig {
     pub instance: usize,
     pub latency: usize,
@@ -37,13 +46,17 @@ pub struct ClientConfig {
     pub volume: ClientVolume,
 }
 
+/// Client volume state.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(missing_docs)]
 pub struct ClientVolume {
     pub muted: bool,
     pub percent: usize,
 }
 
+/// Snapclient software information.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(missing_docs)]
 pub struct Snapclient {
     pub name: String,
     #[serde(rename = "protocolVersion")]
@@ -51,7 +64,9 @@ pub struct Snapclient {
     pub version: String,
 }
 
+/// Last-seen timestamp (seconds + microseconds since epoch).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(missing_docs)]
 pub struct LastSeen {
     pub sec: usize,
     pub usec: usize,
@@ -59,7 +74,9 @@ pub struct LastSeen {
 
 // ── Group ─────────────────────────────────────────────────────
 
+/// A Snapcast group (synchronized playback unit).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(missing_docs)]
 pub struct Group {
     pub id: String,
     pub name: String,
@@ -70,7 +87,9 @@ pub struct Group {
 
 // ── Stream ────────────────────────────────────────────────────
 
+/// A Snapcast audio stream source.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(missing_docs)]
 pub struct Stream {
     pub id: String,
     pub properties: Option<StreamProperties>,
@@ -78,16 +97,23 @@ pub struct Stream {
     pub uri: StreamUri,
 }
 
+/// Stream playback status.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum StreamStatus {
+    /// No audio data flowing.
     Idle,
+    /// Audio data actively streaming.
     Playing,
+    /// Stream disabled by configuration.
     Disabled,
+    /// Status not recognized.
     Unknown,
 }
 
+/// Stream source URI components.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(missing_docs)]
 pub struct StreamUri {
     pub fragment: String,
     pub host: String,
@@ -97,7 +123,9 @@ pub struct StreamUri {
     pub scheme: String,
 }
 
+/// Stream properties (MPRIS-style metadata and capabilities).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(missing_docs)]
 pub struct StreamProperties {
     pub playback_status: Option<String>,
     pub loop_status: Option<String>,
@@ -123,20 +151,26 @@ pub struct StreamProperties {
 
 // ── Server ────────────────────────────────────────────────────
 
+/// Snapcast server state (groups + streams).
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(missing_docs)]
 pub struct Server {
     pub server: ServerDetails,
     pub groups: Vec<Group>,
     pub streams: Vec<Stream>,
 }
 
+/// Snapserver host and version information.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(missing_docs)]
 pub struct ServerDetails {
     pub host: Host,
     pub snapserver: Snapserver,
 }
 
+/// Snapserver software information.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(missing_docs)]
 pub struct Snapserver {
     pub name: String,
     #[serde(rename = "protocolVersion")]
@@ -146,8 +180,9 @@ pub struct Snapserver {
     pub version: String,
 }
 
-/// Result of Server.GetStatus
+/// Result of `Server.GetStatus`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerStatus {
+    /// Full server state.
     pub server: Server,
 }
