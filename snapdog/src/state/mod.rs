@@ -36,53 +36,91 @@ pub fn init(config: &AppConfig, persist_path: Option<&Path>) -> Result<SharedSta
 }
 
 /// Central application state.
+///
+/// Holds all zone and client state in memory, with optional JSON persistence.
+/// Initialized from [`AppConfig`] at startup, then mutated by the audio pipeline,
+/// Snapcast sync, and control interfaces (API, MQTT, KNX).
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Store {
+    /// Zone states keyed by 1-based zone index.
     pub zones: HashMap<usize, ZoneState>,
+    /// Client states keyed by 1-based client index.
     pub clients: HashMap<usize, ClientState>,
+    /// Path for JSON persistence. `None` disables auto-save.
     #[serde(skip)]
     persist_path: Option<PathBuf>,
 }
 
+/// Runtime state of a single audio zone.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZoneState {
+    /// Human-readable zone name from config.
     pub name: String,
+    /// Emoji icon for UI display.
     pub icon: String,
+    /// Group volume (0–100), applied via Snapcast.
     pub volume: i32,
+    /// Whether the zone is muted.
     pub muted: bool,
+    /// Current playback state (stopped, playing, paused).
     pub playback: PlaybackState,
+    /// Shuffle mode for playlist playback.
     pub shuffle: bool,
+    /// Playlist repeat (loop entire playlist).
     pub repeat: bool,
+    /// Single-track repeat.
     pub track_repeat: bool,
+    /// Currently playing track metadata, if any.
     pub track: Option<TrackInfo>,
+    /// Active unified playlist index (0 = radio, 1+ = Subsonic playlists).
     pub playlist_index: Option<usize>,
+    /// Display name of the active playlist.
     pub playlist_name: Option<String>,
+    /// Current track position within the active playlist.
     pub playlist_track_index: Option<usize>,
+    /// Total number of tracks in the active playlist.
     pub playlist_track_count: Option<usize>,
+    /// Active audio source type.
     pub source: SourceType,
+    /// URL for the current cover art image.
     pub cover_url: Option<String>,
+    /// Snapcast group ID for this zone (set after Snapcast sync).
     pub snapcast_group_id: Option<String>,
 }
 
+/// Runtime state of a single Snapcast client (speaker/output device).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientState {
+    /// Human-readable client name from config.
     pub name: String,
+    /// Emoji icon for UI display.
     pub icon: String,
+    /// MAC address used to identify the Snapcast client.
     pub mac: String,
+    /// 1-based index of the zone this client belongs to.
     pub zone_index: usize,
+    /// Client volume (0–100), applied via Snapcast.
     pub volume: i32,
+    /// Whether the client is muted.
     pub muted: bool,
+    /// Audio output latency in milliseconds.
     pub latency_ms: i32,
+    /// Whether the Snapcast client is currently connected.
     pub connected: bool,
+    /// Snapcast client ID (set after Snapcast sync).
     pub snapcast_id: Option<String>,
 }
 
+/// Zone playback state.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum PlaybackState {
+    /// No audio source active.
     #[default]
     Stopped,
+    /// Audio is actively being decoded and streamed.
     Playing,
+    /// Playback is paused (source retained, can resume).
     Paused,
 }
 
@@ -96,15 +134,22 @@ impl std::fmt::Display for PlaybackState {
     }
 }
 
+/// Active audio source type for a zone.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum SourceType {
+    /// No source active.
     #[default]
     Idle,
+    /// Internet radio stream.
     Radio,
+    /// Subsonic playlist playback.
     SubsonicPlaylist,
+    /// Single Subsonic track playback.
     SubsonicTrack,
+    /// Arbitrary URL stream.
     Url,
+    /// AirPlay receiver (passive, preempts other sources).
     AirPlay,
 }
 
@@ -121,27 +166,40 @@ impl std::fmt::Display for SourceType {
     }
 }
 
+/// Metadata and playback info for the currently playing track.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrackInfo {
-    // Metadata
+    /// Track title.
     pub title: String,
+    /// Track artist.
     pub artist: String,
+    /// Album name.
     pub album: String,
+    /// Album artist (may differ from track artist on compilations).
     pub album_artist: Option<String>,
+    /// Genre tag.
     pub genre: Option<String>,
+    /// Release year.
     pub year: Option<u32>,
+    /// Track number within the album.
     pub track_number: Option<u32>,
+    /// Disc number for multi-disc albums.
     pub disc_number: Option<u32>,
 
-    // Playback
+    /// Total track duration in milliseconds.
     pub duration_ms: i64,
+    /// Current playback position in milliseconds.
     pub position_ms: i64,
+    /// Whether seeking is supported (false for radio streams).
     pub seekable: bool,
+    /// Source type that produced this track info.
     pub source: SourceType,
 
-    // Technical
+    /// Audio bitrate in kbps, if known.
     pub bitrate_kbps: Option<u32>,
+    /// MIME content type of the audio stream.
     pub content_type: Option<String>,
+    /// Decoded sample rate in Hz.
     pub sample_rate: Option<u32>,
 }
 
@@ -209,8 +267,7 @@ impl Store {
         self.persist_path = Some(path);
     }
 
-    /// Persist current state to JSON file (atomic write).
-    /// Persist state to JSON file. Uses blocking I/O (called infrequently on state changes).
+    /// Persist current state to JSON file via atomic write (write to `.tmp`, then rename).
     pub fn persist(&self) -> Result<()> {
         let Some(path) = &self.persist_path else {
             return Ok(());
@@ -372,7 +429,9 @@ mod tests {
     }
 }
 
-/// Update client state and broadcast a notification.
+/// Update a client's state via closure and broadcast a [`Notification::ClientStateChanged`] event.
+///
+/// No-op if `client_index` does not exist in the store.
 pub async fn update_client_and_notify(
     store: &SharedState,
     client_index: usize,
