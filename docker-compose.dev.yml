@@ -41,7 +41,8 @@ services:
       - CLIENT_ADDRESS=0.0.2:8
       - INTERFACE=dummy
     ports:
-      - "3671:3671"
+      - "3671:3671/udp"
+      - "3671:3671/tcp"
     networks:
       snapdog-dev:
     restart: unless-stopped
