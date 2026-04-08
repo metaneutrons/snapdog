@@ -218,7 +218,7 @@ async fn set_zone(
     if !state.config.zones.iter().any(|z| z.index == target_zone) {
         return Err(ApiError::NotFound("zone"));
     }
-    if state.store.read().await.clients.get(&idx).is_none() {
+    if !state.store.read().await.clients.contains_key(&idx) {
         return Err(not_found());
     }
 
