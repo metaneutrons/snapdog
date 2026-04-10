@@ -130,11 +130,9 @@ impl EmbeddedBackend {
     /// Map a `ServerEvent` to a `SnapcastEvent`.
     fn map_event(event: ServerEvent) -> Option<SnapcastEvent> {
         match event {
-            ServerEvent::ClientConnected { id, name } => Some(SnapcastEvent::ClientConnected {
-                id,
-                name: name.clone(),
-                mac: String::new(), // embedded server doesn't expose MAC yet
-            }),
+            ServerEvent::ClientConnected { id, name, mac } => {
+                Some(SnapcastEvent::ClientConnected { id, name, mac })
+            }
             ServerEvent::ClientDisconnected { id } => {
                 Some(SnapcastEvent::ClientDisconnected { id })
             }
@@ -401,6 +399,7 @@ mod tests {
         let event = ServerEvent::ClientConnected {
             id: "c1".into(),
             name: "Kitchen".into(),
+            mac: "aa:bb:cc:dd:ee:ff".into(),
         };
         let mapped = EmbeddedBackend::map_event(event).unwrap();
         assert!(
