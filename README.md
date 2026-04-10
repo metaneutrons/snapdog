@@ -7,7 +7,7 @@ Multi-zone audio controller with AirPlay, Snapcast, MQTT, and KNX integration.
 SnapDog is a single binary that turns a Linux box (or Mac) into a multi-room audio system with smart home integration:
 
 - **AirPlay 1 + 2 receiver** — one per zone, stream from iPhone/Mac directly into multi-room audio (AirPlay 2 behind feature `ap2`)
-- **Snapcast integration** — synchronized playback across rooms, managed as child process
+- **Snapcast integration** — synchronized playback across rooms, embedded server (default) or managed child process
 - **Subsonic/Navidrome** — play from your personal music library with playlist navigation and seek
 - **Internet radio** — configurable station list with live ICY metadata (current song title)
 - **HLS streaming** — segment-based streaming with retry logic and metadata extraction
@@ -62,6 +62,7 @@ port = 5555
 sample_rate = 48000
 bit_depth = 16        # 16, 24, or 32
 channels = 2
+# codec = "flac"      # flac (default), pcm, f32lz4, opus, ogg
 
 [airplay]
 # Optional: require password for AirPlay
@@ -122,7 +123,9 @@ When using Navidrome (or other Subsonic-compatible servers), ensure transcoding 
 - **Volume coalescing** — rapid volume commands debounced (50ms window per client) to protect Snapcast
 - **Resampling** — dynamic resampler creation from actual decoded sample rate (S16LE for active sources, F32 for receivers)
 - **Configurable output** — bit depth (16/24/32), sample rate, channels — SSOT with Snapcast
-- **Event-driven Snapcast** — own JSON-RPC client, fire-and-forget commands, state from server responses
+- **Dual Snapcast backend** — embedded server (default, per-zone streams via snapcast-server crate) or external process (JSON-RPC)
+- **Per-zone audio streams** — each zone gets its own Snapcast stream and encoder thread
+- **MAC-based client matching** — clients auto-assigned to zones by MAC address from config
 - **Cover art** — content-addressed caching with CRC32 hash, unified `/zones/{id}/cover` endpoint
 - **KNX bridge** — multiplexed tunnel/router connection, typed DPT encoding (knxkit_dpt), bidirectional
 - **API middleware** — CORS, gzip/brotli compression, request tracing, optional API key auth, typed JSON error responses
@@ -141,6 +144,8 @@ When using Navidrome (or other Subsonic-compatible servers), ensure transcoding 
 
 | Feature | Default | Description |
 |---------|---------|-------------|
+| `snapcast-embedded` | ✅ | In-process Snapcast server (snapcast-server crate) |
+| `snapcast-process` | off | External snapserver binary + JSON-RPC |
 | `ap2` | off | AirPlay 2 support (encrypted transport, HAP pairing) |
 | `spotify` | off | Spotify Connect receiver (librespot, WIP) |
 
