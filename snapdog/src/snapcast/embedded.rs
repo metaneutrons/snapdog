@@ -6,7 +6,9 @@
 use anyhow::{Context, Result};
 use tokio::sync::mpsc;
 
-use snapcast_server::{AudioFrame, ServerCommand, ServerConfig, ServerEvent, SnapServer};
+use snapcast_server::{
+    AudioData, AudioFrame, ServerCommand, ServerConfig, ServerEvent, SnapServer,
+};
 
 use super::backend::{BoxFuture, SnapcastBackend, SnapcastEvent};
 use crate::config::AppConfig;
@@ -171,13 +173,11 @@ impl SnapcastBackend for EmbeddedBackend {
         &self,
         _zone_index: usize,
         samples: &[f32],
-        sample_rate: u32,
-        channels: u16,
+        _sample_rate: u32,
+        _channels: u16,
     ) -> BoxFuture<'_, Result<()>> {
         let frame = AudioFrame {
-            samples: samples.to_vec(),
-            sample_rate,
-            channels,
+            data: AudioData::F32(samples.to_vec()),
             timestamp_usec: snapcast_server::time::now_usec(),
         };
         Box::pin(async move {
