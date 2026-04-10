@@ -217,11 +217,11 @@ async fn main() -> Result<()> {
             }
             // Snapcast server notifications → state updates (process backend only)
             _ = async {
-                #[cfg(feature = "snapcast-process")]
+                #[cfg(all(feature = "snapcast-process", not(feature = "snapcast-embedded")))]
                 if let Ok(notification) = snap_notifications.recv().await {
                     snapcast::handle_notification(notification, &config, process_backend.client(), &store, &notify_tx).await;
                 }
-                #[cfg(not(feature = "snapcast-process"))]
+                #[cfg(not(all(feature = "snapcast-process", not(feature = "snapcast-embedded"))))]
                 std::future::pending::<()>().await;
             } => {}
             // MQTT events
