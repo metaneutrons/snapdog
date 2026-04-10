@@ -5,6 +5,9 @@
 
 pub mod backend;
 
+#[cfg(feature = "snapcast-embedded")]
+pub mod embedded;
+
 #[cfg(feature = "snapcast-process")]
 pub mod connection;
 #[cfg(feature = "snapcast-process")]

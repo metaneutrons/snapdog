@@ -55,7 +55,7 @@ pub enum SnapcastEvent {
 }
 
 /// Boxed future type for trait object safety.
-type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// Abstraction over Snapcast server implementations.
 ///
