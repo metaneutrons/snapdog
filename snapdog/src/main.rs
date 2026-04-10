@@ -58,7 +58,7 @@ async fn main() -> Result<()> {
     let status = snap.server_get_status().await?;
     #[cfg(feature = "snapcast-process")]
     snapcast::sync_initial_state(&status, &config, &snap, &store).await;
-    #[cfg(feature = "snapcast-process")]
+    #[cfg(all(feature = "snapcast-process", not(feature = "snapcast-embedded")))]
     let mut snap_notifications = snap.subscribe();
 
     #[cfg(feature = "snapcast-embedded")]
