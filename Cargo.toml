@@ -56,6 +56,9 @@ futures-util = "0.3"
 thiserror = "2"
 anyhow = "1"
 
+# Snapcast
+snapcast-server = { git = "https://github.com/metaneutrons/snapcast-rs", branch = "main", features = ["flac"] }
+
 # Utilities
 md5 = "0.7"
 fastrand = "2"

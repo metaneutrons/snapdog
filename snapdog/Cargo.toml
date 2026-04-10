@@ -49,8 +49,12 @@ librespot-connect = { git = "https://github.com/librespot-org/librespot", branch
 librespot-discovery = { git = "https://github.com/librespot-org/librespot", branch = "dev", optional = true }
 librespot-metadata = { git = "https://github.com/librespot-org/librespot", branch = "dev", optional = true }
 
+snapcast-server = { workspace = true, optional = true }
+
 [features]
-default = []
+default = ["snapcast-embedded"]
+snapcast-embedded = ["dep:snapcast-server"]
+snapcast-process = []
 ap2 = ["shairplay/ap2"]
 spotify = ["dep:librespot-core", "dep:librespot-playback", "dep:librespot-connect", "dep:librespot-discovery", "dep:librespot-metadata"]
 
