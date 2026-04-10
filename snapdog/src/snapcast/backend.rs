@@ -75,9 +75,6 @@ pub trait SnapcastBackend: Send + Sync {
     /// Execute a Snapcast command (volume, mute, group assignment, etc.)
     fn execute(&self, cmd: SnapcastCmd) -> BoxFuture<'_, Result<()>>;
 
-    /// Receive the next event. Returns `None` when the backend shuts down.
-    fn recv_event(&mut self) -> BoxFuture<'_, Option<SnapcastEvent>>;
-
     /// Graceful shutdown.
     fn stop(&self) -> BoxFuture<'_, Result<()>>;
 

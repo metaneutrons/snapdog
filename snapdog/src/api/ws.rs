@@ -74,6 +74,9 @@ pub enum Notification {
 }
 
 /// Create a broadcast channel for notifications.
+pub type NotifySender = broadcast::Sender<Notification>;
+
+/// Create a broadcast channel for notifications.
 pub fn notification_channel() -> (
     broadcast::Sender<Notification>,
     broadcast::Receiver<Notification>,

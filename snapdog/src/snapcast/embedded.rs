@@ -16,12 +16,16 @@ use crate::player::{ClientAction, GroupAction, SnapcastCmd};
 pub struct EmbeddedBackend {
     cmd_tx: mpsc::Sender<ServerCommand>,
     audio_tx: mpsc::Sender<AudioFrame>,
+}
+
+/// Event receiver from the embedded server.
+pub struct EmbeddedEventReceiver {
     event_rx: mpsc::Receiver<ServerEvent>,
 }
 
 impl EmbeddedBackend {
-    /// Start the embedded server. Spawns the server task and returns the backend.
-    pub async fn start(config: &AppConfig) -> Result<Self> {
+    /// Start the embedded server. Returns the backend + event receiver.
+    pub async fn start(config: &AppConfig) -> Result<(Self, EmbeddedEventReceiver)> {
         let server_config = ServerConfig {
             stream_port: config.snapcast.streaming_port,
             buffer_ms: 1000,
@@ -47,11 +51,10 @@ impl EmbeddedBackend {
             "Embedded Snapcast server started"
         );
 
-        Ok(Self {
-            cmd_tx,
-            audio_tx,
-            event_rx,
-        })
+        Ok((
+            Self { cmd_tx, audio_tx },
+            EmbeddedEventReceiver { event_rx },
+        ))
     }
 
     /// Map a `SnapcastCmd` to one or more `ServerCommand`s.
@@ -140,6 +143,18 @@ impl EmbeddedBackend {
     }
 }
 
+impl EmbeddedEventReceiver {
+    /// Receive the next mapped event. Returns `None` when the server shuts down.
+    pub async fn recv(&mut self) -> Option<SnapcastEvent> {
+        loop {
+            let event = self.event_rx.recv().await?;
+            if let Some(mapped) = EmbeddedBackend::map_event(event) {
+                return Some(mapped);
+            }
+        }
+    }
+}
+
 impl SnapcastBackend for EmbeddedBackend {
     fn send_audio(
         &self,
@@ -172,17 +187,6 @@ impl SnapcastBackend for EmbeddedBackend {
                     .context("Server command channel closed")?;
             }
             Ok(())
-        })
-    }
-
-    fn recv_event(&mut self) -> BoxFuture<'_, Option<SnapcastEvent>> {
-        Box::pin(async move {
-            loop {
-                let event = self.event_rx.recv().await?;
-                if let Some(mapped) = Self::map_event(event) {
-                    return Some(mapped);
-                }
-            }
         })
     }
 

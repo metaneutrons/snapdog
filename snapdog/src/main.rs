@@ -57,8 +57,13 @@ async fn main() -> Result<()> {
     let mut snap_notifications = snap.subscribe();
 
     #[cfg(feature = "snapcast-embedded")]
-    let backend: Arc<dyn snapcast::backend::SnapcastBackend> =
-        Arc::new(snapcast::embedded::EmbeddedBackend::start(&config).await?);
+    let (embedded_backend, embedded_events) =
+        snapcast::embedded::EmbeddedBackend::start(&config).await?;
+    #[cfg(feature = "snapcast-embedded")]
+    let backend: Arc<dyn snapcast::backend::SnapcastBackend> = Arc::new(embedded_backend);
+    #[cfg(feature = "snapcast-embedded")]
+    snapcast::events::spawn_event_handler(embedded_events, store.clone(), notify_tx.clone());
+
     #[cfg(all(feature = "snapcast-process", not(feature = "snapcast-embedded")))]
     compile_error!("ProcessBackend wrapper not yet implemented — use snapcast-embedded");
 
