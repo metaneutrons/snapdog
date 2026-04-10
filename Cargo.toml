@@ -57,7 +57,7 @@ thiserror = "2"
 anyhow = "1"
 
 # Snapcast
-snapcast-server = { path = "../snapcast-rs/crates/snapcast-server", features = ["flac", "encryption"] }
+snapcast-server = { version = "0.5", features = ["flac", "encryption"] }
 
 # Utilities
 md5 = "0.7"
