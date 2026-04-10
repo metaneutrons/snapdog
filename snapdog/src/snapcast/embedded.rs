@@ -3,8 +3,6 @@
 
 //! Embedded Snapcast backend — in-process server via snapcast-server crate.
 
-use std::pin::Pin;
-
 use anyhow::{Context, Result};
 use tokio::sync::mpsc;
 
@@ -138,8 +136,6 @@ impl EmbeddedBackend {
             ServerEvent::GroupStreamChanged { .. }
             | ServerEvent::GroupMuteChanged { .. }
             | ServerEvent::StreamStatus { .. } => Some(SnapcastEvent::ServerUpdated),
-            #[cfg(feature = "custom-protocol")]
-            ServerEvent::CustomMessage { .. } => None,
         }
     }
 }

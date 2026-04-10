@@ -67,6 +67,15 @@ async fn main() -> Result<()> {
         std::path::Path::new("eq.json"),
     )));
 
+    // ── Snapcast backend ───────────────────────────────────────
+    #[cfg(feature = "snapcast-embedded")]
+    let backend: std::sync::Arc<dyn snapcast::backend::SnapcastBackend> =
+        std::sync::Arc::new(snapcast::embedded::EmbeddedBackend::start(&config).await?);
+    // TODO: ProcessBackend for snapcast-process feature
+    #[cfg(all(feature = "snapcast-process", not(feature = "snapcast-embedded")))]
+    let backend: std::sync::Arc<dyn snapcast::backend::SnapcastBackend> =
+        unimplemented!("ProcessBackend not yet implemented");
+
     // Zone players
     let zone_commands = player::spawn_zone_players(player::ZonePlayerContext {
         config: config.clone(),
@@ -74,6 +83,7 @@ async fn main() -> Result<()> {
         covers: covers.clone(),
         notify: notify_tx.clone(),
         snap_tx: snap_cmd_tx.clone(),
+        backend: backend.clone(),
         eq_store: eq_store.clone(),
         #[cfg(feature = "snapcast-process")]
         client_mac_map: snapcast::build_client_mac_map(&status),

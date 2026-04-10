@@ -7,7 +7,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::Result;
-use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
@@ -62,11 +61,7 @@ async fn run(
     let zone_config = &config.zones[zone_index - 1];
     let audio_config = config.audio.clone(); // Cloned once, moved into decode tasks
 
-    // Connect TCP to Snapcast source
-    #[cfg(feature = "snapcast-process")]
-    let mut tcp = snapcast::open_audio_source(zone_config.tcp_source_port).await?;
-    #[cfg(not(feature = "snapcast-process"))]
-    let mut tcp: Vec<u8> = Vec::new(); // placeholder until EmbeddedBackend
+    let backend = &ctx.backend;
 
     // Zone grouping: assign clients to group, set stream
     let group_id = setup_zone_group(zone_index, &ctx).await;
@@ -116,7 +111,6 @@ async fn run(
         config.audio.channels,
     );
     let mut receiver_resampler: Option<audio::resample::F32Resampling> = None;
-    let output_bit_depth = config.audio.bit_depth;
 
     // Per-zone EQ
     let mut zone_eq = audio::eq::ZoneEq::new(config.audio.sample_rate, config.audio.channels);
@@ -487,11 +481,8 @@ async fn run(
                     Some(audio::PcmMessage::Audio(samples)) => {
                         let mut samples = resampler.process_or_passthrough(samples);
                         zone_eq.process(&mut samples);
-                        let pcm = audio::resample::f32_to_pcm(&samples, output_bit_depth);
-                        if let Err(e) = tcp.write_all(&pcm).await {
-                            tracing::error!(zone = zone_index, error = %e, "TCP write failed");
-                            #[cfg(feature = "snapcast-process")]
-                            if let Ok(new_tcp) = snapcast::open_audio_source(zone_config.tcp_source_port).await { tcp = new_tcp; }
+                        if let Err(e) = backend.send_audio(zone_index, &samples, config.audio.sample_rate, config.audio.channels).await {
+                            tracing::error!(zone = zone_index, error = %e, "Audio send failed");
                         }
                     }
                     Some(audio::PcmMessage::Position(ms)) => {
@@ -521,8 +512,9 @@ async fn run(
                     None => samples,
                 };
                 zone_eq.process(&mut samples);
-                let pcm = audio::resample::f32_to_pcm(&samples, output_bit_depth);
-                if let Err(e) = tcp.write_all(&pcm).await { tracing::error!(zone = zone_index, error = %e, "TCP write failed (AirPlay)"); }
+                if let Err(e) = backend.send_audio(zone_index, &samples, config.audio.sample_rate, config.audio.channels).await {
+                    tracing::error!(zone = zone_index, error = %e, "Audio send failed (AirPlay)");
+                }
             }
             Some(event) = airplay_event_rx.recv() => {
                 use crate::receiver::ReceiverEvent;
