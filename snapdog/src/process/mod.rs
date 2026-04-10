@@ -112,10 +112,7 @@ fn render_config(config: &AppConfig) -> String {
     // TCP sources — one per zone
     out.push_str("[stream]\n");
     for zone in &config.zones {
-        let sf = format!(
-            "{}:{}:{}",
-            config.audio.sample_rate, config.audio.bit_depth, config.audio.channels
-        );
+        let sf = config.audio.sample_format();
         out.push_str(&format!(
             "source = tcp://127.0.0.1:{}?name={}&sampleformat={}&mode=server\n",
             zone.tcp_source_port, zone.stream_name, sf

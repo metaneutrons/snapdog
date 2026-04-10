@@ -66,8 +66,14 @@ impl SnapcastBackend for ProcessBackend {
                     tracing::error!(zone = zone_index, error = %e, "TCP write failed");
                     // Reconnect
                     if let Some(&port) = self.ports.get(&zone_index) {
-                        if let Ok(new_tcp) = open_audio_source(port).await {
-                            *tcp = new_tcp;
+                        match open_audio_source(port).await {
+                            Ok(new_tcp) => {
+                                *tcp = new_tcp;
+                                tracing::info!(zone = zone_index, "TCP audio source reconnected");
+                            }
+                            Err(e) => {
+                                tracing::warn!(zone = zone_index, error = %e, "TCP audio source reconnect failed");
+                            }
                         }
                     }
                 }

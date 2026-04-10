@@ -12,6 +12,9 @@ use super::backend::{BoxFuture, SnapcastBackend, SnapcastEvent};
 use crate::config::AppConfig;
 use crate::player::{ClientAction, GroupAction, SnapcastCmd};
 
+/// Default audio buffer size in milliseconds for the embedded server.
+const DEFAULT_BUFFER_MS: u32 = 1000;
+
 /// Embedded Snapcast server backend.
 pub struct EmbeddedBackend {
     cmd_tx: mpsc::Sender<ServerCommand>,
@@ -28,12 +31,9 @@ impl EmbeddedBackend {
     pub async fn start(config: &AppConfig) -> Result<(Self, EmbeddedEventReceiver)> {
         let server_config = ServerConfig {
             stream_port: config.snapcast.streaming_port,
-            buffer_ms: 1000,
+            buffer_ms: DEFAULT_BUFFER_MS,
             codec: config.audio.codec.clone(),
-            sample_format: format!(
-                "{}:{}:{}",
-                config.audio.sample_rate, config.audio.bit_depth, config.audio.channels
-            ),
+            sample_format: config.audio.sample_format(),
             ..ServerConfig::default()
         };
 

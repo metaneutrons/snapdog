@@ -95,6 +95,13 @@ impl Default for AudioConfig {
     }
 }
 
+impl AudioConfig {
+    /// Snapcast sample format string (e.g., "48000:16:2").
+    pub fn sample_format(&self) -> String {
+        format!("{}:{}:{}", self.sample_rate, self.bit_depth, self.channels)
+    }
+}
+
 /// HTTP server configuration.
 #[derive(Debug, Deserialize, Clone)]
 pub struct HttpConfig {

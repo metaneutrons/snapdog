@@ -9,6 +9,11 @@ use tracing_subscriber::EnvFilter;
 
 use snapdog::*;
 
+/// Volume coalescing window — rapid volume changes within this window are merged.
+const VOLUME_COALESCE_MS: u64 = 50;
+/// Channel capacity for Snapcast commands from zone players, API, MQTT, KNX.
+const SNAPCAST_CMD_CHANNEL_SIZE: usize = 64;
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // ── Parse config ──────────────────────────────────────────
@@ -70,7 +75,8 @@ async fn main() -> Result<()> {
     let backend: Arc<dyn snapcast::backend::SnapcastBackend> = process_backend.clone();
 
     // Snapcast command channel (used by zone players, API, MQTT, KNX)
-    let (snap_cmd_tx, mut snap_cmd_rx) = tokio::sync::mpsc::channel::<player::SnapcastCmd>(64);
+    let (snap_cmd_tx, mut snap_cmd_rx) =
+        tokio::sync::mpsc::channel::<player::SnapcastCmd>(SNAPCAST_CMD_CHANNEL_SIZE);
 
     // EQ store
     let eq_store = Arc::new(std::sync::Mutex::new(audio::eq::EqStore::load(
@@ -183,7 +189,7 @@ async fn main() -> Result<()> {
                 // Coalesce client volume commands (50ms window)
                 if let player::SnapcastCmd::Client { ref client_id, action: player::ClientAction::Volume(v) } = cmd {
                     pending_volumes.insert(client_id.clone(), v);
-                    coalesce_deadline = Some(tokio::time::Instant::now() + std::time::Duration::from_millis(50));
+                    coalesce_deadline = Some(tokio::time::Instant::now() + std::time::Duration::from_millis(VOLUME_COALESCE_MS));
                 } else {
                     if let Err(e) = cmd_backend.execute(cmd).await {
                         tracing::warn!(error = %e, "Snapcast command failed");
