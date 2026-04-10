@@ -11,6 +11,9 @@ pub mod events;
 pub mod embedded;
 
 #[cfg(feature = "snapcast-process")]
+pub mod process;
+
+#[cfg(feature = "snapcast-process")]
 pub mod connection;
 #[cfg(feature = "snapcast-process")]
 pub mod protocol;

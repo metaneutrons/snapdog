@@ -17,8 +17,6 @@ use super::helpers::*;
 use super::helpers::{DecodeState, PlaybackCtx};
 use crate::audio;
 use crate::receiver::ReceiverProvider;
-#[cfg(feature = "snapcast-process")]
-use crate::snapcast;
 use crate::state::{PlaybackState, SourceType, TrackInfo};
 use crate::subsonic::SubsonicClient;
 

@@ -65,11 +65,9 @@ async fn main() -> Result<()> {
     snapcast::events::spawn_event_handler(embedded_events, store.clone(), notify_tx.clone());
 
     #[cfg(all(feature = "snapcast-process", not(feature = "snapcast-embedded")))]
-    let backend: Arc<dyn snapcast::backend::SnapcastBackend> = {
-        // Process backend: commands still go through snap_cmd_tx → main loop → execute_command
-        // This is a thin wrapper that forwards to the existing JSON-RPC path
-        todo!("ProcessBackend wrapper — use snapcast-embedded for now")
-    };
+    let process_backend = Arc::new(snapcast::process::ProcessBackend::start(&config, snap).await?);
+    #[cfg(all(feature = "snapcast-process", not(feature = "snapcast-embedded")))]
+    let backend: Arc<dyn snapcast::backend::SnapcastBackend> = process_backend.clone();
 
     // Snapcast command channel (used by zone players, API, MQTT, KNX)
     let (snap_cmd_tx, mut snap_cmd_rx) = tokio::sync::mpsc::channel::<player::SnapcastCmd>(64);
@@ -209,7 +207,7 @@ async fn main() -> Result<()> {
             _ = async {
                 #[cfg(feature = "snapcast-process")]
                 if let Ok(notification) = snap_notifications.recv().await {
-                    snapcast::handle_notification(notification, &config, &snap, &store, &notify_tx).await;
+                    snapcast::handle_notification(notification, &config, process_backend.client(), &store, &notify_tx).await;
                 }
                 #[cfg(not(feature = "snapcast-process"))]
                 std::future::pending::<()>().await;

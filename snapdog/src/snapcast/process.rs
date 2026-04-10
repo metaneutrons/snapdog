@@ -1,0 +1,122 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2025 Fabian Schmieder
+
+//! Process-based Snapcast backend — external snapserver binary + JSON-RPC.
+
+use std::collections::HashMap;
+
+use anyhow::{Context, Result};
+use tokio::io::AsyncWriteExt;
+use tokio::net::TcpStream;
+use tokio::sync::RwLock;
+
+use super::backend::{BoxFuture, SnapcastBackend};
+use super::{SnapcastClient, open_audio_source};
+use crate::audio;
+use crate::config::AppConfig;
+use crate::player::{ClientAction, GroupAction, SnapcastCmd};
+
+/// Process-based Snapcast backend wrapping JSON-RPC + TCP sinks.
+pub struct ProcessBackend {
+    snap: SnapcastClient,
+    /// Zone index → TCP sink (one per zone).
+    sinks: RwLock<HashMap<usize, TcpStream>>,
+    bit_depth: u16,
+    /// Zone index → TCP source port (for reconnect).
+    ports: HashMap<usize, u16>,
+}
+
+impl ProcessBackend {
+    /// Connect to an existing snapserver process.
+    pub async fn start(config: &AppConfig, snap: SnapcastClient) -> Result<Self> {
+        let mut sinks = HashMap::new();
+        let mut ports = HashMap::new();
+        for zone in &config.zones {
+            let tcp = open_audio_source(zone.tcp_source_port).await?;
+            sinks.insert(zone.index, tcp);
+            ports.insert(zone.index, zone.tcp_source_port);
+        }
+        Ok(Self {
+            snap,
+            sinks: RwLock::new(sinks),
+            bit_depth: config.audio.bit_depth,
+            ports,
+        })
+    }
+
+    /// Get a reference to the underlying JSON-RPC client.
+    pub fn client(&self) -> &SnapcastClient {
+        &self.snap
+    }
+}
+
+impl SnapcastBackend for ProcessBackend {
+    fn send_audio(
+        &self,
+        zone_index: usize,
+        samples: &[f32],
+        _sample_rate: u32,
+        _channels: u16,
+    ) -> BoxFuture<'_, Result<()>> {
+        let pcm = audio::resample::f32_to_pcm(samples, self.bit_depth);
+        Box::pin(async move {
+            let mut sinks = self.sinks.write().await;
+            if let Some(tcp) = sinks.get_mut(&zone_index) {
+                if let Err(e) = tcp.write_all(&pcm).await {
+                    tracing::error!(zone = zone_index, error = %e, "TCP write failed");
+                    // Reconnect
+                    if let Some(&port) = self.ports.get(&zone_index) {
+                        if let Ok(new_tcp) = open_audio_source(port).await {
+                            *tcp = new_tcp;
+                        }
+                    }
+                }
+            }
+            Ok(())
+        })
+    }
+
+    fn execute(&self, cmd: SnapcastCmd) -> BoxFuture<'_, Result<()>> {
+        Box::pin(async move {
+            match cmd {
+                SnapcastCmd::Group { group_id, action } => match action {
+                    GroupAction::Stream(stream_id) => {
+                        self.snap.group_set_stream(&group_id, &stream_id).await
+                    }
+                    GroupAction::Clients(clients) => {
+                        self.snap.group_set_clients(&group_id, clients).await
+                    }
+                    GroupAction::Name(name) => self.snap.group_set_name(&group_id, &name).await,
+                    GroupAction::Volume(_) => Ok(()), // TODO: group volume
+                    GroupAction::Mute(muted) => self.snap.group_set_mute(&group_id, muted).await,
+                },
+                SnapcastCmd::Client { client_id, action } => match action {
+                    ClientAction::Volume(v) => {
+                        self.snap
+                            .client_set_volume(&client_id, v.clamp(0, 100) as u8)
+                            .await
+                    }
+                    ClientAction::Mute(muted) => self.snap.client_set_mute(&client_id, muted).await,
+                    ClientAction::Latency(ms) => self.snap.client_set_latency(&client_id, ms).await,
+                },
+                SnapcastCmd::ReconcileZones => Ok(()), // handled at higher level
+            }
+        })
+    }
+
+    fn stop(&self) -> BoxFuture<'_, Result<()>> {
+        Box::pin(async { Ok(()) }) // snapserver process stopped separately
+    }
+
+    fn get_status(&self) -> BoxFuture<'_, Result<serde_json::Value>> {
+        Box::pin(async move {
+            let status = self.snap.server_get_status().await?;
+            serde_json::to_value(&status).context("Failed to serialize status")
+        })
+    }
+
+    fn delete_client(&self, id: &str) -> BoxFuture<'_, Result<()>> {
+        let id = id.to_string();
+        Box::pin(async move { self.snap.server_delete_client(&id).await })
+    }
+}
