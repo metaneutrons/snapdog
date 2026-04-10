@@ -4,6 +4,7 @@
 //! Snapcast integration — backend trait and implementations.
 
 pub mod backend;
+#[cfg(feature = "snapcast-embedded")]
 pub mod events;
 
 #[cfg(feature = "snapcast-embedded")]

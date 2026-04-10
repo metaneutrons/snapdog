@@ -459,14 +459,11 @@ async fn handle_incoming(
                         .as_ref()
                         .and_then(|d| decode_percent(d).map(|v| ClientAction::Latency(v as i32))),
                     "zone" => {
-                        if let Some(target_zone) = data.as_ref().and_then(|d| decode_percent(d)) {
+                        if let Some(target_zone) = data.as_ref().and_then(decode_percent) {
                             drop(s);
-                            store
-                                .write()
-                                .await
-                                .clients
-                                .get_mut(&client_idx)
-                                .map(|c| c.zone_index = target_zone as usize);
+                            if let Some(c) = store.write().await.clients.get_mut(&client_idx) {
+                                c.zone_index = target_zone as usize;
+                            }
                             let _ = snap_tx.send(SnapcastCmd::ReconcileZones).await;
                             tracing::debug!(client = client_idx, zone = target_zone, ga = %ga, "KNX → client zone change");
                         }
