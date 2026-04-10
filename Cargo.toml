@@ -57,7 +57,7 @@ thiserror = "2"
 anyhow = "1"
 
 # Snapcast
-snapcast-server = { git = "https://github.com/metaneutrons/snapcast-rs", branch = "main", features = ["flac"] }
+snapcast-server = { path = "../snapcast-rs/crates/snapcast-server", features = ["flac"] }
 
 # Utilities
 md5 = "0.7"
