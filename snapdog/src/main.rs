@@ -5,9 +5,19 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::Result;
+use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
 use snapdog::*;
+
+/// Multi-zone audio controller with AirPlay, Snapcast, MQTT, and KNX integration.
+#[derive(Parser)]
+#[command(version, about)]
+struct Cli {
+    /// Path to configuration file
+    #[arg(short, long, default_value = "snapdog.toml")]
+    config: PathBuf,
+}
 
 /// Volume coalescing window — rapid volume changes within this window are merged.
 const VOLUME_COALESCE_MS: u64 = 50;
@@ -17,12 +27,10 @@ const SNAPCAST_CMD_CHANNEL_SIZE: usize = 64;
 #[tokio::main]
 async fn main() -> Result<()> {
     // ── Parse config ──────────────────────────────────────────
-    let config_path = std::env::args()
-        .nth(2)
-        .filter(|_| std::env::args().nth(1).as_deref() == Some("--config"))
-        .unwrap_or_else(|| "snapdog.toml".into());
+    let cli = Cli::parse();
+    let config_path = &cli.config;
 
-    let config = Arc::new(config::load(&PathBuf::from(&config_path))?);
+    let config = Arc::new(config::load(config_path)?);
 
     // ── Initialize logging ────────────────────────────────────
     tracing_subscriber::fmt()
@@ -36,7 +44,8 @@ async fn main() -> Result<()> {
         zones = config.zones.len(),
         clients = config.clients.len(),
         radios = config.radios.len(),
-        "Configuration loaded from {config_path}"
+        "Configuration loaded from {}",
+        config_path.display()
     );
 
     // ── Initialize subsystems ─────────────────────────────────
