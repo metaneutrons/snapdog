@@ -40,15 +40,21 @@ async fn main() -> Result<()> {
     let (notify_tx, _) = api::ws::notification_channel();
 
     // Snapserver (managed child process)
+    #[cfg(feature = "snapcast-process")]
     let mut snapserver = process::SnapserverHandle::start(&config).await?;
+    #[cfg(feature = "snapcast-process")]
     if config.snapcast.managed {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
 
     // Snapcast JSON-RPC client
+    #[cfg(feature = "snapcast-process")]
     let snap = snapcast::SnapcastClient::from_config(&config).await?;
+    #[cfg(feature = "snapcast-process")]
     let status = snap.server_get_status().await?;
+    #[cfg(feature = "snapcast-process")]
     snapcast::sync_initial_state(&status, &config, &snap, &store).await;
+    #[cfg(feature = "snapcast-process")]
     let mut snap_notifications = snap.subscribe();
 
     // Snapcast command channel
@@ -69,9 +75,18 @@ async fn main() -> Result<()> {
         notify: notify_tx.clone(),
         snap_tx: snap_cmd_tx.clone(),
         eq_store: eq_store.clone(),
+        #[cfg(feature = "snapcast-process")]
         client_mac_map: snapcast::build_client_mac_map(&status),
+        #[cfg(not(feature = "snapcast-process"))]
+        client_mac_map: std::collections::HashMap::new(),
+        #[cfg(feature = "snapcast-process")]
         group_ids: snapcast::build_group_ids(&status),
+        #[cfg(not(feature = "snapcast-process"))]
+        group_ids: Vec::new(),
+        #[cfg(feature = "snapcast-process")]
         group_clients: snapcast::build_group_clients(&status),
+        #[cfg(not(feature = "snapcast-process"))]
+        group_clients: std::collections::HashMap::new(),
     })
     .await?;
 
@@ -138,6 +153,7 @@ async fn main() -> Result<()> {
     let mqtt_store = store.clone();
 
     // Volume coalescing: buffer rapid volume changes per client (50ms window)
+    #[cfg(feature = "snapcast-process")]
     let mut pending_volumes: std::collections::HashMap<String, i32> =
         std::collections::HashMap::new();
     let mut coalesce_deadline: Option<tokio::time::Instant> = None;
@@ -153,29 +169,44 @@ async fn main() -> Result<()> {
         tokio::select! {
             // Snapcast commands from zone players / API
             Some(cmd) = snap_cmd_rx.recv() => {
-                // Coalesce client volume commands
-                if let player::SnapcastCmd::Client { ref client_id, action: player::ClientAction::Volume(v) } = cmd {
-                    pending_volumes.insert(client_id.clone(), v);
-                    coalesce_deadline = Some(tokio::time::Instant::now() + std::time::Duration::from_millis(50));
-                } else {
-                    snapcast::execute_command(&snap, cmd, &config, &store, &notify_tx).await;
+                #[cfg(feature = "snapcast-process")]
+                {
+                    // Coalesce client volume commands
+                    if let player::SnapcastCmd::Client { ref client_id, action: player::ClientAction::Volume(v) } = cmd {
+                        pending_volumes.insert(client_id.clone(), v);
+                        coalesce_deadline = Some(tokio::time::Instant::now() + std::time::Duration::from_millis(50));
+                    } else {
+                        snapcast::execute_command(&snap, cmd, &config, &store, &notify_tx).await;
+                    }
+                }
+                #[cfg(not(feature = "snapcast-process"))]
+                {
+                    let _ = cmd; // TODO: route through EmbeddedBackend
                 }
             }
             // Coalesce timer fired — flush pending volumes
             _ = sleep => {
-                for (client_id, volume) in pending_volumes.drain() {
-                    let cmd = player::SnapcastCmd::Client {
-                        client_id,
-                        action: player::ClientAction::Volume(volume),
-                    };
-                    snapcast::execute_command(&snap, cmd, &config, &store, &notify_tx).await;
+                #[cfg(feature = "snapcast-process")]
+                {
+                    for (client_id, volume) in pending_volumes.drain() {
+                        let cmd = player::SnapcastCmd::Client {
+                            client_id,
+                            action: player::ClientAction::Volume(volume),
+                        };
+                        snapcast::execute_command(&snap, cmd, &config, &store, &notify_tx).await;
+                    }
                 }
                 coalesce_deadline = None;
             }
             // Snapcast server notifications → state updates
-            Ok(notification) = snap_notifications.recv() => {
-                snapcast::handle_notification(notification, &config, &snap, &store, &notify_tx).await;
-            }
+            _ = async {
+                #[cfg(feature = "snapcast-process")]
+                if let Ok(notification) = snap_notifications.recv().await {
+                    snapcast::handle_notification(notification, &config, &snap, &store, &notify_tx).await;
+                }
+                #[cfg(not(feature = "snapcast-process"))]
+                std::future::pending::<()>().await;
+            } => {}
             // MQTT events
             _ = async {
                 if let Some(ref mut bridge) = mqtt_bridge {
@@ -196,6 +227,7 @@ async fn main() -> Result<()> {
     if let Err(e) = store.write().await.persist() {
         tracing::warn!(error = %e, "Failed to persist state");
     }
+    #[cfg(feature = "snapcast-process")]
     snapserver.stop().await?;
     Ok(())
 }

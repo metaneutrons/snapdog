@@ -13,10 +13,12 @@ use tokio::task::JoinHandle;
 
 use super::commands::{ActiveSource, ZoneCommand};
 use super::context::*;
+
 use super::helpers::*;
 use super::helpers::{DecodeState, PlaybackCtx};
 use crate::audio;
 use crate::receiver::ReceiverProvider;
+#[cfg(feature = "snapcast-process")]
 use crate::snapcast;
 use crate::state::{PlaybackState, SourceType, TrackInfo};
 use crate::subsonic::SubsonicClient;
@@ -61,7 +63,10 @@ async fn run(
     let audio_config = config.audio.clone(); // Cloned once, moved into decode tasks
 
     // Connect TCP to Snapcast source
+    #[cfg(feature = "snapcast-process")]
     let mut tcp = snapcast::open_audio_source(zone_config.tcp_source_port).await?;
+    #[cfg(not(feature = "snapcast-process"))]
+    let mut tcp: Vec<u8> = Vec::new(); // placeholder until EmbeddedBackend
 
     // Zone grouping: assign clients to group, set stream
     let group_id = setup_zone_group(zone_index, &ctx).await;
@@ -485,6 +490,7 @@ async fn run(
                         let pcm = audio::resample::f32_to_pcm(&samples, output_bit_depth);
                         if let Err(e) = tcp.write_all(&pcm).await {
                             tracing::error!(zone = zone_index, error = %e, "TCP write failed");
+                            #[cfg(feature = "snapcast-process")]
                             if let Ok(new_tcp) = snapcast::open_audio_source(zone_config.tcp_source_port).await { tcp = new_tcp; }
                         }
                     }
