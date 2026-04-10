@@ -3,6 +3,8 @@
 
 //! Embedded Snapcast backend — in-process server via snapcast-server crate.
 
+use std::collections::HashMap;
+
 use anyhow::{Context, Result};
 use tokio::sync::mpsc;
 
@@ -21,7 +23,8 @@ const DEFAULT_BUFFER_MS: u32 = 1000;
 /// Embedded Snapcast server backend.
 pub struct EmbeddedBackend {
     cmd_tx: mpsc::Sender<ServerCommand>,
-    audio_tx: mpsc::Sender<AudioFrame>,
+    /// Per-zone audio senders, keyed by 1-based zone index.
+    audio_txs: HashMap<usize, mpsc::Sender<AudioFrame>>,
     store: state::SharedState,
 }
 
@@ -45,7 +48,14 @@ impl EmbeddedBackend {
         };
 
         let (mut server, event_rx) = SnapServer::new(server_config);
-        let audio_tx = server.add_stream("default");
+
+        // One stream per zone
+        let mut audio_txs = HashMap::new();
+        for zone in &config.zones {
+            let tx = server.add_stream(&zone.stream_name);
+            audio_txs.insert(zone.index, tx);
+        }
+
         let cmd_tx = server.command_sender();
 
         tokio::spawn(async move {
@@ -56,13 +66,14 @@ impl EmbeddedBackend {
 
         tracing::info!(
             port = config.snapcast.streaming_port,
+            zones = audio_txs.len(),
             "Embedded Snapcast server started"
         );
 
         Ok((
             Self {
                 cmd_tx,
-                audio_tx,
+                audio_txs,
                 store,
             },
             EmbeddedEventReceiver { event_rx },
@@ -172,20 +183,23 @@ impl EmbeddedEventReceiver {
 impl SnapcastBackend for EmbeddedBackend {
     fn send_audio(
         &self,
-        _zone_index: usize,
+        zone_index: usize,
         samples: &[f32],
         _sample_rate: u32,
         _channels: u16,
     ) -> BoxFuture<'_, Result<()>> {
+        let Some(tx) = self.audio_txs.get(&zone_index) else {
+            return Box::pin(async move { anyhow::bail!("No audio stream for zone {zone_index}") });
+        };
         let frame = AudioFrame {
             data: AudioData::F32(samples.to_vec()),
             timestamp_usec: snapcast_server::time::now_usec(),
         };
+        let tx = tx.clone();
         Box::pin(async move {
-            self.audio_tx
-                .send(frame)
+            tx.send(frame)
                 .await
-                .map_err(|_| anyhow::anyhow!("Audio channel closed"))
+                .map_err(|_| anyhow::anyhow!("Audio channel closed for zone {zone_index}"))
         })
     }
 
