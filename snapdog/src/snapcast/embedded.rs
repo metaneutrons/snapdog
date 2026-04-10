@@ -148,7 +148,6 @@ impl EmbeddedBackend {
             ServerEvent::GroupStreamChanged { .. }
             | ServerEvent::GroupMuteChanged { .. }
             | ServerEvent::GroupNameChanged { .. }
-            | ServerEvent::GroupClientsChanged { .. }
             | ServerEvent::StreamStatus { .. }
             | ServerEvent::ServerUpdated => Some(SnapcastEvent::ServerUpdated),
         }
@@ -436,18 +435,6 @@ mod tests {
         let event = ServerEvent::GroupNameChanged {
             group_id: "g1".into(),
             name: "Living Room".into(),
-        };
-        assert!(matches!(
-            EmbeddedBackend::map_event(event),
-            Some(SnapcastEvent::ServerUpdated)
-        ));
-    }
-
-    #[test]
-    fn map_event_group_clients_changed() {
-        let event = ServerEvent::GroupClientsChanged {
-            group_id: "g1".into(),
-            clients: vec!["c1".into(), "c2".into()],
         };
         assert!(matches!(
             EmbeddedBackend::map_event(event),
