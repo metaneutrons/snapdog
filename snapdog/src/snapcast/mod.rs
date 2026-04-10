@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2025 Fabian Schmieder
 
-//! Snapcast JSON-RPC client and TCP audio source management.
+//! Snapcast integration — backend trait and implementations.
 
+pub mod backend;
 pub mod connection;
 pub mod protocol;
 pub mod types;
