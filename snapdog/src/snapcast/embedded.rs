@@ -220,3 +220,162 @@ impl SnapcastBackend for EmbeddedBackend {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn map_command_group_stream() {
+        let cmd = SnapcastCmd::Group {
+            group_id: "g1".into(),
+            action: GroupAction::Stream("Zone1".into()),
+        };
+        let cmds = EmbeddedBackend::map_command(cmd);
+        assert_eq!(cmds.len(), 1);
+        assert!(
+            matches!(&cmds[0], ServerCommand::SetGroupStream { group_id, stream_id } if group_id == "g1" && stream_id == "Zone1")
+        );
+    }
+
+    #[test]
+    fn map_command_group_clients() {
+        let cmd = SnapcastCmd::Group {
+            group_id: "g1".into(),
+            action: GroupAction::Clients(vec!["c1".into(), "c2".into()]),
+        };
+        let cmds = EmbeddedBackend::map_command(cmd);
+        assert_eq!(cmds.len(), 1);
+        assert!(
+            matches!(&cmds[0], ServerCommand::SetGroupClients { clients, .. } if clients.len() == 2)
+        );
+    }
+
+    #[test]
+    fn map_command_group_mute() {
+        let cmd = SnapcastCmd::Group {
+            group_id: "g1".into(),
+            action: GroupAction::Mute(true),
+        };
+        let cmds = EmbeddedBackend::map_command(cmd);
+        assert!(matches!(
+            &cmds[0],
+            ServerCommand::SetGroupMute { muted: true, .. }
+        ));
+    }
+
+    #[test]
+    fn map_command_group_volume_noop() {
+        let cmd = SnapcastCmd::Group {
+            group_id: "g1".into(),
+            action: GroupAction::Volume(50),
+        };
+        assert!(EmbeddedBackend::map_command(cmd).is_empty());
+    }
+
+    #[test]
+    fn map_command_client_volume() {
+        let cmd = SnapcastCmd::Client {
+            client_id: "c1".into(),
+            action: ClientAction::Volume(75),
+        };
+        let cmds = EmbeddedBackend::map_command(cmd);
+        assert!(matches!(
+            &cmds[0],
+            ServerCommand::SetClientVolume { volume: 75, .. }
+        ));
+    }
+
+    #[test]
+    fn map_command_client_volume_clamps() {
+        let cmd = SnapcastCmd::Client {
+            client_id: "c1".into(),
+            action: ClientAction::Volume(200),
+        };
+        let cmds = EmbeddedBackend::map_command(cmd);
+        assert!(matches!(
+            &cmds[0],
+            ServerCommand::SetClientVolume { volume: 100, .. }
+        ));
+    }
+
+    #[test]
+    fn map_command_client_mute() {
+        let cmd = SnapcastCmd::Client {
+            client_id: "c1".into(),
+            action: ClientAction::Mute(true),
+        };
+        let cmds = EmbeddedBackend::map_command(cmd);
+        assert!(matches!(
+            &cmds[0],
+            ServerCommand::SetClientVolume { muted: true, .. }
+        ));
+    }
+
+    #[test]
+    fn map_command_client_latency() {
+        let cmd = SnapcastCmd::Client {
+            client_id: "c1".into(),
+            action: ClientAction::Latency(50),
+        };
+        let cmds = EmbeddedBackend::map_command(cmd);
+        assert!(matches!(
+            &cmds[0],
+            ServerCommand::SetClientLatency { latency: 50, .. }
+        ));
+    }
+
+    #[test]
+    fn map_command_reconcile_noop() {
+        assert!(EmbeddedBackend::map_command(SnapcastCmd::ReconcileZones).is_empty());
+    }
+
+    #[test]
+    fn map_event_client_connected() {
+        let event = ServerEvent::ClientConnected {
+            id: "c1".into(),
+            name: "Kitchen".into(),
+        };
+        let mapped = EmbeddedBackend::map_event(event).unwrap();
+        assert!(
+            matches!(mapped, SnapcastEvent::ClientConnected { id, name, .. } if id == "c1" && name == "Kitchen")
+        );
+    }
+
+    #[test]
+    fn map_event_client_disconnected() {
+        let event = ServerEvent::ClientDisconnected { id: "c1".into() };
+        let mapped = EmbeddedBackend::map_event(event).unwrap();
+        assert!(matches!(mapped, SnapcastEvent::ClientDisconnected { id } if id == "c1"));
+    }
+
+    #[test]
+    fn map_event_volume_changed() {
+        let event = ServerEvent::ClientVolumeChanged {
+            client_id: "c1".into(),
+            volume: 80,
+            muted: false,
+        };
+        let mapped = EmbeddedBackend::map_event(event).unwrap();
+        assert!(matches!(
+            mapped,
+            SnapcastEvent::ClientVolumeChanged {
+                volume: 80,
+                muted: false,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn map_event_group_events_become_server_updated() {
+        let event = ServerEvent::GroupMuteChanged {
+            group_id: "g1".into(),
+            muted: true,
+        };
+        assert!(matches!(
+            EmbeddedBackend::map_event(event),
+            Some(SnapcastEvent::ServerUpdated)
+        ));
+    }
+}
