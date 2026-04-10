@@ -67,7 +67,13 @@ async fn main() -> Result<()> {
     #[cfg(feature = "snapcast-embedded")]
     let backend: Arc<dyn snapcast::backend::SnapcastBackend> = Arc::new(embedded_backend);
     #[cfg(feature = "snapcast-embedded")]
-    snapcast::events::spawn_event_handler(embedded_events, store.clone(), notify_tx.clone());
+    snapcast::events::spawn_event_handler(
+        embedded_events,
+        config.clone(),
+        backend.clone(),
+        store.clone(),
+        notify_tx.clone(),
+    );
 
     #[cfg(all(feature = "snapcast-process", not(feature = "snapcast-embedded")))]
     let process_backend = Arc::new(snapcast::process::ProcessBackend::start(&config, snap).await?);
