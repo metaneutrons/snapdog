@@ -44,7 +44,8 @@ impl EmbeddedBackend {
             ..ServerConfig::default()
         };
 
-        let (mut server, event_rx, audio_tx) = SnapServer::new(server_config);
+        let (mut server, event_rx) = SnapServer::new(server_config);
+        let audio_tx = server.add_stream("default");
         let cmd_tx = server.command_sender();
 
         tokio::spawn(async move {
