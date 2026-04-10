@@ -39,11 +39,27 @@ impl EmbeddedBackend {
         config: &AppConfig,
         store: state::SharedState,
     ) -> Result<(Self, EmbeddedEventReceiver)> {
+        // Resolve f32lz4e → f32lz4 + encryption
+        let (codec, encryption_psk) = if config.audio.codec == "f32lz4e" {
+            let psk = config
+                .audio
+                .encryption_psk
+                .clone()
+                .unwrap_or_else(|| snapcast_server::DEFAULT_ENCRYPTION_PSK.into());
+            ("f32lz4".into(), Some(psk))
+        } else {
+            (
+                config.audio.codec.clone(),
+                config.audio.encryption_psk.clone(),
+            )
+        };
+
         let server_config = ServerConfig {
             stream_port: config.snapcast.streaming_port,
             buffer_ms: DEFAULT_BUFFER_MS,
-            codec: config.audio.codec.clone(),
+            codec,
             sample_format: config.audio.sample_format(),
+            encryption_psk,
             ..ServerConfig::default()
         };
 
