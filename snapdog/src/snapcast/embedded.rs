@@ -11,6 +11,7 @@ use snapcast_server::{AudioFrame, ServerCommand, ServerConfig, ServerEvent, Snap
 use super::backend::{BoxFuture, SnapcastBackend, SnapcastEvent};
 use crate::config::AppConfig;
 use crate::player::{ClientAction, GroupAction, SnapcastCmd};
+use crate::state;
 
 /// Default audio buffer size in milliseconds for the embedded server.
 const DEFAULT_BUFFER_MS: u32 = 1000;
@@ -19,6 +20,7 @@ const DEFAULT_BUFFER_MS: u32 = 1000;
 pub struct EmbeddedBackend {
     cmd_tx: mpsc::Sender<ServerCommand>,
     audio_tx: mpsc::Sender<AudioFrame>,
+    store: state::SharedState,
 }
 
 /// Event receiver from the embedded server.
@@ -28,7 +30,10 @@ pub struct EmbeddedEventReceiver {
 
 impl EmbeddedBackend {
     /// Start the embedded server. Returns the backend + event receiver.
-    pub async fn start(config: &AppConfig) -> Result<(Self, EmbeddedEventReceiver)> {
+    pub async fn start(
+        config: &AppConfig,
+        store: state::SharedState,
+    ) -> Result<(Self, EmbeddedEventReceiver)> {
         let server_config = ServerConfig {
             stream_port: config.snapcast.streaming_port,
             buffer_ms: DEFAULT_BUFFER_MS,
@@ -52,7 +57,11 @@ impl EmbeddedBackend {
         );
 
         Ok((
-            Self { cmd_tx, audio_tx },
+            Self {
+                cmd_tx,
+                audio_tx,
+                store,
+            },
             EmbeddedEventReceiver { event_rx },
         ))
     }
@@ -178,8 +187,48 @@ impl SnapcastBackend for EmbeddedBackend {
     }
 
     fn execute(&self, cmd: SnapcastCmd) -> BoxFuture<'_, Result<()>> {
-        let commands = Self::map_command(cmd);
         Box::pin(async move {
+            let commands = match &cmd {
+                // Mute needs current volume — SetClientVolume sets both
+                SnapcastCmd::Client {
+                    client_id,
+                    action: ClientAction::Mute(muted),
+                } => {
+                    let s = self.store.read().await;
+                    let volume = s
+                        .clients
+                        .values()
+                        .find(|c| c.snapcast_id.as_deref() == Some(client_id))
+                        .map(|c| c.volume.clamp(0, 100) as u16)
+                        .unwrap_or(100);
+                    drop(s);
+                    vec![ServerCommand::SetClientVolume {
+                        client_id: client_id.clone(),
+                        volume,
+                        muted: *muted,
+                    }]
+                }
+                // Volume needs current mute state — SetClientVolume sets both
+                SnapcastCmd::Client {
+                    client_id,
+                    action: ClientAction::Volume(percent),
+                } => {
+                    let s = self.store.read().await;
+                    let muted = s
+                        .clients
+                        .values()
+                        .find(|c| c.snapcast_id.as_deref() == Some(client_id))
+                        .map(|c| c.muted)
+                        .unwrap_or(false);
+                    drop(s);
+                    vec![ServerCommand::SetClientVolume {
+                        client_id: client_id.clone(),
+                        volume: (*percent).clamp(0, 100) as u16,
+                        muted,
+                    }]
+                }
+                _ => Self::map_command(cmd),
+            };
             for c in commands {
                 self.cmd_tx
                     .send(c)

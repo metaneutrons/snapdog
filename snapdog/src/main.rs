@@ -63,7 +63,7 @@ async fn main() -> Result<()> {
 
     #[cfg(feature = "snapcast-embedded")]
     let (embedded_backend, embedded_events) =
-        snapcast::embedded::EmbeddedBackend::start(&config).await?;
+        snapcast::embedded::EmbeddedBackend::start(&config, store.clone()).await?;
     #[cfg(feature = "snapcast-embedded")]
     let backend: Arc<dyn snapcast::backend::SnapcastBackend> = Arc::new(embedded_backend);
     #[cfg(feature = "snapcast-embedded")]
