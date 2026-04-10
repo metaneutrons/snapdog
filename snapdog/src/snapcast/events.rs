@@ -115,7 +115,7 @@ async fn handle_event(
             }
         }
         SnapcastEvent::ServerUpdated => {
-            tracing::debug!("Server state updated");
+            sync_group_ids(config, backend, store).await;
         }
     }
 }
@@ -217,6 +217,58 @@ async fn setup_zone_group(
         stream = %zone_config.stream_name,
         "Zone group configured"
     );
+}
+
+/// Re-sync zone group IDs from server status.
+///
+/// The server may reorganize groups (new client → new group, SetGroupClients → merge/delete).
+/// The stream name is the stable identifier; the group ID is ephemeral.
+async fn sync_group_ids(
+    config: &AppConfig,
+    backend: &dyn SnapcastBackend,
+    store: &state::SharedState,
+) {
+    let status = match backend.get_status().await {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!(error = %e, "Failed to get server status for group sync");
+            return;
+        }
+    };
+
+    let groups = match status
+        .get("server")
+        .and_then(|s| s.get("groups"))
+        .and_then(|g| g.as_array())
+    {
+        Some(g) => g,
+        None => return,
+    };
+
+    let mut s = store.write().await;
+    for zone_cfg in &config.zones {
+        // Find the group whose stream matches this zone, prefer the one with most clients
+        let best_group = groups
+            .iter()
+            .filter(|g| g.get("stream_id").and_then(|s| s.as_str()) == Some(&zone_cfg.stream_name))
+            .max_by_key(|g| {
+                g.get("clients")
+                    .and_then(|c| c.as_array())
+                    .map(|c| c.len())
+                    .unwrap_or(0)
+            });
+
+        if let Some(group) = best_group {
+            if let Some(gid) = group.get("id").and_then(|id| id.as_str()) {
+                if let Some(zone) = s.zones.get_mut(&zone_cfg.index) {
+                    if zone.snapcast_group_id.as_deref() != Some(gid) {
+                        tracing::debug!(zone = zone_cfg.index, new = %gid, "Zone group ID updated");
+                        zone.snapcast_group_id = Some(gid.to_string());
+                    }
+                }
+            }
+        }
+    }
 }
 
 fn client_notification(idx: usize, client: &state::ClientState) -> api::ws::Notification {
