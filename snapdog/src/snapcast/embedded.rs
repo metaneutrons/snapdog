@@ -291,7 +291,7 @@ impl SnapcastBackend for EmbeddedBackend {
                 .await
                 .context("Server command channel closed")?;
             let status = rx.await.context("Status response channel closed")?;
-            Ok(serde_json::json!({"server": {"groups": status.groups, "streams": status.streams}}))
+            serde_json::to_value(status).context("Failed to serialize status")
         })
     }
 
