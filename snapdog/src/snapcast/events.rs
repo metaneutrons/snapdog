@@ -56,9 +56,25 @@ async fn handle_event(
             };
             broadcast_all_clients(store, notify).await;
 
-            // Setup zone group for the connecting client
+            // Setup zone group for connecting client.
+            // - First connect: full setup (assign all connected clients, stream, name)
+            // - Subsequent connects: only merge client into existing zone group if needed
             if let Some(zone_index) = zone_index {
-                setup_zone_group(zone_index, &id, config, backend, store).await;
+                let zone_group_id = {
+                    let s = store.read().await;
+                    s.zones
+                        .get(&zone_index)
+                        .and_then(|z| z.snapcast_group_id.clone())
+                };
+                match zone_group_id {
+                    None => {
+                        setup_zone_group(zone_index, &id, config, backend, store).await;
+                    }
+                    Some(gid) => {
+                        // Client may be in a different group — merge into zone group
+                        merge_client_into_group(&id, &gid, zone_index, backend, store).await;
+                    }
+                }
             }
         }
         SnapcastEvent::ClientDisconnected { id } => {
@@ -162,45 +178,84 @@ async fn setup_zone_group(
     }
 
     // Find the group the connecting client is in
-    let gid = groups.as_array().and_then(|groups| {
-        groups
-            .iter()
-            .find(|g| {
-                g.get("clients")
-                    .and_then(|c| c.as_array())
-                    .is_some_and(|clients| {
-                        clients.iter().any(|c| {
-                            c.get("id").and_then(|id| id.as_str()) == Some(connecting_client_id)
-                        })
+    let group = groups.as_array().and_then(|groups| {
+        groups.iter().find(|g| {
+            g.get("clients")
+                .and_then(|c| c.as_array())
+                .is_some_and(|clients| {
+                    clients.iter().any(|c| {
+                        c.get("id").and_then(|id| id.as_str()) == Some(connecting_client_id)
                     })
-            })
-            .and_then(|g| g.get("id").and_then(|id| id.as_str()).map(String::from))
+                })
+        })
     });
 
-    let Some(gid) = gid else {
+    let Some(group) = group else {
         tracing::warn!(zone = zone_index, "No group found for connecting client");
         return;
     };
 
-    // Assign clients, stream, and name
-    let cmds = [
-        SnapcastCmd::Group {
-            group_id: gid.clone(),
-            action: GroupAction::Clients(snap_client_ids.clone()),
-        },
-        SnapcastCmd::Group {
-            group_id: gid.clone(),
-            action: GroupAction::Stream(zone_config.stream_name.clone()),
-        },
-        SnapcastCmd::Group {
-            group_id: gid.clone(),
-            action: GroupAction::Name(zone_config.name.clone()),
-        },
-    ];
+    let gid = match group.get("id").and_then(|id| id.as_str()) {
+        Some(id) => id.to_string(),
+        None => return,
+    };
 
-    for cmd in cmds {
-        if let Err(e) = backend.execute(cmd).await {
-            tracing::warn!(error = %e, "Failed to configure zone group");
+    // Extract current group state to avoid redundant commands
+    let current_clients: Vec<&str> = group
+        .get("clients")
+        .and_then(|c| c.as_array())
+        .map(|clients| {
+            clients
+                .iter()
+                .filter_map(|c| c.get("id").and_then(|id| id.as_str()))
+                .collect()
+        })
+        .unwrap_or_default();
+    let current_stream = group
+        .get("stream_id")
+        .and_then(|s| s.as_str())
+        .unwrap_or("");
+    let current_name = group.get("name").and_then(|n| n.as_str()).unwrap_or("");
+
+    // Only send commands for things that actually differ
+    let mut sorted_want = snap_client_ids.clone();
+    sorted_want.sort();
+    let mut sorted_have: Vec<&str> = current_clients;
+    sorted_have.sort();
+    let clients_match = sorted_want.len() == sorted_have.len()
+        && sorted_want.iter().zip(&sorted_have).all(|(a, b)| a == b);
+
+    if !clients_match {
+        if let Err(e) = backend
+            .execute(SnapcastCmd::Group {
+                group_id: gid.clone(),
+                action: GroupAction::Clients(snap_client_ids.clone()),
+            })
+            .await
+        {
+            tracing::warn!(error = %e, "Failed to set group clients");
+        }
+    }
+    if current_stream != zone_config.stream_name {
+        if let Err(e) = backend
+            .execute(SnapcastCmd::Group {
+                group_id: gid.clone(),
+                action: GroupAction::Stream(zone_config.stream_name.clone()),
+            })
+            .await
+        {
+            tracing::warn!(error = %e, "Failed to set group stream");
+        }
+    }
+    if current_name != zone_config.name {
+        if let Err(e) = backend
+            .execute(SnapcastCmd::Group {
+                group_id: gid.clone(),
+                action: GroupAction::Name(zone_config.name.clone()),
+            })
+            .await
+        {
+            tracing::warn!(error = %e, "Failed to set group name");
         }
     }
 
@@ -217,6 +272,65 @@ async fn setup_zone_group(
         stream = %zone_config.stream_name,
         "Zone group configured"
     );
+}
+
+/// Merge a reconnecting client into its zone's existing group if it ended up elsewhere.
+async fn merge_client_into_group(
+    client_id: &str,
+    zone_group_id: &str,
+    zone_index: usize,
+    backend: &dyn SnapcastBackend,
+    store: &state::SharedState,
+) {
+    let status = match backend.get_status().await {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+
+    let groups = match status
+        .get("server")
+        .and_then(|s| s.get("groups"))
+        .and_then(|g| g.as_array())
+    {
+        Some(g) => g,
+        None => return,
+    };
+
+    // Check if client is already in the zone's group
+    let already_in_group = groups.iter().any(|g| {
+        g.get("id").and_then(|id| id.as_str()) == Some(zone_group_id)
+            && g.get("clients")
+                .and_then(|c| c.as_array())
+                .is_some_and(|clients| {
+                    clients
+                        .iter()
+                        .any(|c| c.get("id").and_then(|id| id.as_str()) == Some(client_id))
+                })
+    });
+
+    if already_in_group {
+        return;
+    }
+
+    // Client is in a different group — collect all zone clients and merge
+    let s = store.read().await;
+    let all_zone_clients: Vec<String> = s
+        .clients
+        .values()
+        .filter(|c| c.zone_index == zone_index)
+        .filter_map(|c| c.snapcast_id.clone())
+        .collect();
+    drop(s);
+
+    if let Err(e) = backend
+        .execute(SnapcastCmd::Group {
+            group_id: zone_group_id.to_string(),
+            action: GroupAction::Clients(all_zone_clients),
+        })
+        .await
+    {
+        tracing::warn!(error = %e, "Failed to merge client into zone group");
+    }
 }
 
 /// Re-sync zone group IDs from server status.
