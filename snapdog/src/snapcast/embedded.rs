@@ -181,6 +181,7 @@ impl EmbeddedBackend {
             | ServerEvent::GroupNameChanged { .. }
             | ServerEvent::StreamStatus { .. }
             | ServerEvent::ServerUpdated => Some(SnapcastEvent::ServerUpdated),
+            _ => None,
         }
     }
 }
