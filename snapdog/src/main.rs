@@ -1,6 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2025 Fabian Schmieder
 
+#[cfg(all(feature = "snapcast-embedded", feature = "snapcast-process"))]
+compile_error!(
+    "Features `snapcast-embedded` and `snapcast-process` are mutually exclusive. \
+     Use `--no-default-features --features snapcast-process` for process mode."
+);
+
+#[cfg(not(any(feature = "snapcast-embedded", feature = "snapcast-process")))]
+compile_error!("Either `snapcast-embedded` or `snapcast-process` feature must be enabled.");
+
 use std::path::PathBuf;
 use std::sync::Arc;
 
