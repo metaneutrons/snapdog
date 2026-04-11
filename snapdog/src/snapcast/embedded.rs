@@ -86,6 +86,8 @@ impl EmbeddedBackend {
             "Embedded Snapcast server started"
         );
 
+        // mDNS is handled automatically by SnapServer::run()
+
         Ok((
             Self {
                 cmd_tx,
