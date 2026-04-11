@@ -60,6 +60,7 @@ impl EmbeddedBackend {
             codec,
             sample_format: config.audio.sample_format(),
             encryption_psk,
+            state_file: Some("snapcast-state.json".into()),
             ..ServerConfig::default()
         };
 
