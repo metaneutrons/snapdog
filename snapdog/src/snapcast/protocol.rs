@@ -94,7 +94,7 @@ pub enum Notification {
         /// Snapcast client identifier.
         id: String,
         /// New volume state.
-        volume: types::ClientVolume,
+        volume: types::Volume,
     },
     /// Client playback latency changed.
     ClientOnLatencyChanged {
@@ -197,7 +197,7 @@ impl Notification {
                 #[derive(Deserialize)]
                 struct P {
                     id: String,
-                    volume: types::ClientVolume,
+                    volume: types::Volume,
                 }
                 match serde_json::from_value::<P>(params.clone()) {
                     Ok(p) => Self::ClientOnVolumeChanged {
