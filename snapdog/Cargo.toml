@@ -51,6 +51,7 @@ librespot-discovery = { git = "https://github.com/librespot-org/librespot", bran
 librespot-metadata = { git = "https://github.com/librespot-org/librespot", branch = "dev", optional = true }
 
 snapcast-server = { workspace = true, optional = true }
+snapcast-proto = { workspace = true }
 
 [features]
 default = ["snapcast-embedded"]

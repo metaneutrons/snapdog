@@ -61,6 +61,7 @@ anyhow = "1"
 
 # Snapcast
 snapcast-server = { version = "0.5", features = ["flac", "encryption", "mdns"] }
+snapcast-proto = "0.5"
 
 # Utilities
 md5 = "0.7"
@@ -84,3 +85,7 @@ version = "0.15"
 lto = true
 strip = true
 codegen-units = 1
+
+[patch.crates-io]
+snapcast-server = { path = "../snapcast-rs/crates/snapcast-server" }
+snapcast-proto = { path = "../snapcast-rs/crates/snapcast-proto" }
