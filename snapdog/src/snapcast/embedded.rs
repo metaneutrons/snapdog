@@ -25,6 +25,8 @@ pub struct EmbeddedBackend {
     cmd_tx: mpsc::Sender<ServerCommand>,
     /// Per-zone audio senders, keyed by 1-based zone index.
     audio_txs: HashMap<usize, mpsc::Sender<AudioFrame>>,
+    /// Per-zone realtime pacer (matches C++ nextTick_).
+    next_tick: std::sync::Mutex<HashMap<usize, tokio::time::Instant>>,
     store: state::SharedState,
 }
 
@@ -93,6 +95,7 @@ impl EmbeddedBackend {
             Self {
                 cmd_tx,
                 audio_txs,
+                next_tick: std::sync::Mutex::new(HashMap::new()),
                 store,
             },
             EmbeddedEventReceiver { event_rx },
@@ -203,18 +206,39 @@ impl SnapcastBackend for EmbeddedBackend {
         &self,
         zone_index: usize,
         samples: &[f32],
-        _sample_rate: u32,
-        _channels: u16,
+        sample_rate: u32,
+        channels: u16,
     ) -> BoxFuture<'_, Result<()>> {
         let Some(tx) = self.audio_txs.get(&zone_index) else {
             return Box::pin(async move { anyhow::bail!("No audio stream for zone {zone_index}") });
         };
-        let frame = AudioFrame {
-            data: AudioData::F32(samples.to_vec()),
-            timestamp_usec: snapcast_server::time::now_usec(),
+        let num_frames = (samples.len() / channels.max(1) as usize) as u32;
+        let chunk_duration =
+            std::time::Duration::from_micros((num_frames as u64 * 1_000_000) / sample_rate as u64);
+
+        // Pace to realtime (C++ nextTick_)
+        let deadline = {
+            let mut ticks = self.next_tick.lock().unwrap();
+            let now = tokio::time::Instant::now();
+            let tick = ticks.entry(zone_index).or_insert(now);
+            if *tick < now {
+                *tick = now;
+            }
+            let d = *tick;
+            *tick += chunk_duration;
+            d
         };
+
+        let samples = samples.to_vec();
         let tx = tx.clone();
         Box::pin(async move {
+            tokio::time::sleep_until(deadline).await;
+            // Timestamp AFTER sleep — C++ tvEncodedChunk_ tracks steady_clock::now()
+            // which is effectively now() when the pipe read completes at realtime
+            let frame = AudioFrame {
+                data: AudioData::F32(samples),
+                timestamp_usec: snapcast_server::time::now_usec(),
+            };
             tx.send(frame)
                 .await
                 .map_err(|_| anyhow::anyhow!("Audio channel closed for zone {zone_index}"))
