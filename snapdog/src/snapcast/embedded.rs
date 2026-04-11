@@ -290,7 +290,8 @@ impl SnapcastBackend for EmbeddedBackend {
                 .send(ServerCommand::GetStatus { response_tx: tx })
                 .await
                 .context("Server command channel closed")?;
-            rx.await.context("Status response channel closed")
+            let status = rx.await.context("Status response channel closed")?;
+            Ok(serde_json::json!({"server": {"groups": status.groups, "streams": status.streams}}))
         })
     }
 
