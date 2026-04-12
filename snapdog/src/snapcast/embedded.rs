@@ -66,7 +66,9 @@ impl EmbeddedBackend {
         // One stream per zone
         let mut audio_txs = HashMap::new();
         for zone in &config.zones {
-            let tx = server.add_f32_stream(&zone.stream_name);
+            let tx = server
+                .add_f32_stream(&zone.stream_name)
+                .map_err(|e| anyhow::anyhow!(e))?;
             audio_txs.insert(zone.index, tx);
         }
 
