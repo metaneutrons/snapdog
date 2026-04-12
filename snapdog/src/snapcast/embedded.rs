@@ -8,9 +8,7 @@ use std::collections::HashMap;
 use anyhow::{Context, Result};
 use tokio::sync::mpsc;
 
-use snapcast_server::{
-    AudioData, AudioFrame, ServerCommand, ServerConfig, ServerEvent, SnapServer,
-};
+use snapcast_server::{ServerCommand, ServerConfig, ServerEvent, SnapServer};
 
 use super::backend::{BoxFuture, SnapcastBackend, SnapcastEvent};
 use crate::config::AppConfig;
@@ -20,20 +18,10 @@ use crate::state;
 /// Default audio buffer size in milliseconds for the embedded server.
 const DEFAULT_BUFFER_MS: u32 = 1000;
 
-/// Per-zone pacing state: logical clock anchored at stream start.
-struct ZonePacer {
-    total_frames: u64,
-    ts: snapcast_server::time::ChunkTimestamper,
-    last_send: tokio::time::Instant,
-    /// Accumulator for fixed-size chunk output (interleaved F32 samples).
-    buf: Vec<f32>,
-}
-
 /// Embedded Snapcast server backend.
 pub struct EmbeddedBackend {
     cmd_tx: mpsc::Sender<ServerCommand>,
-    audio_txs: HashMap<usize, mpsc::Sender<AudioFrame>>,
-    pacers: std::sync::Mutex<HashMap<usize, ZonePacer>>,
+    audio_txs: tokio::sync::Mutex<HashMap<usize, snapcast_server::F32AudioSender>>,
     store: state::SharedState,
 }
 
@@ -78,7 +66,7 @@ impl EmbeddedBackend {
         // One stream per zone
         let mut audio_txs = HashMap::new();
         for zone in &config.zones {
-            let tx = server.add_stream(&zone.stream_name);
+            let tx = server.add_f32_stream(&zone.stream_name);
             audio_txs.insert(zone.index, tx);
         }
 
@@ -101,8 +89,7 @@ impl EmbeddedBackend {
         Ok((
             Self {
                 cmd_tx,
-                audio_txs,
-                pacers: std::sync::Mutex::new(HashMap::new()),
+                audio_txs: tokio::sync::Mutex::new(audio_txs),
                 store,
             },
             EmbeddedEventReceiver { event_rx },
@@ -213,63 +200,18 @@ impl SnapcastBackend for EmbeddedBackend {
         &self,
         zone_index: usize,
         samples: &[f32],
-        sample_rate: u32,
-        channels: u16,
+        _sample_rate: u32,
+        _channels: u16,
     ) -> BoxFuture<'_, Result<()>> {
-        let Some(tx) = self.audio_txs.get(&zone_index) else {
-            return Box::pin(async move { anyhow::bail!("No audio stream for zone {zone_index}") });
-        };
-        let ch = channels.max(1) as usize;
-        // 20ms fixed chunks (matches C++ snapserver default for non-FLAC)
-        let chunk_samples = (sample_rate as usize * 20 / 1000) * ch;
-
-        // Accumulate samples and extract fixed-size chunks
-        let chunks: Vec<(Vec<f32>, i64)> = {
-            let mut pacers = self.pacers.lock().unwrap();
-            let now = tokio::time::Instant::now();
-            let p = pacers.entry(zone_index).or_insert_with(|| ZonePacer {
-                total_frames: 0,
-                ts: snapcast_server::time::ChunkTimestamper::new(sample_rate),
-                last_send: now,
-                buf: Vec::with_capacity(chunk_samples * 2),
-            });
-
-            // Reset on new playback (gap > 500ms since last send)
-            if now.duration_since(p.last_send) > std::time::Duration::from_millis(500) {
-                p.total_frames = 0;
-                p.ts = snapcast_server::time::ChunkTimestamper::new(sample_rate);
-                p.buf.clear();
-            }
-            p.last_send = now;
-
-            p.buf.extend_from_slice(samples);
-
-            let mut out = Vec::new();
-            while p.buf.len() >= chunk_samples {
-                let chunk: Vec<f32> = p.buf.drain(..chunk_samples).collect();
-                let frames = (chunk_samples / ch) as u32;
-                if p.total_frames == 0 {
-                    p.ts = snapcast_server::time::ChunkTimestamper::new(sample_rate);
-                }
-                let timestamp_usec = p.ts.next(frames);
-                p.total_frames += frames as u64;
-                out.push((chunk, timestamp_usec));
-            }
-            out
-        };
-
-        let tx = tx.clone();
+        let samples = samples.to_vec();
         Box::pin(async move {
-            for (samples, timestamp_usec) in chunks {
-                let frame = AudioFrame {
-                    data: AudioData::F32(samples),
-                    timestamp_usec,
-                };
-                tx.send(frame)
-                    .await
-                    .map_err(|_| anyhow::anyhow!("Audio channel closed for zone {zone_index}"))?;
-            }
-            Ok(())
+            let mut txs = self.audio_txs.lock().await;
+            let tx = txs
+                .get_mut(&zone_index)
+                .ok_or_else(|| anyhow::anyhow!("No audio stream for zone {zone_index}"))?;
+            tx.send(&samples)
+                .await
+                .map_err(|_| anyhow::anyhow!("Audio channel closed for zone {zone_index}"))
         })
     }
 
