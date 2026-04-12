@@ -20,13 +20,20 @@ use crate::state;
 /// Default audio buffer size in milliseconds for the embedded server.
 const DEFAULT_BUFFER_MS: u32 = 1000;
 
+/// Per-zone pacing state: logical clock anchored at stream start.
+struct ZonePacer {
+    total_frames: u64,
+    ts: snapcast_server::time::ChunkTimestamper,
+    last_send: tokio::time::Instant,
+    /// Accumulator for fixed-size chunk output (interleaved F32 samples).
+    buf: Vec<f32>,
+}
+
 /// Embedded Snapcast server backend.
 pub struct EmbeddedBackend {
     cmd_tx: mpsc::Sender<ServerCommand>,
-    /// Per-zone audio senders, keyed by 1-based zone index.
     audio_txs: HashMap<usize, mpsc::Sender<AudioFrame>>,
-    /// Per-zone realtime pacer (matches C++ nextTick_).
-    next_tick: std::sync::Mutex<HashMap<usize, tokio::time::Instant>>,
+    pacers: std::sync::Mutex<HashMap<usize, ZonePacer>>,
     store: state::SharedState,
 }
 
@@ -95,7 +102,7 @@ impl EmbeddedBackend {
             Self {
                 cmd_tx,
                 audio_txs,
-                next_tick: std::sync::Mutex::new(HashMap::new()),
+                pacers: std::sync::Mutex::new(HashMap::new()),
                 store,
             },
             EmbeddedEventReceiver { event_rx },
@@ -145,7 +152,7 @@ impl EmbeddedBackend {
                     }]
                 }
             },
-            SnapcastCmd::ReconcileZones => vec![], // handled at higher level
+            SnapcastCmd::ReconcileZones => unreachable!("handled in execute"),
         }
     }
 
@@ -212,36 +219,57 @@ impl SnapcastBackend for EmbeddedBackend {
         let Some(tx) = self.audio_txs.get(&zone_index) else {
             return Box::pin(async move { anyhow::bail!("No audio stream for zone {zone_index}") });
         };
-        let num_frames = (samples.len() / channels.max(1) as usize) as u32;
-        let chunk_duration =
-            std::time::Duration::from_micros((num_frames as u64 * 1_000_000) / sample_rate as u64);
+        let ch = channels.max(1) as usize;
+        // 20ms fixed chunks (matches C++ snapserver default for non-FLAC)
+        let chunk_samples = (sample_rate as usize * 20 / 1000) * ch;
 
-        // Pace to realtime (C++ nextTick_)
-        let deadline = {
-            let mut ticks = self.next_tick.lock().unwrap();
+        // Accumulate samples and extract fixed-size chunks
+        let chunks: Vec<(Vec<f32>, i64)> = {
+            let mut pacers = self.pacers.lock().unwrap();
             let now = tokio::time::Instant::now();
-            let tick = ticks.entry(zone_index).or_insert(now);
-            if *tick < now {
-                *tick = now;
+            let p = pacers.entry(zone_index).or_insert_with(|| ZonePacer {
+                total_frames: 0,
+                ts: snapcast_server::time::ChunkTimestamper::new(sample_rate),
+                last_send: now,
+                buf: Vec::with_capacity(chunk_samples * 2),
+            });
+
+            // Reset on new playback (gap > 500ms since last send)
+            if now.duration_since(p.last_send) > std::time::Duration::from_millis(500) {
+                p.total_frames = 0;
+                p.ts = snapcast_server::time::ChunkTimestamper::new(sample_rate);
+                p.buf.clear();
             }
-            let d = *tick;
-            *tick += chunk_duration;
-            d
+            p.last_send = now;
+
+            p.buf.extend_from_slice(samples);
+
+            let mut out = Vec::new();
+            while p.buf.len() >= chunk_samples {
+                let chunk: Vec<f32> = p.buf.drain(..chunk_samples).collect();
+                let frames = (chunk_samples / ch) as u32;
+                if p.total_frames == 0 {
+                    p.ts = snapcast_server::time::ChunkTimestamper::new(sample_rate);
+                }
+                let timestamp_usec = p.ts.next(frames);
+                p.total_frames += frames as u64;
+                out.push((chunk, timestamp_usec));
+            }
+            out
         };
 
-        let samples = samples.to_vec();
         let tx = tx.clone();
         Box::pin(async move {
-            tokio::time::sleep_until(deadline).await;
-            // Timestamp AFTER sleep — C++ tvEncodedChunk_ tracks steady_clock::now()
-            // which is effectively now() when the pipe read completes at realtime
-            let frame = AudioFrame {
-                data: AudioData::F32(samples),
-                timestamp_usec: snapcast_server::time::now_usec(),
-            };
-            tx.send(frame)
-                .await
-                .map_err(|_| anyhow::anyhow!("Audio channel closed for zone {zone_index}"))
+            for (samples, timestamp_usec) in chunks {
+                let frame = AudioFrame {
+                    data: AudioData::F32(samples),
+                    timestamp_usec,
+                };
+                tx.send(frame)
+                    .await
+                    .map_err(|_| anyhow::anyhow!("Audio channel closed for zone {zone_index}"))?;
+            }
+            Ok(())
         })
     }
 
@@ -285,6 +313,34 @@ impl SnapcastBackend for EmbeddedBackend {
                         volume: (*percent).clamp(0, 100) as u16,
                         muted,
                     }]
+                }
+                SnapcastCmd::ReconcileZones => {
+                    // Move each connected client to its zone's Snapcast group
+                    let s = self.store.read().await;
+                    // Build zone_index → Vec<snapcast_id>
+                    let mut zone_clients: HashMap<usize, Vec<String>> = HashMap::new();
+                    for c in s.clients.values() {
+                        if let Some(ref sid) = c.snapcast_id {
+                            zone_clients
+                                .entry(c.zone_index)
+                                .or_default()
+                                .push(sid.clone());
+                        }
+                    }
+                    // For each zone that has a group, issue SetGroupClients
+                    let mut cmds = vec![];
+                    for (zi, clients) in &zone_clients {
+                        if let Some(gid) =
+                            s.zones.get(zi).and_then(|z| z.snapcast_group_id.as_ref())
+                        {
+                            cmds.push(ServerCommand::SetGroupClients {
+                                group_id: gid.clone(),
+                                clients: clients.clone(),
+                            });
+                        }
+                    }
+                    drop(s);
+                    cmds
                 }
                 _ => Self::map_command(cmd),
             };
@@ -432,11 +488,6 @@ mod tests {
             &cmds[0],
             ServerCommand::SetClientLatency { latency: 50, .. }
         ));
-    }
-
-    #[test]
-    fn map_command_reconcile_noop() {
-        assert!(EmbeddedBackend::map_command(SnapcastCmd::ReconcileZones).is_empty());
     }
 
     #[test]
