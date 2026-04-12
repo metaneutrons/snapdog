@@ -21,7 +21,7 @@ const DEFAULT_BUFFER_MS: u32 = 1000;
 /// Embedded Snapcast server backend.
 pub struct EmbeddedBackend {
     cmd_tx: mpsc::Sender<ServerCommand>,
-    audio_txs: tokio::sync::Mutex<HashMap<usize, snapcast_server::F32AudioSender>>,
+    audio_txs: HashMap<usize, tokio::sync::Mutex<snapcast_server::F32AudioSender>>,
     store: state::SharedState,
 }
 
@@ -69,7 +69,7 @@ impl EmbeddedBackend {
             let tx = server
                 .add_f32_stream(&zone.stream_name)
                 .map_err(|e| anyhow::anyhow!(e))?;
-            audio_txs.insert(zone.index, tx);
+            audio_txs.insert(zone.index, tokio::sync::Mutex::new(tx));
         }
 
         let cmd_tx = server.command_sender();
@@ -91,7 +91,7 @@ impl EmbeddedBackend {
         Ok((
             Self {
                 cmd_tx,
-                audio_txs: tokio::sync::Mutex::new(audio_txs),
+                audio_txs,
                 store,
             },
             EmbeddedEventReceiver { event_rx },
@@ -207,11 +207,13 @@ impl SnapcastBackend for EmbeddedBackend {
     ) -> BoxFuture<'_, Result<()>> {
         let samples = samples.to_vec();
         Box::pin(async move {
-            let mut txs = self.audio_txs.lock().await;
-            let tx = txs
-                .get_mut(&zone_index)
+            let tx = self
+                .audio_txs
+                .get(&zone_index)
                 .ok_or_else(|| anyhow::anyhow!("No audio stream for zone {zone_index}"))?;
-            tx.send(&samples)
+            tx.lock()
+                .await
+                .send(&samples)
                 .await
                 .map_err(|_| anyhow::anyhow!("Audio channel closed for zone {zone_index}"))
         })
