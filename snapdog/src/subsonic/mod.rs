@@ -34,6 +34,7 @@ impl SubsonicClient {
             http: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(10))
                 .connect_timeout(std::time::Duration::from_secs(5))
+                .danger_accept_invalid_certs(config.tls_skip_verify)
                 .build()
                 .unwrap_or_default(),
         }

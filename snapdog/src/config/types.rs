@@ -203,6 +203,9 @@ pub struct SubsonicConfig {
     /// Default: "flac" (lossless, streamable, no buffering delay).
     #[serde(default = "default_subsonic_format")]
     pub format: String,
+    /// Skip TLS certificate verification (for self-signed certs).
+    #[serde(default)]
+    pub tls_skip_verify: bool,
 }
 
 fn default_subsonic_format() -> String {

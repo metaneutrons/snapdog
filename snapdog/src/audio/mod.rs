@@ -512,8 +512,6 @@ impl MediaSource for SyncReader {
 /// - For HLS media playlists (segment lists), routes to HLS segment streaming.
 ///
 /// TODO: Support nested m3u resolution (m3u pointing to another m3u).
-/// TODO: Add option to skip HTTPS certificate verification for self-signed certs.
-/// TODO: Use final URL after redirects for extension-based detection (currently uses original URL).
 async fn resolve_playlist_url(url: &str) -> Option<ResolvedUrl> {
     let lower = url.to_lowercase();
     let ext_is_playlist =
@@ -540,8 +538,10 @@ async fn resolve_playlist_url(url: &str) -> Option<ResolvedUrl> {
         }
     }
 
-    // Fetch the playlist body
+    // Fetch the playlist body (follows redirects)
     let response = client.get(url).send().await.ok()?.error_for_status().ok()?;
+    let final_url = response.url().to_string();
+    let final_lower = final_url.to_lowercase();
     let content_type = response
         .headers()
         .get("content-type")
@@ -551,13 +551,13 @@ async fn resolve_playlist_url(url: &str) -> Option<ResolvedUrl> {
 
     let is_pls = content_type.contains("x-scpls")
         || content_type.contains("scpls")
-        || lower.ends_with(".pls");
+        || final_lower.ends_with(".pls");
 
-    tracing::debug!(url, content_type, "Resolving playlist");
+    tracing::debug!(url, final_url, content_type, "Resolving playlist");
     let body = response.text().await.ok()?;
 
-    // Parse the playlist base URL for resolving relative paths
-    let base_url = url::Url::parse(url).ok()?;
+    // Parse the final URL for resolving relative paths
+    let base_url = url::Url::parse(&final_url).ok()?;
 
     if is_pls {
         // PLS format: INI-style, look for File1=URL
