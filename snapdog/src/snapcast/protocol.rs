@@ -82,8 +82,12 @@ impl std::error::Error for RpcError {}
 #[derive(Debug, Clone)]
 pub enum Notification {
     /// Client connected to Snapcast server.
-    #[allow(missing_docs)]
-    ClientOnConnect { id: String, client: types::Client },
+    ClientOnConnect {
+        /// Snapcast client identifier.
+        id: String,
+        /// Full client state at connection time.
+        client: types::Client,
+    },
     /// Client disconnected from Snapcast server.
     ClientOnDisconnect {
         /// Snapcast client identifier.
