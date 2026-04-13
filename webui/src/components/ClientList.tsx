@@ -9,13 +9,16 @@ import type { ClientInfo } from "@/lib/types";
 import { VolumeSlider } from "@/components/VolumeSlider";
 
 function ClientCard({ client }: { client: ClientInfo }) {
+  const zones = useAppStore((s) => s.zones);
+  const otherZones = Array.from(zones.values()).filter((z) => z.index !== client.zone_index);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <div
-      className="flex items-stretch gap-2 px-3 py-2.5 rounded-lg bg-muted shadow-[inset_0_2px_4px_rgba(0,0,0,0.15)] border border-border/50 cursor-grab hover:border-primary/30 transition-colors"
+      className="relative flex items-stretch gap-2 px-3 py-2.5 rounded-lg bg-muted shadow-[inset_0_2px_4px_rgba(0,0,0,0.15)] border border-border/50 cursor-grab hover:border-primary/30 transition-colors"
       draggable
       onDragStart={(e) => {
-        if ((e.target as HTMLElement).closest("[data-slot=slider]")) {
+        if ((e.target as HTMLElement).closest("[data-slot=slider]") || (e.target as HTMLElement).closest("[data-menu]")) {
           e.preventDefault();
           return;
         }
@@ -32,11 +35,41 @@ function ClientCard({ client }: { client: ClientInfo }) {
         </div>
       </div>
       <div className="min-w-0 flex-1 space-y-1.5">
-        {/* Name row: icon + connection indicator + name */}
+        {/* Name row: icon + connection indicator + name + menu */}
         <div className="flex items-center gap-1.5">
           <span className="text-lg shrink-0">{client.icon || "🔊"}</span>
           <div className={`size-2 rounded-full shrink-0 ${client.connected ? "bg-green-500" : "bg-destructive"}`} />
           <span className="text-sm font-medium truncate">{client.name}</span>
+          {otherZones.length > 0 && (
+            <div className="ml-auto relative" data-menu>
+              <button
+                onClick={() => setMenuOpen(!menuOpen)}
+                className="p-1 -m-1 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <span className="text-sm tracking-wider">⋯</span>
+              </button>
+              {menuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+                  <div className="absolute right-0 top-full mt-1 z-50 min-w-[10rem] rounded-lg bg-popover border border-border shadow-lg py-1">
+                    <div className="px-3 py-1.5 text-xs text-muted-foreground">Move to</div>
+                    {otherZones.map((z) => (
+                      <button
+                        key={z.index}
+                        onClick={() => {
+                          api.clients.setZone(client.index, z.index).catch(() => {});
+                          setMenuOpen(false);
+                        }}
+                        className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent transition-colors"
+                      >
+                        {z.icon} {z.name}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
         {/* Volume */}
         <VolumeSlider
