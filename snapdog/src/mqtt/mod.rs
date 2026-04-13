@@ -46,6 +46,18 @@ impl MqttBridge {
         })
     }
 
+    /// Create a disconnected bridge for testing (command routing only).
+    #[cfg(test)]
+    pub(crate) fn test_bridge(base_topic: &str) -> Self {
+        let opts = MqttOptions::new("test", "localhost", 1883);
+        let (client, eventloop) = AsyncClient::new(opts, 4);
+        Self {
+            client,
+            eventloop,
+            base_topic: base_topic.to_string(),
+        }
+    }
+
     /// Subscribe to all command topics.
     pub async fn subscribe_commands(&self) -> Result<()> {
         let topics = [
@@ -129,7 +141,7 @@ impl MqttBridge {
         client: &state::ClientState,
     ) -> Result<()> {
         let base = format!("clients/{index}");
-        self.publish(&format!("{base}/volume"), &client.volume.to_string())
+        self.publish(&format!("{base}/volume"), &client.base_volume.to_string())
             .await?;
         self.publish(&format!("{base}/mute"), &client.muted.to_string())
             .await?;
@@ -179,7 +191,7 @@ impl MqttBridge {
         }
     }
 
-    async fn handle_command(
+    pub(crate) async fn handle_command(
         &self,
         topic: &str,
         payload: &str,
@@ -244,7 +256,7 @@ impl MqttBridge {
                 let volume: i32 = payload.parse()?;
                 let mut store = state.write().await;
                 if let Some(client) = store.clients.get_mut(&index) {
-                    client.volume = volume.clamp(0, 100);
+                    client.base_volume = volume.clamp(0, 100);
                 }
             }
             ["clients", idx, "mute", "set"] => {
@@ -308,11 +320,188 @@ fn parse_port(broker: &str) -> Result<u16> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
+    use tokio::sync::{RwLock, mpsc};
+
+    fn test_state_with_client() -> state::SharedState {
+        let store: state::Store = serde_json::from_value(serde_json::json!({
+            "zones": {},
+            "clients": {
+                "1": {
+                    "name": "Test", "icon": "", "mac": "", "zone_index": 1,
+                    "volume": 50, "base_volume": 50, "muted": false,
+                    "latency_ms": 0, "connected": true, "snapcast_id": "snap-1"
+                }
+            }
+        }))
+        .unwrap();
+        Arc::new(RwLock::new(store))
+    }
+
+    fn zone_channels() -> (
+        HashMap<usize, ZoneCommandSender>,
+        mpsc::Receiver<ZoneCommand>,
+    ) {
+        let (tx, rx) = mpsc::channel(16);
+        let mut map = HashMap::new();
+        map.insert(1, tx);
+        (map, rx)
+    }
 
     #[test]
     fn parses_broker_port() {
         assert_eq!(parse_port("mqtt:1883").unwrap(), 1883);
         assert_eq!(parse_port("localhost:1883").unwrap(), 1883);
         assert!(parse_port("no-port").is_err());
+    }
+
+    #[tokio::test]
+    async fn routes_zone_volume() {
+        let bridge = MqttBridge::test_bridge("snapdog");
+        let (cmds, mut rx) = zone_channels();
+        let state = test_state_with_client();
+        bridge
+            .handle_command("snapdog/zones/1/volume/set", "75", &cmds, &state)
+            .await
+            .unwrap();
+        assert!(matches!(rx.recv().await, Some(ZoneCommand::SetVolume(75))));
+    }
+
+    #[tokio::test]
+    async fn routes_zone_mute() {
+        let bridge = MqttBridge::test_bridge("snapdog");
+        let (cmds, mut rx) = zone_channels();
+        let state = test_state_with_client();
+        bridge
+            .handle_command("snapdog/zones/1/mute/set", "true", &cmds, &state)
+            .await
+            .unwrap();
+        assert!(matches!(rx.recv().await, Some(ZoneCommand::SetMute(true))));
+    }
+
+    #[tokio::test]
+    async fn routes_zone_control_commands() {
+        let bridge = MqttBridge::test_bridge("snapdog");
+        let (cmds, mut rx) = zone_channels();
+        let state = test_state_with_client();
+        for (payload, expected) in [
+            ("play", ZoneCommand::Play),
+            ("pause", ZoneCommand::Pause),
+            ("stop", ZoneCommand::Stop),
+            ("next", ZoneCommand::Next),
+            ("previous", ZoneCommand::Previous),
+        ] {
+            bridge
+                .handle_command("snapdog/zones/1/control/set", payload, &cmds, &state)
+                .await
+                .unwrap();
+            let cmd = rx.recv().await.unwrap();
+            assert_eq!(
+                std::mem::discriminant(&cmd),
+                std::mem::discriminant(&expected)
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn routes_zone_playlist() {
+        let bridge = MqttBridge::test_bridge("snapdog");
+        let (cmds, mut rx) = zone_channels();
+        let state = test_state_with_client();
+        bridge
+            .handle_command("snapdog/zones/1/playlist/set", "3", &cmds, &state)
+            .await
+            .unwrap();
+        assert!(matches!(
+            rx.recv().await,
+            Some(ZoneCommand::SetPlaylist(3, 0))
+        ));
+    }
+
+    #[tokio::test]
+    async fn routes_zone_seek() {
+        let bridge = MqttBridge::test_bridge("snapdog");
+        let (cmds, mut rx) = zone_channels();
+        let state = test_state_with_client();
+        bridge
+            .handle_command("snapdog/zones/1/track/position/set", "30000", &cmds, &state)
+            .await
+            .unwrap();
+        assert!(matches!(rx.recv().await, Some(ZoneCommand::Seek(30000))));
+    }
+
+    #[tokio::test]
+    async fn routes_client_volume() {
+        let bridge = MqttBridge::test_bridge("snapdog");
+        let (cmds, _rx) = zone_channels();
+        let state = test_state_with_client();
+        bridge
+            .handle_command("snapdog/clients/1/volume/set", "80", &cmds, &state)
+            .await
+            .unwrap();
+        let s = state.read().await;
+        assert_eq!(s.clients[&1].base_volume, 80);
+    }
+
+    #[tokio::test]
+    async fn routes_client_mute() {
+        let bridge = MqttBridge::test_bridge("snapdog");
+        let (cmds, _rx) = zone_channels();
+        let state = test_state_with_client();
+        bridge
+            .handle_command("snapdog/clients/1/mute/set", "true", &cmds, &state)
+            .await
+            .unwrap();
+        let s = state.read().await;
+        assert!(s.clients[&1].muted);
+    }
+
+    #[tokio::test]
+    async fn routes_client_zone_change() {
+        let bridge = MqttBridge::test_bridge("snapdog");
+        let (cmds, _rx) = zone_channels();
+        let state = test_state_with_client();
+        bridge
+            .handle_command("snapdog/clients/1/zone/set", "2", &cmds, &state)
+            .await
+            .unwrap();
+        let s = state.read().await;
+        assert_eq!(s.clients[&1].zone_index, 2);
+    }
+
+    #[tokio::test]
+    async fn clamps_client_volume() {
+        let bridge = MqttBridge::test_bridge("snapdog");
+        let (cmds, _rx) = zone_channels();
+        let state = test_state_with_client();
+        bridge
+            .handle_command("snapdog/clients/1/volume/set", "200", &cmds, &state)
+            .await
+            .unwrap();
+        let s = state.read().await;
+        assert_eq!(s.clients[&1].base_volume, 100);
+    }
+
+    #[tokio::test]
+    async fn rejects_unknown_topic() {
+        let bridge = MqttBridge::test_bridge("snapdog");
+        let (cmds, _rx) = zone_channels();
+        let state = test_state_with_client();
+        // Should not error, just silently ignore
+        bridge
+            .handle_command("snapdog/unknown/topic", "x", &cmds, &state)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn rejects_wrong_base_topic() {
+        let bridge = MqttBridge::test_bridge("snapdog");
+        let (cmds, _rx) = zone_channels();
+        let state = test_state_with_client();
+        let result = bridge
+            .handle_command("other/zones/1/volume/set", "50", &cmds, &state)
+            .await;
+        assert!(result.is_err());
     }
 }

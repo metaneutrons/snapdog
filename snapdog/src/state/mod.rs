@@ -101,6 +101,10 @@ pub struct ClientState {
     pub zone_index: usize,
     /// Client volume (0–100), applied via Snapcast.
     pub volume: i32,
+    /// Base volume (0–100) before group scaling. Used by relative/compressed modes.
+    /// In absolute mode, this equals `volume`.
+    #[serde(default = "default_volume")]
+    pub base_volume: i32,
     /// Whether the client is muted.
     pub muted: bool,
     /// Audio output latency in milliseconds.
@@ -109,6 +113,10 @@ pub struct ClientState {
     pub connected: bool,
     /// Snapcast client ID (set after Snapcast sync).
     pub snapcast_id: Option<String>,
+}
+
+fn default_volume() -> i32 {
+    100
 }
 
 /// Zone playback state.
@@ -246,6 +254,7 @@ impl Store {
                         mac: c.mac.clone(),
                         zone_index: c.zone_index,
                         volume: 50,
+                        base_volume: 50,
                         muted: false,
                         latency_ms: 0,
                         connected: false,

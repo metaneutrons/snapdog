@@ -24,11 +24,17 @@ pub struct ProcessBackend {
     bit_depth: u16,
     /// Zone index → TCP source port (for reconnect).
     ports: HashMap<usize, u16>,
+    store: crate::state::SharedState,
+    volume_modes: HashMap<usize, crate::config::GroupVolumeMode>,
 }
 
 impl ProcessBackend {
     /// Connect to an existing snapserver process.
-    pub async fn start(config: &AppConfig, snap: SnapcastClient) -> Result<Self> {
+    pub async fn start(
+        config: &AppConfig,
+        snap: SnapcastClient,
+        store: crate::state::SharedState,
+    ) -> Result<Self> {
         let mut sinks = HashMap::new();
         let mut ports = HashMap::new();
         for zone in &config.zones {
@@ -41,6 +47,12 @@ impl ProcessBackend {
             sinks: RwLock::new(sinks),
             bit_depth: config.audio.bit_depth,
             ports,
+            store,
+            volume_modes: config
+                .zones
+                .iter()
+                .map(|z| (z.index, z.group_volume_mode))
+                .collect(),
         })
     }
 
@@ -93,13 +105,60 @@ impl SnapcastBackend for ProcessBackend {
                         self.snap.group_set_clients(&group_id, clients).await
                     }
                     GroupAction::Name(name) => self.snap.group_set_name(&group_id, &name).await,
-                    GroupAction::Volume(_) => Ok(()), // TODO: group volume
+                    GroupAction::Volume(percent) => {
+                        let s = self.store.read().await;
+                        let zone_index = s
+                            .zones
+                            .iter()
+                            .find(|(_, z)| z.snapcast_group_id.as_deref() == Some(&group_id))
+                            .map(|(&zi, _)| zi);
+                        let mode = zone_index
+                            .and_then(|zi| self.volume_modes.get(&zi).copied())
+                            .unwrap_or_default();
+                        let clients: Vec<_> = s
+                            .clients
+                            .values()
+                            .filter(|c| {
+                                zone_index.is_some_and(|zi| c.zone_index == zi)
+                                    && c.snapcast_id.is_some()
+                            })
+                            .map(|c| (c.snapcast_id.clone().unwrap(), c.base_volume, c.muted))
+                            .collect();
+                        drop(s);
+                        for (cid, base, _muted) in clients {
+                            let vol = mode.effective(base, percent) as u8;
+                            self.snap.client_set_volume(&cid, vol).await?;
+                        }
+                        Ok(())
+                    }
                     GroupAction::Mute(muted) => self.snap.group_set_mute(&group_id, muted).await,
                 },
                 SnapcastCmd::Client { client_id, action } => match action {
                     ClientAction::Volume(v) => {
+                        let mut s = self.store.write().await;
+                        let info = s
+                            .clients
+                            .values()
+                            .find(|c| c.snapcast_id.as_deref() == Some(&client_id))
+                            .map(|c| c.zone_index);
+                        let (zone_vol, mode) = info
+                            .map(|zi| {
+                                let zv = s.zones.get(&zi).map(|z| z.volume).unwrap_or(100);
+                                let m = self.volume_modes.get(&zi).copied().unwrap_or_default();
+                                (zv, m)
+                            })
+                            .unwrap_or((100, Default::default()));
+                        let base = v.clamp(0, 100);
+                        if let Some(c) = s
+                            .clients
+                            .values_mut()
+                            .find(|c| c.snapcast_id.as_deref() == Some(&client_id))
+                        {
+                            c.base_volume = base;
+                        }
+                        drop(s);
                         self.snap
-                            .client_set_volume(&client_id, v.clamp(0, 100) as u8)
+                            .client_set_volume(&client_id, mode.effective(base, zone_vol) as u8)
                             .await
                     }
                     ClientAction::Mute(muted) => self.snap.client_set_mute(&client_id, muted).await,

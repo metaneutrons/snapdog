@@ -23,6 +23,7 @@ pub struct EmbeddedBackend {
     cmd_tx: mpsc::Sender<ServerCommand>,
     audio_txs: HashMap<usize, tokio::sync::Mutex<snapcast_server::F32AudioSender>>,
     store: state::SharedState,
+    volume_modes: HashMap<usize, crate::config::GroupVolumeMode>,
 }
 
 /// Event receiver from the embedded server.
@@ -93,6 +94,11 @@ impl EmbeddedBackend {
                 cmd_tx,
                 audio_txs,
                 store,
+                volume_modes: config
+                    .zones
+                    .iter()
+                    .map(|z| (z.index, z.group_volume_mode))
+                    .collect(),
             },
             EmbeddedEventReceiver { event_rx },
         ))
@@ -114,7 +120,7 @@ impl EmbeddedBackend {
                 GroupAction::Name(name) => {
                     vec![ServerCommand::SetGroupName { group_id, name }]
                 }
-                GroupAction::Volume(_percent) => vec![], // TODO: group volume
+                GroupAction::Volume(_) => vec![], // handled in execute()
                 GroupAction::Mute(muted) => {
                     vec![ServerCommand::SetGroupMute { group_id, muted }]
                 }
@@ -222,6 +228,33 @@ impl SnapcastBackend for EmbeddedBackend {
     fn execute(&self, cmd: SnapcastCmd) -> BoxFuture<'_, Result<()>> {
         Box::pin(async move {
             let commands = match &cmd {
+                // Group volume: compute per-client effective volume based on mode
+                SnapcastCmd::Group {
+                    group_id,
+                    action: GroupAction::Volume(percent),
+                } => {
+                    let s = self.store.read().await;
+                    let zone_index = s
+                        .zones
+                        .iter()
+                        .find(|(_, z)| z.snapcast_group_id.as_deref() == Some(group_id))
+                        .map(|(&zi, _)| zi);
+                    let mode = zone_index
+                        .and_then(|zi| self.volume_modes.get(&zi).copied())
+                        .unwrap_or_default();
+                    s.clients
+                        .values()
+                        .filter(|c| {
+                            zone_index.is_some_and(|zi| c.zone_index == zi)
+                                && c.snapcast_id.is_some()
+                        })
+                        .map(|c| ServerCommand::SetClientVolume {
+                            client_id: c.snapcast_id.clone().unwrap(),
+                            volume: mode.effective(c.base_volume, *percent) as u16,
+                            muted: c.muted,
+                        })
+                        .collect()
+                }
                 // Mute needs current volume — SetClientVolume sets both
                 SnapcastCmd::Client {
                     client_id,
@@ -241,22 +274,39 @@ impl SnapcastBackend for EmbeddedBackend {
                         muted: *muted,
                     }]
                 }
-                // Volume needs current mute state — SetClientVolume sets both
+                // Volume: update base_volume, compute effective via zone mode
                 SnapcastCmd::Client {
                     client_id,
                     action: ClientAction::Volume(percent),
                 } => {
-                    let s = self.store.read().await;
-                    let muted = s
+                    let mut s = self.store.write().await;
+                    // Read zone info before mutable client borrow
+                    let client_zone = s
                         .clients
                         .values()
                         .find(|c| c.snapcast_id.as_deref() == Some(client_id))
-                        .map(|c| c.muted)
-                        .unwrap_or(false);
+                        .map(|c| (c.zone_index, c.muted));
+                    let (zone_vol, mode) = client_zone
+                        .map(|(zi, _)| {
+                            let zv = s.zones.get(&zi).map(|z| z.volume).unwrap_or(100);
+                            let m = self.volume_modes.get(&zi).copied().unwrap_or_default();
+                            (zv, m)
+                        })
+                        .unwrap_or((100, Default::default()));
+                    let muted = client_zone.map(|(_, m)| m).unwrap_or(false);
+                    // Now mutate
+                    if let Some(c) = s
+                        .clients
+                        .values_mut()
+                        .find(|c| c.snapcast_id.as_deref() == Some(client_id))
+                    {
+                        c.base_volume = (*percent).clamp(0, 100);
+                    }
+                    let base = (*percent).clamp(0, 100);
                     drop(s);
                     vec![ServerCommand::SetClientVolume {
                         client_id: client_id.clone(),
-                        volume: (*percent).clamp(0, 100) as u16,
+                        volume: mode.effective(base, zone_vol) as u16,
                         muted,
                     }]
                 }

@@ -68,6 +68,36 @@ impl Default for SystemConfig {
 }
 
 /// Audio output format — SSOT with Snapcast stream configuration.
+/// How zone (group) volume changes affect individual client volumes.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GroupVolumeMode {
+    /// Set all clients to the zone volume, ignoring individual levels.
+    Absolute,
+    /// Scale each client proportionally: `base_volume * zone_volume / 100`.
+    Relative,
+    /// Soft scaling with square-root curve — quiet clients don't drop as fast.
+    /// `base_volume * sqrt(zone_volume / 100)`.
+    #[default]
+    Compressed,
+}
+
+impl GroupVolumeMode {
+    /// Compute effective client volume given the client's base volume and zone volume.
+    pub fn effective(self, base_volume: i32, zone_volume: i32) -> i32 {
+        let z = zone_volume.clamp(0, 100);
+        match self {
+            Self::Absolute => z,
+            Self::Relative => (base_volume.clamp(0, 100) * z / 100).clamp(0, 100),
+            Self::Compressed => {
+                let factor = (z as f64 / 100.0).sqrt();
+                (base_volume.clamp(0, 100) as f64 * factor).round() as i32
+            }
+        }
+    }
+}
+
+/// Audio output configuration (sample rate, bit depth, codec, encryption).
 #[derive(Debug, Clone, Deserialize)]
 pub struct AudioConfig {
     /// Output sample rate in Hz (e.g., 44100, 48000, 96000).
@@ -85,6 +115,9 @@ pub struct AudioConfig {
     /// Pre-shared key for f32lz4e encryption (default: built-in key).
     #[serde(default)]
     pub encryption_psk: Option<String>,
+    /// Default group volume mode for all zones.
+    #[serde(default)]
+    pub group_volume_mode: GroupVolumeMode,
 }
 
 impl Default for AudioConfig {
@@ -95,6 +128,7 @@ impl Default for AudioConfig {
             channels: default_channels(),
             codec: default_codec(),
             encryption_psk: None,
+            group_volume_mode: GroupVolumeMode::default(),
         }
     }
 }
@@ -256,6 +290,8 @@ pub struct RawZoneConfig {
     /// KNX group addresses for this zone.
     #[serde(default)]
     pub knx: RawZoneKnxConfig,
+    /// Override group volume mode for this zone.
+    pub group_volume_mode: Option<GroupVolumeMode>,
 }
 
 /// KNX group addresses for zone control (all optional, explicit config only).
@@ -470,6 +506,8 @@ pub struct ZoneConfig {
     pub airplay_name: String,
     /// KNX group addresses.
     pub knx: ZoneKnxAddresses,
+    /// Group volume mode (resolved from zone override or global default).
+    pub group_volume_mode: GroupVolumeMode,
 }
 
 /// Resolved KNX group addresses for a zone (all optional, explicit config only).

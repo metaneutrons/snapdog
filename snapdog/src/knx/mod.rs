@@ -275,7 +275,7 @@ async fn publish_client_state(
         write(
             handle,
             ga,
-            encode_percent(client.volume.clamp(0, 100) as u8),
+            encode_percent(client.base_volume.clamp(0, 100) as u8),
         )
         .await;
     }
@@ -333,7 +333,7 @@ async fn listener(
     }
 }
 
-fn build_zone_ga_map(config: &AppConfig) -> HashMap<String, (usize, &'static str)> {
+pub(crate) fn build_zone_ga_map(config: &AppConfig) -> HashMap<String, (usize, &'static str)> {
     let mut map = HashMap::new();
     for zone_cfg in &config.zones {
         let idx = zone_cfg.index;
@@ -366,7 +366,7 @@ fn build_zone_ga_map(config: &AppConfig) -> HashMap<String, (usize, &'static str
     map
 }
 
-fn build_client_ga_map(config: &AppConfig) -> HashMap<String, (usize, &'static str)> {
+pub(crate) fn build_client_ga_map(config: &AppConfig) -> HashMap<String, (usize, &'static str)> {
     let mut map = HashMap::new();
     for client_cfg in &config.clients {
         let idx = client_cfg.index;
@@ -387,7 +387,7 @@ fn build_client_ga_map(config: &AppConfig) -> HashMap<String, (usize, &'static s
     map
 }
 
-async fn handle_incoming(
+pub(crate) async fn handle_incoming(
     cemi: &knxkit::core::cemi::CEMI,
     zone_ga_map: &HashMap<String, (usize, &str)>,
     client_ga_map: &HashMap<String, (usize, &str)>,
@@ -552,5 +552,284 @@ mod tests {
     fn encodes_string_via_dpt() {
         let dp = encode_string("Hello");
         assert!(matches!(dp, DataPoint::Long(_)));
+    }
+
+    // ── Integration tests for handle_incoming ─────────────────
+
+    use crate::player::ZoneCommand;
+    use knxkit::core::address::{DestinationAddress, GroupAddress, IndividualAddress};
+    use knxkit::core::apdu::{APDU, Service};
+    use knxkit::core::cemi::{CEMI, CEMIFlags, Priority};
+    use knxkit::core::npdu::NPDU;
+    use knxkit::core::tpdu::TPDU;
+    use std::sync::Arc;
+    use tokio::sync::{RwLock, mpsc};
+
+    fn make_cemi(ga_str: &str, data: Option<DataPoint>) -> CEMI {
+        let ga = GroupAddress::from_str(ga_str).unwrap();
+        CEMI {
+            mc: 0x29,
+            flags: CEMIFlags::empty(),
+            hops: 6,
+            prio: Priority::Low,
+            source: IndividualAddress::new(0x1001),
+            destination: DestinationAddress::Group(ga),
+            npdu: NPDU {
+                tpdu: TPDU::DataGroup(APDU {
+                    service: Service::GroupValueWrite,
+                    data,
+                }),
+            },
+        }
+    }
+
+    fn test_state() -> state::SharedState {
+        let store: state::Store = serde_json::from_value(serde_json::json!({
+            "zones": {},
+            "clients": {
+                "1": {
+                    "name": "Test", "icon": "", "mac": "", "zone_index": 1,
+                    "volume": 50, "base_volume": 50, "muted": false,
+                    "latency_ms": 0, "connected": true, "snapcast_id": "snap-1"
+                }
+            }
+        }))
+        .unwrap();
+        Arc::new(RwLock::new(store))
+    }
+
+    fn zone_ga_map() -> HashMap<String, (usize, &'static str)> {
+        let mut m = HashMap::new();
+        m.insert("1/0/1".into(), (1, "play"));
+        m.insert("1/0/2".into(), (1, "pause"));
+        m.insert("1/0/3".into(), (1, "stop"));
+        m.insert("1/0/4".into(), (1, "next"));
+        m.insert("1/0/5".into(), (1, "previous"));
+        m.insert("1/0/6".into(), (1, "volume"));
+        m.insert("1/0/7".into(), (1, "mute"));
+        m.insert("1/0/8".into(), (1, "mute_toggle"));
+        m.insert("1/0/9".into(), (1, "shuffle_toggle"));
+        m.insert("1/0/10".into(), (1, "playlist"));
+        m
+    }
+
+    fn client_ga_map() -> HashMap<String, (usize, &'static str)> {
+        let mut m = HashMap::new();
+        m.insert("2/0/1".into(), (1, "volume"));
+        m.insert("2/0/2".into(), (1, "mute"));
+        m.insert("2/0/3".into(), (1, "mute_toggle"));
+        m
+    }
+
+    #[tokio::test]
+    async fn zone_play_command() {
+        let (tx, mut rx) = mpsc::channel(16);
+        let mut cmds = HashMap::new();
+        cmds.insert(1, tx);
+        let (snap_tx, _snap_rx) = mpsc::channel(16);
+        let state = test_state();
+        let cemi = make_cemi("1/0/1", None);
+        handle_incoming(
+            &cemi,
+            &zone_ga_map(),
+            &client_ga_map(),
+            &cmds,
+            &snap_tx,
+            &state,
+        )
+        .await;
+        assert!(matches!(rx.recv().await, Some(ZoneCommand::Play)));
+    }
+
+    #[tokio::test]
+    async fn zone_volume_from_knx() {
+        let (tx, mut rx) = mpsc::channel(16);
+        let mut cmds = HashMap::new();
+        cmds.insert(1, tx);
+        let (snap_tx, _snap_rx) = mpsc::channel(16);
+        let state = test_state();
+        let cemi = make_cemi("1/0/6", Some(encode_percent(75)));
+        handle_incoming(
+            &cemi,
+            &zone_ga_map(),
+            &client_ga_map(),
+            &cmds,
+            &snap_tx,
+            &state,
+        )
+        .await;
+        match rx.recv().await {
+            Some(ZoneCommand::SetVolume(v)) => {
+                assert!((73..=77).contains(&v), "expected ~75, got {v}")
+            }
+            other => panic!("expected SetVolume, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn zone_mute_from_knx() {
+        let (tx, mut rx) = mpsc::channel(16);
+        let mut cmds = HashMap::new();
+        cmds.insert(1, tx);
+        let (snap_tx, _snap_rx) = mpsc::channel(16);
+        let state = test_state();
+        let cemi = make_cemi("1/0/7", Some(encode_bool(true)));
+        handle_incoming(
+            &cemi,
+            &zone_ga_map(),
+            &client_ga_map(),
+            &cmds,
+            &snap_tx,
+            &state,
+        )
+        .await;
+        assert!(matches!(rx.recv().await, Some(ZoneCommand::SetMute(true))));
+    }
+
+    #[tokio::test]
+    async fn zone_mute_toggle() {
+        let (tx, mut rx) = mpsc::channel(16);
+        let mut cmds = HashMap::new();
+        cmds.insert(1, tx);
+        let (snap_tx, _snap_rx) = mpsc::channel(16);
+        let state = test_state();
+        let cemi = make_cemi("1/0/8", None);
+        handle_incoming(
+            &cemi,
+            &zone_ga_map(),
+            &client_ga_map(),
+            &cmds,
+            &snap_tx,
+            &state,
+        )
+        .await;
+        assert!(matches!(rx.recv().await, Some(ZoneCommand::ToggleMute)));
+    }
+
+    #[tokio::test]
+    async fn zone_playlist_from_knx() {
+        let (tx, mut rx) = mpsc::channel(16);
+        let mut cmds = HashMap::new();
+        cmds.insert(1, tx);
+        let (snap_tx, _snap_rx) = mpsc::channel(16);
+        let state = test_state();
+        let cemi = make_cemi("1/0/10", Some(encode_percent(3)));
+        handle_incoming(
+            &cemi,
+            &zone_ga_map(),
+            &client_ga_map(),
+            &cmds,
+            &snap_tx,
+            &state,
+        )
+        .await;
+        match rx.recv().await {
+            Some(ZoneCommand::SetPlaylist(idx, 0)) => {
+                assert!((2..=4).contains(&idx), "expected ~3, got {idx}")
+            }
+            other => panic!("expected SetPlaylist, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn client_volume_from_knx() {
+        let (tx, _rx) = mpsc::channel(16);
+        let mut cmds = HashMap::new();
+        cmds.insert(1, tx);
+        let (snap_tx, mut snap_rx) = mpsc::channel(16);
+        let state = test_state();
+        let cemi = make_cemi("2/0/1", Some(encode_percent(80)));
+        handle_incoming(
+            &cemi,
+            &zone_ga_map(),
+            &client_ga_map(),
+            &cmds,
+            &snap_tx,
+            &state,
+        )
+        .await;
+        match snap_rx.recv().await {
+            Some(SnapcastCmd::Client {
+                action: ClientAction::Volume(v),
+                ..
+            }) => {
+                assert!((78..=82).contains(&v), "expected ~80, got {v}");
+            }
+            other => panic!("expected Client Volume, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn client_mute_from_knx() {
+        let (tx, _rx) = mpsc::channel(16);
+        let mut cmds = HashMap::new();
+        cmds.insert(1, tx);
+        let (snap_tx, mut snap_rx) = mpsc::channel(16);
+        let state = test_state();
+        let cemi = make_cemi("2/0/2", Some(encode_bool(true)));
+        handle_incoming(
+            &cemi,
+            &zone_ga_map(),
+            &client_ga_map(),
+            &cmds,
+            &snap_tx,
+            &state,
+        )
+        .await;
+        assert!(matches!(
+            snap_rx.recv().await,
+            Some(SnapcastCmd::Client {
+                action: ClientAction::Mute(true),
+                ..
+            })
+        ));
+    }
+
+    #[tokio::test]
+    async fn client_mute_toggle_from_knx() {
+        let (tx, _rx) = mpsc::channel(16);
+        let mut cmds = HashMap::new();
+        cmds.insert(1, tx);
+        let (snap_tx, mut snap_rx) = mpsc::channel(16);
+        let state = test_state();
+        // Client starts unmuted, toggle should mute
+        let cemi = make_cemi("2/0/3", None);
+        handle_incoming(
+            &cemi,
+            &zone_ga_map(),
+            &client_ga_map(),
+            &cmds,
+            &snap_tx,
+            &state,
+        )
+        .await;
+        assert!(matches!(
+            snap_rx.recv().await,
+            Some(SnapcastCmd::Client {
+                action: ClientAction::Mute(true),
+                ..
+            })
+        ));
+    }
+
+    #[tokio::test]
+    async fn unknown_ga_ignored() {
+        let (tx, mut rx) = mpsc::channel(16);
+        let mut cmds = HashMap::new();
+        cmds.insert(1, tx);
+        let (snap_tx, mut snap_rx) = mpsc::channel(16);
+        let state = test_state();
+        let cemi = make_cemi("3/0/1", Some(encode_bool(true)));
+        handle_incoming(
+            &cemi,
+            &zone_ga_map(),
+            &client_ga_map(),
+            &cmds,
+            &snap_tx,
+            &state,
+        )
+        .await;
+        assert!(rx.try_recv().is_err());
+        assert!(snap_rx.try_recv().is_err());
     }
 }

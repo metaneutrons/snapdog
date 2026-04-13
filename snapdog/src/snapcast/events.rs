@@ -388,7 +388,7 @@ async fn sync_group_ids(
 fn client_notification(idx: usize, client: &state::ClientState) -> api::ws::Notification {
     api::ws::Notification::ClientStateChanged {
         client: idx,
-        volume: client.volume,
+        volume: client.base_volume,
         muted: client.muted,
         connected: client.connected,
         zone: client.zone_index,
