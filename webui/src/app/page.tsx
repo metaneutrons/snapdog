@@ -190,7 +190,7 @@ function ZoneDetail({ zone }: { zone: ZoneState }) {
         <div className="hidden md:block"><ZoneHeader zone={zone} /></div>
         {/* Tablet+Desktop: horizontal layout for cover + controls */}
         <div className="md:flex md:gap-5 md:items-start">
-          <div className="md:w-56 md:shrink-0">
+          <div className="md:w-64 md:shrink-0">
             <NowPlaying zone={zone} />
           </div>
           <div className="space-y-3 md:flex-1 md:min-w-0 md:max-w-sm md:min-h-56 md:justify-between">
