@@ -111,6 +111,39 @@ function ZoneRailItem({ zone, selected, onSelect }: {
   );
 }
 
+function MobileZoneTab({ zone, selected, onSelect }: { zone: ZoneState; selected: boolean; onSelect: () => void }) {
+  const [dragOver, setDragOver] = useState(false);
+  return (
+    <button
+      onClick={onSelect}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes("application/x-snapdog-client")) {
+          e.preventDefault();
+          setDragOver(true);
+        }
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragOver(false);
+        const clientIndex = Number(e.dataTransfer.getData("application/x-snapdog-client"));
+        if (!isNaN(clientIndex)) {
+          api.clients.setZone(clientIndex, zone.index).catch(() => {});
+        }
+      }}
+      className={`shrink-0 px-3 py-2 text-sm rounded-t-md transition-colors ${
+        dragOver
+          ? "bg-primary/20 ring-2 ring-primary"
+          : selected
+            ? "text-primary border-b-2 border-primary font-medium"
+            : "text-muted-foreground"
+      }`}
+    >
+      {zone.name}
+    </button>
+  );
+}
+
 // ── Zone Detail — composes all control components ─────────────
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -351,17 +384,7 @@ export default function Home() {
         {/* Mobile zone tabs */}
         <div className="flex md:hidden overflow-x-auto border-b border-border px-2 gap-1 scrollbar-none">
           {zoneList.map((z) => (
-            <button
-              key={z.index}
-              onClick={() => selectZone(z.index)}
-              className={`shrink-0 px-3 py-2 text-sm rounded-t-md transition-colors ${
-                z.index === selectedZone
-                  ? "text-primary border-b-2 border-primary font-medium"
-                  : "text-muted-foreground"
-              }`}
-            >
-              {z.name}
-            </button>
+            <MobileZoneTab key={z.index} zone={z} selected={z.index === selectedZone} onSelect={() => selectZone(z.index)} />
           ))}
         </div>
 
