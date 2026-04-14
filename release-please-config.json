@@ -1,0 +1,9 @@
+{
+  "packages": {
+    ".": {
+      "release-type": "rust",
+      "package-name": "snapdog",
+      "bump-minor-pre-major": true
+    }
+  }
+}
