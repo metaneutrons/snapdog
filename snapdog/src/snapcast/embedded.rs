@@ -65,6 +65,8 @@ impl EmbeddedBackend {
             sample_format: config.audio.sample_format(),
             encryption_psk,
             state_file: Some("snapcast-state.json".into()),
+            mdns_service_type: config.snapcast.mdns_service_type.clone(),
+            mdns_name: config.snapcast.mdns_name.clone(),
             ..ServerConfig::default()
         };
 

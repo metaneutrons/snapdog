@@ -47,6 +47,14 @@ struct Cli {
     #[arg(long)]
     streaming_port: Option<u16>,
 
+    /// mDNS service type (default: _snapdog._tcp.local.)
+    #[arg(long)]
+    mdns_service_type: Option<String>,
+
+    /// mDNS advertised name (default: SnapDog)
+    #[arg(long)]
+    mdns_name: Option<String>,
+
     /// Log level: trace, debug, info, warn, error
     #[arg(short, long)]
     log_level: Option<String>,
@@ -85,6 +93,12 @@ async fn main() -> Result<()> {
     }
     if let Some(port) = cli.streaming_port {
         app_config.snapcast.streaming_port = port;
+    }
+    if let Some(ref s) = cli.mdns_service_type {
+        app_config.snapcast.mdns_service_type = s.clone();
+    }
+    if let Some(ref s) = cli.mdns_name {
+        app_config.snapcast.mdns_name = s.clone();
     }
     if let Some(ref level) = cli.log_level {
         app_config.system.log_level = level.clone();

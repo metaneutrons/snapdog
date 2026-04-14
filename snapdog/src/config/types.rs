@@ -178,6 +178,12 @@ pub struct SnapcastConfig {
     /// Show snapserver console output.
     #[serde(default)]
     pub verbose: bool,
+    /// mDNS service type (default: "_snapdog._tcp.local.").
+    #[serde(default = "default_mdns_service_type")]
+    pub mdns_service_type: String,
+    /// mDNS advertised name (default: "SnapDog").
+    #[serde(default = "default_mdns_name")]
+    pub mdns_name: String,
 }
 
 impl Default for SnapcastConfig {
@@ -188,6 +194,8 @@ impl Default for SnapcastConfig {
             streaming_port: default_streaming_port(),
             managed: true,
             verbose: false,
+            mdns_service_type: default_mdns_service_type(),
+            mdns_name: default_mdns_name(),
         }
     }
 }
@@ -682,6 +690,12 @@ fn default_jsonrpc_port() -> u16 {
 }
 fn default_streaming_port() -> u16 {
     1704
+}
+fn default_mdns_service_type() -> String {
+    "_snapdog._tcp.local.".into()
+}
+fn default_mdns_name() -> String {
+    "SnapDog".into()
 }
 fn default_mqtt_base_topic() -> String {
     "snapdog/".into()
