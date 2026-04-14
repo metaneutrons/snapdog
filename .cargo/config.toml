@@ -1,5 +1,0 @@
-# Local path overrides for development.
-# Cargo uses these instead of crates.io when the local checkout exists.
-# CI and other machines without the checkout use the published crate.
-[patch.crates-io]
-snapcast-server = { path = "../snapcast-rs/crates/snapcast-server" }
