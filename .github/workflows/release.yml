@@ -44,10 +44,15 @@ jobs:
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
           sudo dpkg --add-architecture arm64
-          # Add arm64 sources without touching existing list files
           . /etc/os-release
-          echo "deb [arch=arm64] http://ports.ubuntu.com/ ${VERSION_CODENAME} main restricted universe" | sudo tee /etc/apt/sources.list.d/arm64.list
-          echo "deb [arch=arm64] http://ports.ubuntu.com/ ${VERSION_CODENAME}-updates main restricted universe" | sudo tee -a /etc/apt/sources.list.d/arm64.list
+          # Pin existing sources to amd64 only
+          sudo sed -i 's/^Types: deb$/Types: deb\nArchitectures: amd64/' /etc/apt/sources.list.d/ubuntu.sources
+          # Add arm64 from ports (includes security)
+          cat <<EOF | sudo tee /etc/apt/sources.list.d/arm64.list
+          deb [arch=arm64] http://ports.ubuntu.com/ ${VERSION_CODENAME} main restricted universe
+          deb [arch=arm64] http://ports.ubuntu.com/ ${VERSION_CODENAME}-updates main restricted universe
+          deb [arch=arm64] http://ports.ubuntu.com/ ${VERSION_CODENAME}-security main restricted universe
+          EOF
           sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu libssl-dev:arm64 pkg-config
       - name: Build release
         run: cargo build --release --target ${{ matrix.target }}
