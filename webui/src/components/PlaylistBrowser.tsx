@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { PlayIcon, MusicNote03Icon } from "@hugeicons/core-free-icons";
+import { useTranslations } from "next-intl";
 import { api } from "@/lib/api";
 import type { PlaylistInfo, TrackInfo } from "@/lib/types";
 import type { ZoneState } from "@/stores/useAppStore";
@@ -12,6 +13,7 @@ interface PlaylistBrowserProps {
 }
 
 export function PlaylistBrowser({ zone }: PlaylistBrowserProps) {
+  const t = useTranslations("playlist");
   const [playlists, setPlaylists] = useState<PlaylistInfo[]>([]);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [tracks, setTracks] = useState<TrackInfo[]>([]);
@@ -42,11 +44,11 @@ export function PlaylistBrowser({ zone }: PlaylistBrowserProps) {
   };
 
   if (loading) {
-    return <p className="text-sm text-muted-foreground p-4">Loading playlists…</p>;
+    return <p className="text-sm text-muted-foreground p-4">{t("loading")}</p>;
   }
 
   if (playlists.length === 0) {
-    return <p className="text-sm text-muted-foreground p-4">No playlists available</p>;
+    return <p className="text-sm text-muted-foreground p-4">{t("empty")}</p>;
   }
 
   const formatDuration = (sec: number) => {
@@ -65,6 +67,7 @@ export function PlaylistBrowser({ zone }: PlaylistBrowserProps) {
             <button
               onClick={() => togglePlaylist(pl.id)}
               className="flex-1 flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted rounded-lg"
+              aria-expanded={expandedId === pl.id}
             >
               <div className="size-8 rounded bg-primary/10 flex items-center justify-center shrink-0 overflow-hidden">
                 {pl.cover_art ? (
@@ -88,7 +91,8 @@ export function PlaylistBrowser({ zone }: PlaylistBrowserProps) {
             <button
               onClick={() => playTrack(pl.id, 0)}
               className="shrink-0 size-8 flex items-center justify-center rounded-full hover:bg-primary/10 transition-colors mr-1"
-              title={`Play ${pl.name}`}
+              title={t("play", { name: pl.name })}
+              aria-label={t("play", { name: pl.name })}
             >
               <HugeiconsIcon icon={PlayIcon} size={16} className="text-primary" />
             </button>

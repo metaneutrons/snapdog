@@ -70,7 +70,7 @@ async fn get_all(State(state): State<SharedState>) -> Json<Vec<ClientInfo>> {
                     mac: c.mac.clone(),
                     zone_index: cs.map_or(c.zone_index, |s| s.zone_index),
                     icon: c.icon.clone(),
-                    volume: cs.map_or(50, |s| s.volume),
+                    volume: cs.map_or(50, |s| s.base_volume),
                     muted: cs.is_some_and(|s| s.muted),
                     connected: cs.is_some_and(|s| s.connected),
                 }
@@ -89,7 +89,7 @@ async fn get_client(State(state): State<SharedState>, Path(idx): Path<usize>) ->
         mac: cfg.mac.clone(),
         zone_index: cs.map_or(cfg.zone_index, |s| s.zone_index),
         icon: cfg.icon.clone(),
-        volume: cs.map_or(50, |s| s.volume),
+        volume: cs.map_or(50, |s| s.base_volume),
         muted: cs.is_some_and(|s| s.muted),
         connected: cs.is_some_and(|s| s.connected),
     }))
@@ -98,7 +98,7 @@ async fn get_client(State(state): State<SharedState>, Path(idx): Path<usize>) ->
 async fn get_volume(State(state): State<SharedState>, Path(idx): Path<usize>) -> impl IntoResponse {
     read_client(&state, idx)
         .await
-        .map(|c| Json(c.volume))
+        .map(|c| Json(c.base_volume))
         .ok_or(not_found())
 }
 
@@ -110,7 +110,7 @@ async fn set_volume(
     let store = state.store.read().await;
     let client = store.clients.get(&idx).ok_or(not_found())?;
     let volume = value
-        .resolve(client.volume)
+        .resolve(client.base_volume)
         .map_err(|e| ApiError::BadRequest(e.to_string()))?;
     let snap_id = client.snapcast_id.clone().ok_or(not_found())?;
     drop(store);

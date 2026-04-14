@@ -4,15 +4,18 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import type { WsNotification, WsCommand } from "@/lib/types";
 import { getApiKey } from "@/lib/auth";
 
-const MAX_BACKOFF = 30_000;
+const BACKOFF_STEPS = [1_000, 2_500, 5_000, 10_000, 15_000];
 
 export function useWebSocket(onNotification: (n: WsNotification) => void, onReconnect?: () => void) {
   const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
-  const backoffRef = useRef(1_000);
+  const attemptRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const onNotifRef = useRef(onNotification);
+  const onReconnectRef = useRef(onReconnect);
   onNotifRef.current = onNotification;
+  onReconnectRef.current = onReconnect;
+  const wasConnectedRef = useRef(false);
 
   const connect = useCallback(() => {
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
@@ -24,8 +27,11 @@ export function useWebSocket(onNotification: (n: WsNotification) => void, onReco
     wsRef.current = ws;
 
     ws.onopen = () => {
+      const wasDisconnected = wasConnectedRef.current;
       setIsConnected(true);
-      backoffRef.current = 1_000;
+      wasConnectedRef.current = true;
+      attemptRef.current = 0;
+      if (wasDisconnected) onReconnectRef.current?.();
     };
 
     ws.onmessage = (e) => {
@@ -40,10 +46,9 @@ export function useWebSocket(onNotification: (n: WsNotification) => void, onReco
     ws.onclose = () => {
       setIsConnected(false);
       wsRef.current = null;
-      timerRef.current = setTimeout(() => {
-        backoffRef.current = Math.min(backoffRef.current * 2, MAX_BACKOFF);
-        connect();
-      }, backoffRef.current);
+      const delay = BACKOFF_STEPS[Math.min(attemptRef.current, BACKOFF_STEPS.length - 1)];
+      attemptRef.current++;
+      timerRef.current = setTimeout(connect, delay);
     };
 
     ws.onerror = () => ws.close();

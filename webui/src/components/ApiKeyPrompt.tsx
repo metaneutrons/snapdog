@@ -1,6 +1,5 @@
-"use client";
-
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { setApiKey } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 
@@ -9,6 +8,7 @@ interface ApiKeyPromptProps {
 }
 
 export function ApiKeyPrompt({ onAuthenticated }: ApiKeyPromptProps) {
+  const t = useTranslations("auth");
   const [key, setKey] = useState("");
   const [error, setError] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -35,37 +35,36 @@ export function ApiKeyPrompt({ onAuthenticated }: ApiKeyPromptProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label={t("title")}>
+      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" role="presentation" />
       <div className="relative z-10 w-full max-w-sm mx-4 rounded-2xl border border-border bg-card p-6 shadow-xl space-y-4">
         <div className="space-y-1">
-          <h2 className="text-lg font-semibold">Authentication Required</h2>
+          <h2 className="text-lg font-semibold">{t("title")}</h2>
           <p className="text-sm text-muted-foreground">
-            This SnapDog instance requires an API key. Enter one of the keys
-            configured in <code className="text-xs bg-muted px-1 py-0.5 rounded">api_keys</code> in
-            your <code className="text-xs bg-muted px-1 py-0.5 rounded">snapdog.toml</code> file.
+            {t.rich("description", {
+              configKey: () => <code className="text-xs bg-muted px-1 py-0.5 rounded">api_keys</code>,
+              configFile: () => <code className="text-xs bg-muted px-1 py-0.5 rounded">snapdog.toml</code>,
+            })}
           </p>
         </div>
         <div className="space-y-2">
           <input
             type="password"
-            placeholder="API key"
+            placeholder={t("placeholder")}
             value={key}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setKey(e.target.value); setError(false); }}
             onKeyDown={(e: React.KeyboardEvent) => e.key === "Enter" && submit()}
             autoFocus
+            aria-label={t("placeholder")}
             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
           {error && (
-            <p className="text-sm text-destructive">Invalid API key. Please try again.</p>
+            <p className="text-sm text-destructive" role="alert">{t("invalid")}</p>
           )}
         </div>
         <Button onClick={submit} disabled={checking || !key.trim()} className="w-full">
-          {checking ? "Checking…" : "Connect"}
+          {checking ? t("checking") : t("submit")}
         </Button>
-        <p className="text-xs text-muted-foreground text-center">
-          The key is stored in your browser&apos;s local storage and sent with every request.
-        </p>
       </div>
     </div>
   );

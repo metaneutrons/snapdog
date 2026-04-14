@@ -24,6 +24,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.8"
 
+# CLI
+clap = { version = "4", features = ["derive"] }
+
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
@@ -56,6 +59,10 @@ futures-util = "0.3"
 thiserror = "2"
 anyhow = "1"
 
+# Snapcast
+snapcast-server = { version = "0.5", features = ["flac", "encryption", "mdns"] }
+snapcast-proto = "0.5"
+
 # Utilities
 md5 = "0.7"
 fastrand = "2"
@@ -78,3 +85,7 @@ version = "0.15"
 lto = true
 strip = true
 codegen-units = 1
+
+[patch.crates-io]
+snapcast-server = { path = "../snapcast-rs/crates/snapcast-server" }
+snapcast-proto = { path = "../snapcast-rs/crates/snapcast-proto" }

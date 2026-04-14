@@ -5,6 +5,8 @@
 @custom-variant dark (@media (prefers-color-scheme: dark));
 
 @theme inline {
+  --breakpoint-sm: 576px;
+  --breakpoint-lg: 868px;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Display",
@@ -147,4 +149,10 @@
 
 @utility animate-marquee {
   animation: marquee 8s ease-in-out infinite alternate;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 4px;
 }

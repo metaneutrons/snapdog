@@ -1,21 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { ArrowDown01Icon, DragDropVerticalIcon } from "@hugeicons/core-free-icons";
+import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
+import { useTranslations } from "next-intl";
 import { api } from "@/lib/api";
 import { useAppStore, type ZoneState } from "@/stores/useAppStore";
 import type { ClientInfo } from "@/lib/types";
 import { VolumeSlider } from "@/components/VolumeSlider";
 
 function ClientCard({ client }: { client: ClientInfo }) {
+  const t = useTranslations("client");
+  const zones = useAppStore((s) => s.zones);
+  const otherZones = Array.from(zones.values()).filter((z) => z.index !== client.zone_index);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // Close menu on Escape
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setMenuOpen(false); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [menuOpen]);
 
   return (
     <div
-      className="flex items-stretch gap-2 px-3 py-2.5 rounded-lg bg-muted shadow-[inset_0_2px_4px_rgba(0,0,0,0.15)] border border-border/50 cursor-grab hover:border-primary/30 transition-colors"
+      className="relative flex items-stretch gap-2 px-3 py-2.5 rounded-lg bg-muted shadow-[inset_0_2px_4px_rgba(0,0,0,0.15)] border border-border/50 cursor-grab hover:border-primary/30 transition-colors"
       draggable
       onDragStart={(e) => {
-        if ((e.target as HTMLElement).closest("[data-slot=slider]")) {
+        if ((e.target as HTMLElement).closest("[data-slot=slider]") || (e.target as HTMLElement).closest("[data-menu]")) {
           e.preventDefault();
           return;
         }
@@ -32,11 +45,44 @@ function ClientCard({ client }: { client: ClientInfo }) {
         </div>
       </div>
       <div className="min-w-0 flex-1 space-y-1.5">
-        {/* Name row: icon + connection indicator + name */}
+        {/* Name row: icon + connection indicator + name + menu */}
         <div className="flex items-center gap-1.5">
           <span className="text-lg shrink-0">{client.icon || "🔊"}</span>
           <div className={`size-2 rounded-full shrink-0 ${client.connected ? "bg-green-500" : "bg-destructive"}`} />
+          <span className="sr-only">{client.connected ? t("connected") : t("disconnected")}</span>
           <span className="text-sm font-medium truncate">{client.name}</span>
+          {otherZones.length > 0 && (
+            <div className="ml-auto relative" data-menu>
+              <button
+                onClick={() => setMenuOpen(!menuOpen)}
+                className="p-1 -m-1 text-muted-foreground hover:text-foreground transition-colors"
+                aria-label={t("moveTo")}
+              >
+                <span className="text-sm tracking-wider">⋯</span>
+              </button>
+              {menuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} role="presentation" />
+                  <div className="absolute right-0 top-full mt-1 z-50 min-w-[10rem] rounded-lg bg-popover border border-border shadow-lg py-1" role="menu" ref={(el) => el?.focus()} tabIndex={-1}>
+                    <div className="px-3 py-1.5 text-xs text-muted-foreground">{t("moveToLabel")}</div>
+                    {otherZones.map((z) => (
+                      <button
+                        key={z.index}
+                        onClick={() => {
+                          api.clients.setZone(client.index, z.index).catch(() => {});
+                          setMenuOpen(false);
+                        }}
+                        className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent transition-colors"
+                        role="menuitem"
+                      >
+                        {z.icon} {z.name}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
         {/* Volume */}
         <VolumeSlider
@@ -52,26 +98,53 @@ function ClientCard({ client }: { client: ClientInfo }) {
   );
 }
 
+const SHOW_OFFLINE_KEY = "snapdog-show-offline";
+
 export function ClientList({ zone }: { zone: ZoneState }) {
+  const t = useTranslations("client");
   const [expanded, setExpanded] = useState(() => typeof window !== "undefined" && window.innerWidth >= 768);
+  const [showOffline, setShowOffline] = useState(() => typeof window !== "undefined" && localStorage.getItem(SHOW_OFFLINE_KEY) === "true");
   const clients = useAppStore((s) => s.clients);
 
   const zoneClients = Array.from(clients.values()).filter((c) => c.zone_index === zone.index);
+  const connectedClients = zoneClients.filter((c) => c.connected);
+  const offlineCount = zoneClients.length - connectedClients.length;
+  const visibleClients = showOffline ? zoneClients : connectedClients;
 
-  if (zoneClients.length === 0) return null;
+  const toggleOffline = () => {
+    const next = !showOffline;
+    setShowOffline(next);
+    localStorage.setItem(SHOW_OFFLINE_KEY, String(next));
+  };
+
+  if (visibleClients.length === 0 && offlineCount === 0) return null;
 
   return (
     <div className="w-full">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <span>{zoneClients.length} client{zoneClients.length !== 1 ? "s" : ""}</span>
-        <HugeiconsIcon icon={ArrowDown01Icon} size={12} className={`transition-transform ${expanded ? "rotate-180" : ""}`} />
-      </button>
-      {expanded && (
+      <div className="flex items-center px-3 py-2">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          aria-expanded={expanded}
+          aria-label={expanded ? t("collapse") : t("expand")}
+        >
+          <HugeiconsIcon icon={ArrowDown01Icon} size={12} className={`transition-transform ${expanded ? "rotate-180" : ""}`} />
+          <span>{t("clients", { count: visibleClients.length })}</span>
+        </button>
+        {offlineCount > 0 && (
+          <button
+            onClick={toggleOffline}
+            className="ml-auto text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+            aria-label={showOffline ? t("hideOffline") : t("showOffline", { count: offlineCount })}
+            aria-pressed={showOffline}
+          >
+            {showOffline ? t("hideOffline") : t("showOffline", { count: offlineCount })}
+          </button>
+        )}
+      </div>
+      {expanded && visibleClients.length > 0 && (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-1 border-t border-border pt-1">
-          {zoneClients.map((c) => (
+          {visibleClients.map((c) => (
             <div key={c.index}>
               <ClientCard client={c} />
             </div>

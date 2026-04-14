@@ -18,27 +18,41 @@ use crate::api::SharedState;
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Notification {
     /// Zone playback state changed (play/pause/stop, volume, mute, source, shuffle, repeat).
-    #[allow(missing_docs)]
     ZoneStateChanged {
+        /// Zone index (1-based).
         zone: usize,
+        /// Playback state: "playing", "paused", or "stopped".
         playback: String,
+        /// Zone volume (0–100).
         volume: i32,
+        /// Whether the zone is muted.
         muted: bool,
+        /// Active source name (e.g. radio station, playlist, "airplay").
         source: String,
+        /// Whether shuffle is enabled.
         shuffle: bool,
+        /// Whether playlist repeat is enabled.
         repeat: bool,
+        /// Whether single-track repeat is enabled.
         track_repeat: bool,
     },
     /// Current track metadata changed for a zone.
-    #[allow(missing_docs)]
     ZoneTrackChanged {
+        /// Zone index (1-based).
         zone: usize,
+        /// Track title.
         title: String,
+        /// Track artist.
         artist: String,
+        /// Track album.
         album: String,
+        /// Total track duration in milliseconds.
         duration_ms: i64,
+        /// Current playback position in milliseconds.
         position_ms: i64,
+        /// Whether the track supports seeking.
         seekable: bool,
+        /// Cover art URL, if available.
         cover_url: Option<String>,
     },
     /// Periodic playback position update for a zone.
@@ -72,6 +86,9 @@ pub enum Notification {
         config: crate::audio::eq::EqConfig,
     },
 }
+
+/// Create a broadcast channel for notifications.
+pub type NotifySender = broadcast::Sender<Notification>;
 
 /// Create a broadcast channel for notifications.
 pub fn notification_channel() -> (

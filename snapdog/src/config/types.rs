@@ -68,6 +68,36 @@ impl Default for SystemConfig {
 }
 
 /// Audio output format — SSOT with Snapcast stream configuration.
+/// How zone (group) volume changes affect individual client volumes.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GroupVolumeMode {
+    /// Set all clients to the zone volume, ignoring individual levels.
+    Absolute,
+    /// Scale each client proportionally: `base_volume * zone_volume / 100`.
+    Relative,
+    /// Soft scaling with square-root curve — quiet clients don't drop as fast.
+    /// `base_volume * sqrt(zone_volume / 100)`.
+    #[default]
+    Compressed,
+}
+
+impl GroupVolumeMode {
+    /// Compute effective client volume given the client's base volume and zone volume.
+    pub fn effective(self, base_volume: i32, zone_volume: i32) -> i32 {
+        let z = zone_volume.clamp(0, 100);
+        match self {
+            Self::Absolute => z,
+            Self::Relative => (base_volume.clamp(0, 100) * z / 100).clamp(0, 100),
+            Self::Compressed => {
+                let factor = (z as f64 / 100.0).sqrt();
+                (base_volume.clamp(0, 100) as f64 * factor).round() as i32
+            }
+        }
+    }
+}
+
+/// Audio output configuration (sample rate, bit depth, codec, encryption).
 #[derive(Debug, Clone, Deserialize)]
 pub struct AudioConfig {
     /// Output sample rate in Hz (e.g., 44100, 48000, 96000).
@@ -79,9 +109,15 @@ pub struct AudioConfig {
     /// Number of audio channels (typically 2 for stereo).
     #[serde(default = "default_channels")]
     pub channels: u16,
-    /// Snapcast codec: "flac", "pcm", "opus", "ogg".
+    /// Snapcast codec: "flac", "pcm", "f32lz4", "f32lz4e", "opus", "ogg".
     #[serde(default = "default_codec")]
     pub codec: String,
+    /// Pre-shared key for f32lz4e encryption (default: built-in key).
+    #[serde(default)]
+    pub encryption_psk: Option<String>,
+    /// Default group volume mode for all zones.
+    #[serde(default)]
+    pub group_volume_mode: GroupVolumeMode,
 }
 
 impl Default for AudioConfig {
@@ -91,7 +127,16 @@ impl Default for AudioConfig {
             bit_depth: default_bit_depth(),
             channels: default_channels(),
             codec: default_codec(),
+            encryption_psk: None,
+            group_volume_mode: GroupVolumeMode::default(),
         }
+    }
+}
+
+impl AudioConfig {
+    /// Snapcast sample format string (e.g., "48000:16:2").
+    pub fn sample_format(&self) -> String {
+        format!("{}:{}:{}", self.sample_rate, self.bit_depth, self.channels)
     }
 }
 
@@ -173,6 +218,16 @@ impl SpotifyConfig {
     pub fn device_id(&self) -> String {
         format!("{:x}", md5::compute(self.name.as_bytes()))
     }
+
+    /// Convert the bitrate u32 to librespot's Bitrate enum.
+    #[cfg(feature = "spotify")]
+    pub fn bitrate_enum(&self) -> librespot_playback::config::Bitrate {
+        match self.bitrate {
+            96 => librespot_playback::config::Bitrate::Bitrate96,
+            160 => librespot_playback::config::Bitrate::Bitrate160,
+            _ => librespot_playback::config::Bitrate::Bitrate320,
+        }
+    }
 }
 
 fn default_spotify_bitrate() -> u32 {
@@ -192,6 +247,9 @@ pub struct SubsonicConfig {
     /// Default: "flac" (lossless, streamable, no buffering delay).
     #[serde(default = "default_subsonic_format")]
     pub format: String,
+    /// Skip TLS certificate verification (for self-signed certs).
+    #[serde(default)]
+    pub tls_skip_verify: bool,
 }
 
 fn default_subsonic_format() -> String {
@@ -242,41 +300,74 @@ pub struct RawZoneConfig {
     /// KNX group addresses for this zone.
     #[serde(default)]
     pub knx: RawZoneKnxConfig,
+    /// Override group volume mode for this zone.
+    pub group_volume_mode: Option<GroupVolumeMode>,
 }
 
 /// KNX group addresses for zone control (all optional, explicit config only).
+///
+/// Each field is a KNX group address string (e.g. "1/2/3") mapped to a zone function.
 #[derive(Debug, Default, Deserialize)]
-#[allow(missing_docs)]
 pub struct RawZoneKnxConfig {
+    /// Play command.
     pub play: Option<String>,
+    /// Pause command.
     pub pause: Option<String>,
+    /// Stop command.
     pub stop: Option<String>,
+    /// Next track command.
     pub track_next: Option<String>,
+    /// Previous track command.
     pub track_previous: Option<String>,
+    /// Playback status feedback.
     pub control_status: Option<String>,
+    /// Volume set (DPT 5.001 scaling).
     pub volume: Option<String>,
+    /// Volume status feedback.
     pub volume_status: Option<String>,
+    /// Relative volume dimming (DPT 3.007).
     pub volume_dim: Option<String>,
+    /// Mute command.
     pub mute: Option<String>,
+    /// Mute status feedback.
     pub mute_status: Option<String>,
+    /// Mute toggle command.
     pub mute_toggle: Option<String>,
+    /// Track title status feedback (DPT 16.001).
     pub track_title_status: Option<String>,
+    /// Track artist status feedback (DPT 16.001).
     pub track_artist_status: Option<String>,
+    /// Track album status feedback (DPT 16.001).
     pub track_album_status: Option<String>,
+    /// Track progress status feedback (percentage).
     pub track_progress_status: Option<String>,
+    /// Track playing status feedback (boolean).
     pub track_playing_status: Option<String>,
+    /// Single-track repeat command.
     pub track_repeat: Option<String>,
+    /// Single-track repeat status feedback.
     pub track_repeat_status: Option<String>,
+    /// Single-track repeat toggle command.
     pub track_repeat_toggle: Option<String>,
+    /// Playlist selection command (index).
     pub playlist: Option<String>,
+    /// Playlist selection status feedback.
     pub playlist_status: Option<String>,
+    /// Next playlist command.
     pub playlist_next: Option<String>,
+    /// Previous playlist command.
     pub playlist_previous: Option<String>,
+    /// Shuffle command.
     pub shuffle: Option<String>,
+    /// Shuffle status feedback.
     pub shuffle_status: Option<String>,
+    /// Shuffle toggle command.
     pub shuffle_toggle: Option<String>,
+    /// Playlist repeat command.
     pub repeat: Option<String>,
+    /// Playlist repeat status feedback.
     pub repeat_status: Option<String>,
+    /// Playlist repeat toggle command.
     pub repeat_toggle: Option<String>,
 }
 
@@ -298,19 +389,31 @@ pub struct RawClientConfig {
 }
 
 /// KNX group addresses for client control (all optional, explicit config only).
+///
+/// Each field is a KNX group address string (e.g. "1/2/3") mapped to a client function.
 #[derive(Debug, Default, Deserialize)]
-#[allow(missing_docs)]
 pub struct RawClientKnxConfig {
+    /// Volume set (DPT 5.001 scaling).
     pub volume: Option<String>,
+    /// Volume status feedback.
     pub volume_status: Option<String>,
+    /// Relative volume dimming (DPT 3.007).
     pub volume_dim: Option<String>,
+    /// Mute command.
     pub mute: Option<String>,
+    /// Mute status feedback.
     pub mute_status: Option<String>,
+    /// Mute toggle command.
     pub mute_toggle: Option<String>,
+    /// Latency set (milliseconds).
     pub latency: Option<String>,
+    /// Latency status feedback.
     pub latency_status: Option<String>,
+    /// Zone assignment command.
     pub zone: Option<String>,
+    /// Zone assignment status feedback.
     pub zone_status: Option<String>,
+    /// Connection status feedback.
     pub connected_status: Option<String>,
 }
 
@@ -413,41 +516,74 @@ pub struct ZoneConfig {
     pub airplay_name: String,
     /// KNX group addresses.
     pub knx: ZoneKnxAddresses,
+    /// Group volume mode (resolved from zone override or global default).
+    pub group_volume_mode: GroupVolumeMode,
 }
 
 /// Resolved KNX group addresses for a zone (all optional, explicit config only).
+///
+/// Same fields as [`RawZoneKnxConfig`] after address validation.
 #[derive(Debug, Clone)]
-#[allow(missing_docs)]
 pub struct ZoneKnxAddresses {
+    /// Play command.
     pub play: Option<String>,
+    /// Pause command.
     pub pause: Option<String>,
+    /// Stop command.
     pub stop: Option<String>,
+    /// Next track command.
     pub track_next: Option<String>,
+    /// Previous track command.
     pub track_previous: Option<String>,
+    /// Playback status feedback.
     pub control_status: Option<String>,
+    /// Volume set (DPT 5.001 scaling).
     pub volume: Option<String>,
+    /// Volume status feedback.
     pub volume_status: Option<String>,
+    /// Relative volume dimming (DPT 3.007).
     pub volume_dim: Option<String>,
+    /// Mute command.
     pub mute: Option<String>,
+    /// Mute status feedback.
     pub mute_status: Option<String>,
+    /// Mute toggle command.
     pub mute_toggle: Option<String>,
+    /// Track title status feedback (DPT 16.001).
     pub track_title_status: Option<String>,
+    /// Track artist status feedback (DPT 16.001).
     pub track_artist_status: Option<String>,
+    /// Track album status feedback (DPT 16.001).
     pub track_album_status: Option<String>,
+    /// Track progress status feedback (percentage).
     pub track_progress_status: Option<String>,
+    /// Track playing status feedback (boolean).
     pub track_playing_status: Option<String>,
+    /// Single-track repeat command.
     pub track_repeat: Option<String>,
+    /// Single-track repeat status feedback.
     pub track_repeat_status: Option<String>,
+    /// Single-track repeat toggle command.
     pub track_repeat_toggle: Option<String>,
+    /// Playlist selection command (index).
     pub playlist: Option<String>,
+    /// Playlist selection status feedback.
     pub playlist_status: Option<String>,
+    /// Next playlist command.
     pub playlist_next: Option<String>,
+    /// Previous playlist command.
     pub playlist_previous: Option<String>,
+    /// Shuffle command.
     pub shuffle: Option<String>,
+    /// Shuffle status feedback.
     pub shuffle_status: Option<String>,
+    /// Shuffle toggle command.
     pub shuffle_toggle: Option<String>,
+    /// Playlist repeat command.
     pub repeat: Option<String>,
+    /// Playlist repeat status feedback.
     pub repeat_status: Option<String>,
+    /// Playlist repeat toggle command.
     pub repeat_toggle: Option<String>,
 }
 
@@ -469,19 +605,31 @@ pub struct ClientConfig {
 }
 
 /// Resolved KNX group addresses for a client (all optional, explicit config only).
+///
+/// Same fields as [`RawClientKnxConfig`] after address validation.
 #[derive(Debug, Clone)]
-#[allow(missing_docs)]
 pub struct ClientKnxAddresses {
+    /// Volume set (DPT 5.001 scaling).
     pub volume: Option<String>,
+    /// Volume status feedback.
     pub volume_status: Option<String>,
+    /// Relative volume dimming (DPT 3.007).
     pub volume_dim: Option<String>,
+    /// Mute command.
     pub mute: Option<String>,
+    /// Mute status feedback.
     pub mute_status: Option<String>,
+    /// Mute toggle command.
     pub mute_toggle: Option<String>,
+    /// Latency set (milliseconds).
     pub latency: Option<String>,
+    /// Latency status feedback.
     pub latency_status: Option<String>,
+    /// Zone assignment command.
     pub zone: Option<String>,
+    /// Zone assignment status feedback.
     pub zone_status: Option<String>,
+    /// Connection status feedback.
     pub connected_status: Option<String>,
 }
 

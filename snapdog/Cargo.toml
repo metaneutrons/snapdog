@@ -20,6 +20,7 @@ tower-http = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }
+clap = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 tracing-appender = { workspace = true }
@@ -43,14 +44,19 @@ mac_address = "1"
 crc32fast = "1"
 uuid = { version = "1", features = ["v4", "serde"] }
 shairplay = "0.2"
-librespot-core = { git = "https://github.com/librespot-org/librespot", branch = "dev", optional = true }
-librespot-playback = { git = "https://github.com/librespot-org/librespot", branch = "dev", default-features = false, optional = true }
-librespot-connect = { git = "https://github.com/librespot-org/librespot", branch = "dev", optional = true }
-librespot-discovery = { git = "https://github.com/librespot-org/librespot", branch = "dev", optional = true }
-librespot-metadata = { git = "https://github.com/librespot-org/librespot", branch = "dev", optional = true }
+librespot-core = { version = "0.8", optional = true }
+librespot-playback = { version = "0.8", default-features = false, optional = true }
+librespot-connect = { version = "0.8", optional = true }
+librespot-discovery = { version = "0.8", optional = true }
+librespot-metadata = { version = "0.8", optional = true }
+
+snapcast-server = { workspace = true, optional = true }
+snapcast-proto = { workspace = true }
 
 [features]
-default = []
+default = ["snapcast-embedded"]
+snapcast-embedded = ["dep:snapcast-server"]
+snapcast-process = []
 ap2 = ["shairplay/ap2"]
 spotify = ["dep:librespot-core", "dep:librespot-playback", "dep:librespot-connect", "dep:librespot-discovery", "dep:librespot-metadata"]
 

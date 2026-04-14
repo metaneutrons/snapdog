@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useCallback, useState, Component, type ReactNode, type DragEvent } from "react";
+import { useTranslations } from "next-intl";
 import { useAppStore, type ZoneState } from "@/stores/useAppStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
-import { api, zones } from "@/lib/api";
+import { api } from "@/lib/api";
 import type { WsNotification } from "@/lib/types";
 import { ApiKeyPrompt } from "@/components/ApiKeyPrompt";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,28 +19,29 @@ import { PlaylistBrowser } from "@/components/PlaylistBrowser";
 import { ClientList } from "@/components/ClientList";
 import { Marquee } from "@/components/Marquee";
 import { ConnectionStatus } from "@/components/ConnectionStatus";
+import { LocalePicker } from "@/components/LocalePicker";
 
 // ── Error Boundary ────────────────────────────────────────────
+
+function ErrorFallback({ error, onRetry }: { error: Error; onRetry: () => void }) {
+  const t = useTranslations("zone");
+  return (
+    <div className="flex flex-1 items-center justify-center p-6 text-center">
+      <div className="space-y-2">
+        <p className="text-sm font-medium text-destructive">{t("error")}</p>
+        <p className="text-xs text-muted-foreground">{error.message}</p>
+        <button onClick={onRetry} className="text-xs text-primary hover:underline">{t("retry")}</button>
+      </div>
+    </div>
+  );
+}
 
 class ZoneErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null as Error | null };
   static getDerivedStateFromError(error: Error) { return { error }; }
   render() {
     if (this.state.error) {
-      return (
-        <div className="flex flex-1 items-center justify-center p-6 text-center">
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-destructive">Something went wrong</p>
-            <p className="text-xs text-muted-foreground">{this.state.error.message}</p>
-            <button
-              onClick={() => this.setState({ error: null })}
-              className="text-xs text-primary hover:underline"
-            >
-              Try again
-            </button>
-          </div>
-        </div>
-      );
+      return <ErrorFallback error={this.state.error} onRetry={() => this.setState({ error: null })} />;
     }
     return this.props.children;
   }
@@ -54,6 +56,7 @@ function ZoneRailItem({ zone, selected, onSelect }: {
 }) {
   const [imgError, setImgError] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const t = useTranslations();
   const isPlaying = zone.playback === "playing";
   const hasCover = zone.track?.cover_url && zone.source !== "idle" && !imgError;
   return (
@@ -95,7 +98,10 @@ function ZoneRailItem({ zone, selected, onSelect }: {
           <span className="text-lg">{zone.icon || "🔊"}</span>
         )}
         {isPlaying && (
-          <div className="absolute bottom-0.5 right-0.5 size-2 rounded-full bg-primary animate-pulse" />
+          <>
+            <div className="absolute bottom-0.5 right-0.5 size-2 rounded-full bg-primary animate-pulse" />
+            <span className="sr-only">{t("zone.playing")}</span>
+          </>
         )}
       </div>
       <div className="min-w-0 flex-1">
@@ -103,7 +109,7 @@ function ZoneRailItem({ zone, selected, onSelect }: {
         <div className="text-xs text-muted-foreground truncate">
           {zone.track && zone.source !== "idle"
             ? `${zone.track.artist} — ${zone.track.title}`
-            : "Idle"}
+            : t("zone.idle")}
         </div>
       </div>
       <div className="text-xs text-muted-foreground tabular-nums">{zone.volume}</div>
@@ -111,27 +117,63 @@ function ZoneRailItem({ zone, selected, onSelect }: {
   );
 }
 
+function MobileZoneTab({ zone, selected, onSelect }: { zone: ZoneState; selected: boolean; onSelect: () => void }) {
+  const [dragOver, setDragOver] = useState(false);
+  return (
+    <button
+      onClick={onSelect}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes("application/x-snapdog-client")) {
+          e.preventDefault();
+          setDragOver(true);
+        }
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragOver(false);
+        const clientIndex = Number(e.dataTransfer.getData("application/x-snapdog-client"));
+        if (!isNaN(clientIndex)) {
+          api.clients.setZone(clientIndex, zone.index).catch(() => {});
+        }
+      }}
+      className={`shrink-0 px-3 py-2 text-sm rounded-t-md transition-colors ${
+        dragOver
+          ? "bg-primary/20 ring-2 ring-primary"
+          : selected
+            ? "text-primary border-b-2 border-primary font-medium"
+            : "text-muted-foreground"
+      }`}
+      role="tab"
+      aria-selected={selected}
+    >
+      {zone.name}
+    </button>
+  );
+}
+
 // ── Zone Detail — composes all control components ─────────────
 
-const SOURCE_LABELS: Record<string, string> = {
-  radio: "Radio",
-  subsonic_playlist: "Subsonic",
-  subsonic_track: "Subsonic",
-  airplay: "AirPlay",
-  url: "URL",
+const SOURCE_KEYS: Record<string, string> = {
+  radio: "radio",
+  subsonic_playlist: "subsonic_playlist",
+  subsonic_track: "subsonic_track",
+  airplay: "airplay",
+  url: "url",
 };
 
 function ZoneHeader({ zone }: { zone: ZoneState }) {
-  const sourceLabel = SOURCE_LABELS[zone.source];
+  const t = useTranslations();
+  const sourceKey = SOURCE_KEYS[zone.source];
   return (
     <div className="flex items-center justify-between gap-2">
       <h2 className="text-sm font-semibold truncate">{zone.name}</h2>
-      {sourceLabel ? (
+      {sourceKey ? (
         <span className="shrink-0 text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
-          {sourceLabel}
+          {t(`source.${sourceKey}`)}
         </span>
       ) : (
-        <span className="shrink-0 text-[10px] text-muted-foreground">Idle</span>
+        <span className="shrink-0 text-[10px] text-muted-foreground">{t("zone.idle")}</span>
       )}
     </div>
   );
@@ -170,13 +212,14 @@ function ZoneDropTarget({ zoneIndex, children }: { zoneIndex: number; children: 
 }
 
 function TrackInfo({ zone }: { zone: ZoneState }) {
+  const t = useTranslations("zone");
   const track = zone.track;
   const isIdle = zone.source === "idle" || !track;
 
   return (
-    <div className="text-center md:text-left space-y-0.5 w-full">
-      <Marquee className="text-base font-bold leading-snug">{isIdle ? "\u00A0" : (track.title || "Unknown")}</Marquee>
-      <Marquee className="text-sm text-muted-foreground">{isIdle ? "No audio playing" : (track.artist || "Unknown Artist")}</Marquee>
+    <div className="text-center sm:text-left space-y-0.5 w-full">
+      <Marquee className="text-base font-bold leading-snug">{isIdle ? "\u00A0" : (track.title || t("unknownTitle"))}</Marquee>
+      <Marquee className="text-sm text-muted-foreground">{isIdle ? t("noAudio") : (track.artist || t("unknownArtist"))}</Marquee>
       <Marquee className="text-xs text-muted-foreground/70">{isIdle ? "\u00A0" : (track.album || "\u00A0")}</Marquee>
     </div>
   );
@@ -186,14 +229,14 @@ function ZoneDetail({ zone }: { zone: ZoneState }) {
   const [showEq, setShowEq] = useState(false);
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
-      <div className="w-full max-w-[calc(100%-2rem)] mx-auto md:max-w-[600px] space-y-3 px-4 py-4 md:px-5 md:py-4">
-        <div className="hidden md:block"><ZoneHeader zone={zone} /></div>
-        {/* Tablet+Desktop: horizontal layout for cover + controls */}
-        <div className="md:flex md:gap-5 md:items-start">
-          <div className="md:w-56 md:shrink-0">
+      <div className="w-full max-w-[calc(100%-2rem)] mx-auto sm:max-w-[600px] space-y-3 px-4 py-4 sm:px-5 sm:py-4">
+        <div className="hidden sm:block"><ZoneHeader zone={zone} /></div>
+        {/* Compact+: horizontal layout for cover + controls */}
+        <div className="sm:flex sm:gap-5 sm:items-start">
+          <div className="sm:w-48 lg:w-56 sm:shrink-0">
             <NowPlaying zone={zone} />
           </div>
-          <div className="space-y-3 md:flex-1 md:min-w-0 md:max-w-sm md:min-h-56 md:justify-between">
+          <div className="space-y-3 sm:flex-1 sm:min-w-0 sm:max-w-sm sm:min-h-56 sm:justify-between">
             <TrackInfo zone={zone} />
             <SeekBar zone={zone} />
             <div className="flex items-center gap-2">
@@ -210,7 +253,6 @@ function ZoneDetail({ zone }: { zone: ZoneState }) {
             />
           </div>
         </div>
-        {/* Full-width below the horizontal row */}
         <ClientList zone={zone} />
         <PlaylistBrowser zone={zone} />
       </div>
@@ -222,13 +264,13 @@ function ZoneDetail({ zone }: { zone: ZoneState }) {
 // ── App Shell ─────────────────────────────────────────────────
 
 export default function Home() {
+  const t = useTranslations();
   const {
     zones: zoneMap,
     selectedZone,
     selectZone,
     isLoading,
     needsAuth,
-    isConnected,
     setConnected,
     loadAll,
     updateZone,
@@ -286,7 +328,7 @@ export default function Home() {
     return (
       <div className="flex flex-1 h-full">
         {/* Skeleton sidebar */}
-        <aside className="hidden md:flex xl:hidden flex-col border-r border-border bg-card md:w-60 shrink-0">
+        <aside className="hidden lg:flex xl:hidden flex-col border-r border-border bg-card lg:w-56 shrink-0">
           <div className="px-4 py-4 border-b border-border">
             <Skeleton className="h-5 w-24" />
           </div>
@@ -315,14 +357,17 @@ export default function Home() {
 
   return (
     <div className="flex flex-1 h-full">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:top-2 focus:left-2 focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-md">
+        {t("app.skipToContent")}
+      </a>
       <ConnectionStatus />
       {/* ── Sidebar / Rail (tablet only) ──────────────────── */}
-      <aside className="hidden md:flex xl:hidden flex-col border-r border-border bg-card md:w-60 shrink-0">
+      <aside className="hidden lg:flex xl:hidden flex-col border-r border-border bg-card lg:w-56 shrink-0" aria-label={t("zone.navigation")}>
         <div className="px-4 py-4 border-b border-border flex items-center justify-between">
           <h1 className="text-base font-semibold">SnapDog</h1>
-          <div className={`size-2 rounded-full ${isConnected ? "bg-green-500" : "bg-destructive"}`} />
+          <LocalePicker />
         </div>
-        <nav className="flex-1 overflow-y-auto p-2 space-y-0.5">
+        <nav className="flex-1 overflow-y-auto p-2 space-y-0.5" aria-label={t("zone.zones")}>
           {zoneList.map((z) => (
             <ZoneRailItem
               key={z.index}
@@ -335,33 +380,23 @@ export default function Home() {
       </aside>
 
       {/* ── Main content ───────────────────────────────────── */}
-      <main className="flex flex-1 flex-col min-w-0">
-        {/* Mobile header */}
-        <header className="flex md:hidden items-center justify-between px-4 py-3 border-b border-border">
+      <main className="flex flex-1 flex-col min-w-0" id="main-content">
+        {/* Header (mobile + compact + wide — hidden when sidebar visible at lg–xl) */}
+        <header className="flex lg:hidden items-center justify-between px-4 py-3 border-b border-border">
           <h1 className="text-base font-semibold">SnapDog</h1>
-          <div className={`size-2 rounded-full ${isConnected ? "bg-green-500" : "bg-destructive"}`} />
+          <LocalePicker />
         </header>
 
-        {/* Desktop header (xl+) */}
+        {/* Wide header (xl+) */}
         <header className="hidden xl:flex items-center justify-between px-6 py-3 border-b border-border">
           <h1 className="text-base font-semibold">SnapDog</h1>
-          <div className={`size-2 rounded-full ${isConnected ? "bg-green-500" : "bg-destructive"}`} />
+          <LocalePicker />
         </header>
 
-        {/* Mobile zone tabs */}
-        <div className="flex md:hidden overflow-x-auto border-b border-border px-2 gap-1 scrollbar-none">
+        {/* Zone tabs (mobile + compact + normal without sidebar visible) */}
+        <div className="flex lg:hidden overflow-x-auto border-b border-border px-2 gap-1 scrollbar-none" role="tablist" aria-label={t("zone.zones")}>
           {zoneList.map((z) => (
-            <button
-              key={z.index}
-              onClick={() => selectZone(z.index)}
-              className={`shrink-0 px-3 py-2 text-sm rounded-t-md transition-colors ${
-                z.index === selectedZone
-                  ? "text-primary border-b-2 border-primary font-medium"
-                  : "text-muted-foreground"
-              }`}
-            >
-              {z.name}
-            </button>
+            <MobileZoneTab key={z.index} zone={z} selected={z.index === selectedZone} onSelect={() => selectZone(z.index)} />
           ))}
         </div>
 

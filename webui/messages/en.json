@@ -1,0 +1,91 @@
+{
+  "app": {
+    "title": "SnapDog",
+    "skipToContent": "Skip to content",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "language": "Language"
+  },
+  "transport": {
+    "play": "Play",
+    "pause": "Pause",
+    "stop": "Stop",
+    "next": "Next",
+    "previous": "Previous"
+  },
+  "shuffle": {
+    "on": "Shuffle on",
+    "off": "Shuffle off",
+    "repeatOn": "Repeat on",
+    "repeatOff": "Repeat off",
+    "trackRepeatOn": "Repeat track on",
+    "trackRepeatOff": "Repeat track off"
+  },
+  "volume": {
+    "label": "Volume",
+    "mute": "Mute",
+    "unmute": "Unmute"
+  },
+  "seek": {
+    "label": "Seek"
+  },
+  "zone": {
+    "idle": "Idle",
+    "noAudio": "No audio playing",
+    "playing": "Playing",
+    "navigation": "Zone navigation",
+    "zones": "Zones",
+    "unknownTitle": "Unknown",
+    "unknownArtist": "Unknown Artist",
+    "error": "Something went wrong",
+    "retry": "Try again"
+  },
+  "client": {
+    "clients": "{count, plural, one {# client} other {# clients}}",
+    "expand": "Expand clients",
+    "collapse": "Collapse clients",
+    "moveTo": "Move to zone",
+    "moveToLabel": "Move to",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "showOffline": "{count, plural, one {# offline — show} other {# offline — show}}",
+    "hideOffline": "Hide offline"
+  },
+  "eq": {
+    "title": "EQ — {zone}",
+    "close": "Close equalizer",
+    "preset": "EQ preset",
+    "enabled": "Enabled",
+    "addBand": "+ Add Band",
+    "removeBand": "Remove band",
+    "filterType": "Band {n} filter type",
+    "frequency": "Frequency",
+    "gain": "Gain",
+    "qFactor": "Q factor",
+    "curve": "EQ frequency response curve"
+  },
+  "playlist": {
+    "loading": "Loading playlists…",
+    "empty": "No playlists available",
+    "play": "Play {name}"
+  },
+  "auth": {
+    "title": "Authentication Required",
+    "description": "This SnapDog instance requires an API key. Enter one of the keys configured in {configKey} in your {configFile} file.",
+    "placeholder": "API key",
+    "submit": "Authenticate",
+    "checking": "Checking…",
+    "invalid": "Invalid API key. Please try again."
+  },
+  "connection": {
+    "lost": "Connection Lost",
+    "reconnecting": "Reconnecting…"
+  },
+  "source": {
+    "radio": "Radio",
+    "subsonic_playlist": "Subsonic",
+    "subsonic_track": "Subsonic",
+    "airplay": "AirPlay",
+    "url": "URL"
+  }
+}

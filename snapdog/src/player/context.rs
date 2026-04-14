@@ -11,6 +11,7 @@ use tokio::sync::mpsc;
 use crate::audio;
 
 use crate::config::AppConfig;
+use crate::snapcast::backend::SnapcastBackend;
 use crate::state;
 use crate::state::cover::SharedCoverCache;
 
@@ -33,6 +34,8 @@ pub struct ZonePlayerContext {
     pub notify: NotifySender,
     /// Channel to send Snapcast JSON-RPC commands to the main task.
     pub snap_tx: SnapcastCmdSender,
+    /// Snapcast backend (embedded or process).
+    pub backend: Arc<dyn SnapcastBackend>,
     /// Shared parametric EQ configuration store.
     pub eq_store: Arc<std::sync::Mutex<crate::audio::eq::EqStore>>,
     /// Pre-extracted: Snapcast client MAC (lowercase) → Snapcast client ID.

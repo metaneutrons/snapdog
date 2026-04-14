@@ -82,8 +82,12 @@ impl std::error::Error for RpcError {}
 #[derive(Debug, Clone)]
 pub enum Notification {
     /// Client connected to Snapcast server.
-    #[allow(missing_docs)]
-    ClientOnConnect { id: String, client: types::Client },
+    ClientOnConnect {
+        /// Snapcast client identifier.
+        id: String,
+        /// Full client state at connection time.
+        client: types::Client,
+    },
     /// Client disconnected from Snapcast server.
     ClientOnDisconnect {
         /// Snapcast client identifier.
@@ -94,7 +98,7 @@ pub enum Notification {
         /// Snapcast client identifier.
         id: String,
         /// New volume state.
-        volume: types::ClientVolume,
+        volume: types::Volume,
     },
     /// Client playback latency changed.
     ClientOnLatencyChanged {
@@ -197,7 +201,7 @@ impl Notification {
                 #[derive(Deserialize)]
                 struct P {
                     id: String,
-                    volume: types::ClientVolume,
+                    volume: types::Volume,
                 }
                 match serde_json::from_value::<P>(params.clone()) {
                     Ok(p) => Self::ClientOnVolumeChanged {

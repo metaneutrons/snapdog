@@ -1,23 +1,45 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2025 Fabian Schmieder
 
+#[cfg(all(feature = "snapcast-embedded", feature = "snapcast-process"))]
+compile_error!(
+    "Features `snapcast-embedded` and `snapcast-process` are mutually exclusive. \
+     Use `--no-default-features --features snapcast-process` for process mode."
+);
+
+#[cfg(not(any(feature = "snapcast-embedded", feature = "snapcast-process")))]
+compile_error!("Either `snapcast-embedded` or `snapcast-process` feature must be enabled.");
+
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::Result;
+use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
 use snapdog::*;
 
+/// Multi-zone audio controller with AirPlay, Snapcast, MQTT, and KNX integration.
+#[derive(Parser)]
+#[command(version, about)]
+struct Cli {
+    /// Path to configuration file
+    #[arg(short, long, default_value = "snapdog.toml")]
+    config: PathBuf,
+}
+
+/// Volume coalescing window — rapid volume changes within this window are merged.
+const VOLUME_COALESCE_MS: u64 = 50;
+/// Channel capacity for Snapcast commands from zone players, API, MQTT, KNX.
+const SNAPCAST_CMD_CHANNEL_SIZE: usize = 64;
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // ── Parse config ──────────────────────────────────────────
-    let config_path = std::env::args()
-        .nth(2)
-        .filter(|_| std::env::args().nth(1).as_deref() == Some("--config"))
-        .unwrap_or_else(|| "snapdog.toml".into());
+    let cli = Cli::parse();
+    let config_path = &cli.config;
 
-    let config = Arc::new(config::load(&PathBuf::from(&config_path))?);
+    let config = Arc::new(config::load(config_path)?);
 
     // ── Initialize logging ────────────────────────────────────
     tracing_subscriber::fmt()
@@ -31,7 +53,8 @@ async fn main() -> Result<()> {
         zones = config.zones.len(),
         clients = config.clients.len(),
         radios = config.radios.len(),
-        "Configuration loaded from {config_path}"
+        "Configuration loaded from {}",
+        config_path.display()
     );
 
     // ── Initialize subsystems ─────────────────────────────────
@@ -39,43 +62,77 @@ async fn main() -> Result<()> {
     let covers = state::cover::new_cache();
     let (notify_tx, _) = api::ws::notification_channel();
 
-    // Snapserver (managed child process)
+    // ── Snapcast backend ──────────────────────────────────────
+    #[cfg(feature = "snapcast-process")]
     let mut snapserver = process::SnapserverHandle::start(&config).await?;
+    #[cfg(feature = "snapcast-process")]
     if config.snapcast.managed {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
 
-    // Snapcast JSON-RPC client
+    #[cfg(feature = "snapcast-process")]
     let snap = snapcast::SnapcastClient::from_config(&config).await?;
+    #[cfg(feature = "snapcast-process")]
     let status = snap.server_get_status().await?;
+    #[cfg(feature = "snapcast-process")]
     snapcast::sync_initial_state(&status, &config, &snap, &store).await;
+    #[cfg(all(feature = "snapcast-process", not(feature = "snapcast-embedded")))]
     let mut snap_notifications = snap.subscribe();
 
-    // Snapcast command channel
-    let (snap_cmd_tx, mut snap_cmd_rx) = tokio::sync::mpsc::channel::<player::SnapcastCmd>(64);
+    #[cfg(feature = "snapcast-embedded")]
+    let (embedded_backend, embedded_events) =
+        snapcast::embedded::EmbeddedBackend::start(&config, store.clone()).await?;
+    #[cfg(feature = "snapcast-embedded")]
+    let backend: Arc<dyn snapcast::backend::SnapcastBackend> = Arc::new(embedded_backend);
+    #[cfg(feature = "snapcast-embedded")]
+    snapcast::events::spawn_event_handler(
+        embedded_events,
+        config.clone(),
+        backend.clone(),
+        store.clone(),
+        notify_tx.clone(),
+    );
 
-    // ── Wire subsystems ───────────────────────────────────────
+    #[cfg(all(feature = "snapcast-process", not(feature = "snapcast-embedded")))]
+    let process_backend =
+        Arc::new(snapcast::process::ProcessBackend::start(&config, snap, store.clone()).await?);
+    #[cfg(all(feature = "snapcast-process", not(feature = "snapcast-embedded")))]
+    let backend: Arc<dyn snapcast::backend::SnapcastBackend> = process_backend.clone();
+
+    // Snapcast command channel (used by zone players, API, MQTT, KNX)
+    let (snap_cmd_tx, mut snap_cmd_rx) =
+        tokio::sync::mpsc::channel::<player::SnapcastCmd>(SNAPCAST_CMD_CHANNEL_SIZE);
 
     // EQ store
-    let eq_store = std::sync::Arc::new(std::sync::Mutex::new(audio::eq::EqStore::load(
+    let eq_store = Arc::new(std::sync::Mutex::new(audio::eq::EqStore::load(
         std::path::Path::new("eq.json"),
     )));
 
-    // Zone players
+    // ── Zone players ──────────────────────────────────────────
     let zone_commands = player::spawn_zone_players(player::ZonePlayerContext {
         config: config.clone(),
         store: store.clone(),
         covers: covers.clone(),
         notify: notify_tx.clone(),
         snap_tx: snap_cmd_tx.clone(),
+        backend: backend.clone(),
         eq_store: eq_store.clone(),
+        #[cfg(feature = "snapcast-process")]
         client_mac_map: snapcast::build_client_mac_map(&status),
+        #[cfg(not(feature = "snapcast-process"))]
+        client_mac_map: std::collections::HashMap::new(),
+        #[cfg(feature = "snapcast-process")]
         group_ids: snapcast::build_group_ids(&status),
+        #[cfg(not(feature = "snapcast-process"))]
+        group_ids: Vec::new(),
+        #[cfg(feature = "snapcast-process")]
         group_clients: snapcast::build_group_clients(&status),
+        #[cfg(not(feature = "snapcast-process"))]
+        group_clients: std::collections::HashMap::new(),
     })
     .await?;
 
-    // API server
+    // ── API server ────────────────────────────────────────────
     let api_config = config::load(&PathBuf::from(&config_path))?;
     let api_store = store.clone();
     let api_commands = zone_commands.clone();
@@ -98,7 +155,7 @@ async fn main() -> Result<()> {
         }
     });
 
-    // MQTT bridge
+    // ── MQTT bridge ───────────────────────────────────────────
     let mut mqtt_bridge = if let Some(mqtt_config) = &config.mqtt {
         match mqtt::MqttBridge::connect(mqtt_config).await {
             Ok(bridge) => {
@@ -116,7 +173,7 @@ async fn main() -> Result<()> {
         None
     };
 
-    // KNX bridge
+    // ── KNX bridge ────────────────────────────────────────────
     if config.knx.enabled {
         let knx_notifications = notify_tx.subscribe();
         match knx::start(
@@ -136,6 +193,7 @@ async fn main() -> Result<()> {
     // ── Main loop ─────────────────────────────────────────────
     let mqtt_zone_cmds = zone_commands.clone();
     let mqtt_store = store.clone();
+    let cmd_backend = backend.clone();
 
     // Volume coalescing: buffer rapid volume changes per client (50ms window)
     let mut pending_volumes: std::collections::HashMap<String, i32> =
@@ -151,14 +209,16 @@ async fn main() -> Result<()> {
         };
 
         tokio::select! {
-            // Snapcast commands from zone players / API
+            // Snapcast commands from zone players / API / MQTT / KNX
             Some(cmd) = snap_cmd_rx.recv() => {
-                // Coalesce client volume commands
+                // Coalesce client volume commands (50ms window)
                 if let player::SnapcastCmd::Client { ref client_id, action: player::ClientAction::Volume(v) } = cmd {
                     pending_volumes.insert(client_id.clone(), v);
-                    coalesce_deadline = Some(tokio::time::Instant::now() + std::time::Duration::from_millis(50));
+                    coalesce_deadline = Some(tokio::time::Instant::now() + std::time::Duration::from_millis(VOLUME_COALESCE_MS));
                 } else {
-                    snapcast::execute_command(&snap, cmd, &config, &store, &notify_tx).await;
+                    if let Err(e) = cmd_backend.execute(cmd).await {
+                        tracing::warn!(error = %e, "Snapcast command failed");
+                    }
                 }
             }
             // Coalesce timer fired — flush pending volumes
@@ -168,14 +228,21 @@ async fn main() -> Result<()> {
                         client_id,
                         action: player::ClientAction::Volume(volume),
                     };
-                    snapcast::execute_command(&snap, cmd, &config, &store, &notify_tx).await;
+                    if let Err(e) = cmd_backend.execute(cmd).await {
+                        tracing::warn!(error = %e, "Snapcast volume command failed");
+                    }
                 }
                 coalesce_deadline = None;
             }
-            // Snapcast server notifications → state updates
-            Ok(notification) = snap_notifications.recv() => {
-                snapcast::handle_notification(notification, &config, &snap, &store, &notify_tx).await;
-            }
+            // Snapcast server notifications → state updates (process backend only)
+            _ = async {
+                #[cfg(all(feature = "snapcast-process", not(feature = "snapcast-embedded")))]
+                if let Ok(notification) = snap_notifications.recv().await {
+                    snapcast::handle_notification(notification, &config, process_backend.client(), &store, &notify_tx).await;
+                }
+                #[cfg(not(all(feature = "snapcast-process", not(feature = "snapcast-embedded"))))]
+                std::future::pending::<()>().await;
+            } => {}
             // MQTT events
             _ = async {
                 if let Some(ref mut bridge) = mqtt_bridge {
@@ -193,9 +260,11 @@ async fn main() -> Result<()> {
     }
 
     // ── Shutdown ──────────────────────────────────────────────
+    let _ = backend.stop().await;
     if let Err(e) = store.write().await.persist() {
         tracing::warn!(error = %e, "Failed to persist state");
     }
+    #[cfg(feature = "snapcast-process")]
     snapserver.stop().await?;
     Ok(())
 }

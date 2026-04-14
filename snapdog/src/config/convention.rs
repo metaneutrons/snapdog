@@ -25,6 +25,7 @@ pub fn resolve_zone(index: usize, raw: RawZoneConfig, audio: &AudioConfig) -> Re
         tcp_source_port: TCP_SOURCE_BASE_PORT + n as u16,
         airplay_name,
         knx: resolve_zone_knx(n, raw.knx),
+        group_volume_mode: raw.group_volume_mode.unwrap_or(audio.group_volume_mode),
     })
 }
 

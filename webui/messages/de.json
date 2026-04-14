@@ -1,0 +1,91 @@
+{
+  "app": {
+    "title": "SnapDog",
+    "skipToContent": "Zum Inhalt springen",
+    "connected": "Verbunden",
+    "disconnected": "Getrennt",
+    "language": "Sprache"
+  },
+  "transport": {
+    "play": "Wiedergabe",
+    "pause": "Pause",
+    "stop": "Stopp",
+    "next": "Nächster",
+    "previous": "Vorheriger"
+  },
+  "shuffle": {
+    "on": "Zufallswiedergabe an",
+    "off": "Zufallswiedergabe aus",
+    "repeatOn": "Wiederholung an",
+    "repeatOff": "Wiederholung aus",
+    "trackRepeatOn": "Titelwiederholung an",
+    "trackRepeatOff": "Titelwiederholung aus"
+  },
+  "volume": {
+    "label": "Lautstärke",
+    "mute": "Stumm",
+    "unmute": "Ton an"
+  },
+  "seek": {
+    "label": "Spulen"
+  },
+  "zone": {
+    "idle": "Inaktiv",
+    "noAudio": "Keine Wiedergabe",
+    "playing": "Wiedergabe",
+    "navigation": "Zonennavigation",
+    "zones": "Zonen",
+    "unknownTitle": "Unbekannt",
+    "unknownArtist": "Unbekannter Künstler",
+    "error": "Etwas ist schiefgelaufen",
+    "retry": "Erneut versuchen"
+  },
+  "client": {
+    "clients": "{count, plural, one {# Client} other {# Clients}}",
+    "expand": "Clients einblenden",
+    "collapse": "Clients ausblenden",
+    "moveTo": "In Zone verschieben",
+    "moveToLabel": "Verschieben nach",
+    "connected": "Verbunden",
+    "disconnected": "Getrennt",
+    "showOffline": "{count, plural, one {# offline — anzeigen} other {# offline — anzeigen}}",
+    "hideOffline": "Offline ausblenden"
+  },
+  "eq": {
+    "title": "EQ — {zone}",
+    "close": "Equalizer schließen",
+    "preset": "EQ-Voreinstellung",
+    "enabled": "Aktiviert",
+    "addBand": "+ Band hinzufügen",
+    "removeBand": "Band entfernen",
+    "filterType": "Band {n} Filtertyp",
+    "frequency": "Frequenz",
+    "gain": "Verstärkung",
+    "qFactor": "Q-Faktor",
+    "curve": "EQ-Frequenzgangkurve"
+  },
+  "playlist": {
+    "loading": "Wiedergabelisten werden geladen…",
+    "empty": "Keine Wiedergabelisten verfügbar",
+    "play": "{name} abspielen"
+  },
+  "auth": {
+    "title": "Authentifizierung erforderlich",
+    "description": "Diese SnapDog-Instanz erfordert einen API-Schlüssel. Geben Sie einen der in {configKey} in Ihrer {configFile}-Datei konfigurierten Schlüssel ein.",
+    "placeholder": "API-Schlüssel",
+    "submit": "Authentifizieren",
+    "checking": "Wird geprüft…",
+    "invalid": "Ungültiger API-Schlüssel. Bitte versuchen Sie es erneut."
+  },
+  "connection": {
+    "lost": "Verbindung verloren",
+    "reconnecting": "Verbindung wird wiederhergestellt…"
+  },
+  "source": {
+    "radio": "Radio",
+    "subsonic_playlist": "Subsonic",
+    "subsonic_track": "Subsonic",
+    "airplay": "AirPlay",
+    "url": "URL"
+  }
+}
