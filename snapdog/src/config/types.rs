@@ -218,6 +218,16 @@ impl SpotifyConfig {
     pub fn device_id(&self) -> String {
         format!("{:x}", md5::compute(self.name.as_bytes()))
     }
+
+    /// Convert the bitrate u32 to librespot's Bitrate enum.
+    #[cfg(feature = "spotify")]
+    pub fn bitrate_enum(&self) -> librespot_playback::config::Bitrate {
+        match self.bitrate {
+            96 => librespot_playback::config::Bitrate::Bitrate96,
+            160 => librespot_playback::config::Bitrate::Bitrate160,
+            _ => librespot_playback::config::Bitrate::Bitrate320,
+        }
+    }
 }
 
 fn default_spotify_bitrate() -> u32 {

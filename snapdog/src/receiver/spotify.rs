@@ -1,29 +1,30 @@
-// SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2025 Fabian Schmieder
 
 //! Spotify Connect receiver implementing [`ReceiverProvider`].
 //!
-//! Uses [`librespot`] for Zeroconf discovery, Spotify Connect protocol,
+//! Uses [`librespot`] 0.8 for Zeroconf discovery, Spotify Connect protocol,
 //! and audio decoding. Audio is delivered as F32 interleaved PCM via a
 //! custom sink that writes to the receiver's audio channel.
 
 use std::sync::Arc;
 
 use anyhow::Result;
-use librespot_connect::config::ConnectConfig;
-use librespot_connect::spirc::Spirc;
-use librespot_core::config::{DeviceType, SessionConfig};
+use librespot_connect::{ConnectConfig, Spirc};
+use librespot_core::SessionConfig;
 use librespot_core::session::Session;
-use librespot_discovery::Discovery;
-use librespot_playback::audio_backend::{Open, Sink, SinkAsBytes, SinkError, SinkResult};
-use librespot_playback::config::{AudioFormat as LsAudioFormat, PlayerConfig};
+use librespot_discovery::{DeviceType, Discovery};
+use librespot_metadata::audio::item::UniqueFields;
+use librespot_playback::audio_backend::{Sink, SinkError, SinkResult};
+use librespot_playback::config::PlayerConfig;
 use librespot_playback::convert::Converter;
 use librespot_playback::decoder::AudioPacket;
-use librespot_playback::mixer::NoOpVolume;
+use librespot_playback::mixer::{MixerConfig, NoOpVolume};
 use librespot_playback::player::{Player, PlayerEvent};
-use tokio::sync::mpsc;
 
-use super::{AudioFormat, AudioSender, ReceiverEvent, ReceiverEventTx, ReceiverProvider};
+use super::{
+    AudioFormat, AudioSender, ReceiverEvent, ReceiverEventTx, ReceiverProvider, RemoteCommand,
+    RemoteControl,
+};
 use crate::config::SpotifyConfig;
 
 // ── SpotifyReceiver ───────────────────────────────────────────
@@ -54,13 +55,11 @@ impl ReceiverProvider for SpotifyReceiver {
     async fn start(&mut self, audio_tx: AudioSender, event_tx: ReceiverEventTx) -> Result<()> {
         let config = self.config.clone();
         let zone_index = self.zone_index;
-
         let task = tokio::spawn(async move {
             if let Err(e) = run_spotify(config, zone_index, audio_tx, event_tx).await {
                 tracing::error!(zone = zone_index, error = %e, "Spotify receiver failed");
             }
         });
-
         self.task = Some(task);
         tracing::info!(zone = self.zone_index, name = %self.config.name, "Spotify Connect receiver started");
         Ok(())
@@ -77,6 +76,37 @@ impl ReceiverProvider for SpotifyReceiver {
     }
 }
 
+// ── Remote control bridge ─────────────────────────────────────
+
+/// Bridges [`RemoteCommand`] to Spirc methods.
+struct SpircRemote(Arc<Spirc>);
+
+impl RemoteControl for SpircRemote {
+    fn send_command(&self, cmd: RemoteCommand) -> Result<()> {
+        match cmd {
+            RemoteCommand::Play => self.0.play()?,
+            RemoteCommand::Pause => self.0.pause()?,
+            RemoteCommand::NextTrack => self.0.next()?,
+            RemoteCommand::PreviousTrack => self.0.prev()?,
+            RemoteCommand::Stop => self.0.pause()?, // Spirc has no stop, pause is closest
+            RemoteCommand::SetVolume(v) => {
+                let volume = (v as u16 * u16::MAX) / 100;
+                self.0.set_volume(volume)?;
+            }
+            RemoteCommand::ToggleShuffle => {
+                // Spirc::shuffle takes a bool — we toggle by passing true
+                // (Spirc reshuffles if already shuffled, which is acceptable)
+                self.0.shuffle(true)?;
+            }
+            RemoteCommand::ToggleRepeat => {
+                // Toggle context repeat
+                self.0.repeat(true)?;
+            }
+        }
+        Ok(())
+    }
+}
+
 // ── Main loop ─────────────────────────────────────────────────
 
 async fn run_spotify(
@@ -86,64 +116,56 @@ async fn run_spotify(
     event_tx: ReceiverEventTx,
 ) -> Result<()> {
     loop {
-        // Advertise via Zeroconf and wait for a Spotify app to connect
         tracing::info!(zone = zone_index, name = %config.name, "Waiting for Spotify Connect client");
 
-        let mut discovery = Discovery::builder(&config.name, config.device_id())
+        let device_id = config.device_id();
+        let mut discovery = Discovery::builder(&config.name, &device_id)
             .device_type(DeviceType::Speaker)
             .launch()
             .map_err(|e| anyhow::anyhow!("Discovery failed: {e}"))?;
 
-        // Wait for credentials from a connecting Spotify app
-        let credentials = loop {
-            use futures_util::StreamExt;
-            match discovery.next().await {
-                Some(librespot_discovery::DiscoveryEvent::Credentials(creds)) => break creds,
-                Some(librespot_discovery::DiscoveryEvent::ServerError(e)) => {
-                    tracing::warn!(zone = zone_index, error = %e, "Discovery server error");
-                }
-                Some(librespot_discovery::DiscoveryEvent::ZeroconfError(e)) => {
-                    tracing::warn!(zone = zone_index, error = %e, "Zeroconf error");
-                }
-                None => return Ok(()), // Discovery stream ended
-            }
+        use futures_util::StreamExt;
+        let credentials = match discovery.next().await {
+            Some(creds) => creds,
+            None => return Ok(()),
         };
 
         tracing::info!(zone = zone_index, "Spotify client connected");
 
-        // Create session
         let session = Session::new(SessionConfig::default(), None);
         session
-            .connect(credentials, true)
+            .connect(credentials.clone(), true)
             .await
             .map_err(|e| anyhow::anyhow!("Session connect failed: {e}"))?;
 
-        // Create player with custom sink
         let tx = audio_tx.clone();
         let player = Player::new(
             PlayerConfig {
-                bitrate: config.bitrate(),
+                bitrate: config.bitrate_enum(),
                 ..PlayerConfig::default()
             },
             session.clone(),
             Box::new(NoOpVolume),
-            move || Box::new(ChannelSink::new(tx.clone(), LsAudioFormat::F32)) as Box<dyn Sink>,
+            move || Box::new(ChannelSink::new(tx.clone())) as Box<dyn Sink>,
         );
 
-        // Subscribe to player events
         let mut event_rx = player.get_player_event_channel();
 
-        // Create Spirc (Spotify Connect protocol handler)
+        let mixer =
+            librespot_playback::mixer::find(None).expect("default mixer")(MixerConfig::default())
+                .map_err(|e| anyhow::anyhow!("Mixer failed: {e}"))?;
+
         let (spirc, spirc_task) = Spirc::new(
             ConnectConfig {
                 name: config.name.clone(),
                 device_type: DeviceType::Speaker,
-                initial_volume: Some(u16::MAX / 2),
+                initial_volume: u16::MAX / 2,
                 ..ConnectConfig::default()
             },
             session.clone(),
-            player,
-            Box::new(NoOpVolume),
+            credentials,
+            player.clone(),
+            mixer,
         )
         .await
         .map_err(|e| anyhow::anyhow!("Spirc failed: {e}"))?;
@@ -155,26 +177,36 @@ async fn run_spotify(
             },
         });
 
-        // Run event loop until session ends
+        // Send remote control handle — enables play/pause/next/prev from SnapDog UI
+        let spirc = Arc::new(spirc);
+        let _ = event_tx.try_send(ReceiverEvent::RemoteAvailable {
+            remote: Arc::new(SpircRemote(spirc.clone())),
+        });
+
         let spirc_handle = tokio::spawn(spirc_task);
+
+        // Track last known duration for Paused events
+        let mut last_duration_ms: u64 = 0;
 
         loop {
             tokio::select! {
                 event = event_rx.recv() => {
                     match event {
-                        Some(event) => handle_player_event(event, &session, &event_tx, zone_index).await,
-                        None => break, // Player dropped
+                        Some(event) => handle_player_event(event, &event_tx, &mut last_duration_ms).await,
+                        None => break,
                     }
                 }
-                _ = session.is_invalid() => {
-                    tracing::info!(zone = zone_index, "Spotify session ended");
-                    break;
+                _ = tokio::time::sleep(std::time::Duration::from_secs(1)) => {
+                    if player.is_invalid() {
+                        tracing::info!(zone = zone_index, "Spotify session ended");
+                        break;
+                    }
                 }
             }
         }
 
         let _ = event_tx.try_send(ReceiverEvent::SessionEnded);
-        spirc.shutdown();
+        let _ = spirc.shutdown();
         spirc_handle.abort();
 
         tracing::info!(
@@ -184,103 +216,95 @@ async fn run_spotify(
     }
 }
 
+// ── Event handling ────────────────────────────────────────────
+
 async fn handle_player_event(
     event: PlayerEvent,
-    session: &Session,
     event_tx: &ReceiverEventTx,
-    zone_index: usize,
+    last_duration_ms: &mut u64,
 ) {
     match event {
-        PlayerEvent::Playing {
-            track_id,
-            position_ms,
-            ..
-        } => {
-            // Fetch track metadata from Spotify
-            if let Ok(track) =
-                librespot_metadata::Track::get(session, &track_id.into_spotify_id().unwrap()).await
-            {
-                let artist = track
-                    .artists_with_role
-                    .first()
-                    .map(|a| a.name.clone())
-                    .unwrap_or_default();
-                let album = track.album.name.clone();
-                let duration_ms = track.duration as u64;
+        // TrackChanged fires on every track switch — contains full metadata
+        PlayerEvent::TrackChanged { audio_item } => {
+            let (artist, album) = match &audio_item.unique_fields {
+                UniqueFields::Track { artists, album, .. } => (
+                    artists.first().map(|a| a.name.clone()).unwrap_or_default(),
+                    album.clone(),
+                ),
+                UniqueFields::Episode { show_name, .. } => (show_name.clone(), String::new()),
+                UniqueFields::Local { artists, album, .. } => (
+                    artists.clone().unwrap_or_default(),
+                    album.clone().unwrap_or_default(),
+                ),
+            };
 
-                let _ = event_tx.try_send(ReceiverEvent::Metadata {
-                    title: track.name.clone(),
-                    artist,
-                    album,
-                });
-                let _ = event_tx.try_send(ReceiverEvent::Progress {
-                    position_ms: position_ms as u64,
-                    duration_ms,
-                });
+            *last_duration_ms = audio_item.duration_ms as u64;
 
-                // Fetch cover art URL from album
-                if let Some(cover) = track.album.covers.first() {
-                    let cover_url = format!(
-                        "https://i.scdn.co/image/{}",
-                        cover.id.to_base16().unwrap_or_default()
-                    );
-                    // Fetch and send cover bytes
-                    if let Some((bytes, _)) = crate::state::cover::fetch_cover(&cover_url).await {
-                        let _ = event_tx.try_send(ReceiverEvent::CoverArt { bytes });
-                    }
+            let _ = event_tx.try_send(ReceiverEvent::Metadata {
+                title: audio_item.name.clone(),
+                artist,
+                album,
+            });
+
+            // Cover art from AudioItem covers
+            if let Some(cover) = audio_item.covers.first() {
+                if let Some((bytes, _)) = crate::state::cover::fetch_cover(&cover.url).await {
+                    let _ = event_tx.try_send(ReceiverEvent::CoverArt { bytes });
                 }
             }
         }
+
+        PlayerEvent::Playing { position_ms, .. } => {
+            let _ = event_tx.try_send(ReceiverEvent::Progress {
+                position_ms: position_ms as u64,
+                duration_ms: *last_duration_ms,
+            });
+        }
+
         PlayerEvent::Paused { position_ms, .. } => {
             let _ = event_tx.try_send(ReceiverEvent::Progress {
                 position_ms: position_ms as u64,
-                duration_ms: 0, // Will be filled from last metadata
+                duration_ms: *last_duration_ms,
             });
         }
+
+        PlayerEvent::Seeked { position_ms, .. }
+        | PlayerEvent::PositionCorrection { position_ms, .. } => {
+            let _ = event_tx.try_send(ReceiverEvent::Progress {
+                position_ms: position_ms as u64,
+                duration_ms: *last_duration_ms,
+            });
+        }
+
         PlayerEvent::VolumeChanged { volume } => {
             let percent = (volume as i32 * 100) / u16::MAX as i32;
             let _ = event_tx.try_send(ReceiverEvent::Volume { percent });
         }
-        PlayerEvent::Stopped { .. } | PlayerEvent::EndOfTrack { .. } => {}
+
         _ => {}
     }
 }
 
 // ── Custom audio sink ─────────────────────────────────────────
 
-/// Sink that sends F32 PCM samples to the receiver's audio channel.
 struct ChannelSink {
     tx: AudioSender,
-    format: LsAudioFormat,
 }
 
 impl ChannelSink {
-    fn new(tx: AudioSender, format: LsAudioFormat) -> Self {
-        Self { tx, format }
-    }
-}
-
-impl Open for ChannelSink {
-    fn open(_device: Option<String>, format: LsAudioFormat) -> Self {
-        // This won't be called — we construct directly in the player factory.
-        // But the trait requires it.
-        panic!("ChannelSink::open should not be called directly");
+    fn new(tx: AudioSender) -> Self {
+        Self { tx }
     }
 }
 
 impl Sink for ChannelSink {
-    sink_as_bytes!();
-}
-
-impl SinkAsBytes for ChannelSink {
-    fn write_bytes(&mut self, data: &[u8]) -> SinkResult<()> {
-        // Data is F32LE bytes (we configured AudioFormat::F32)
-        let samples: Vec<f32> = data
-            .chunks_exact(4)
-            .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
-            .collect();
+    fn write(&mut self, packet: AudioPacket, _converter: &mut Converter) -> SinkResult<()> {
+        let f32_samples = match packet {
+            AudioPacket::Samples(samples) => samples.iter().map(|&s| s as f32).collect(),
+            AudioPacket::Raw(_) => return Ok(()),
+        };
         self.tx
-            .try_send(samples)
+            .try_send(f32_samples)
             .map_err(|e| SinkError::OnWrite(format!("Channel send failed: {e}")))?;
         Ok(())
     }
