@@ -17,3 +17,4 @@ webui/node_modules/
 webui/.next/
 snapdog.dev.toml
 snapcast-state.json
+.cargo/
