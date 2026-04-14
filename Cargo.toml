@@ -60,8 +60,8 @@ thiserror = "2"
 anyhow = "1"
 
 # Snapcast
-snapcast-server = { version = "0.5", features = ["flac", "encryption", "mdns"] }
-snapcast-proto = "0.5"
+snapcast-server = { version = "0.6", features = ["flac", "encryption", "mdns"] }
+snapcast-proto = "0.6"
 
 # Utilities
 md5 = "0.7"
@@ -86,6 +86,3 @@ lto = true
 strip = true
 codegen-units = 1
 
-[patch.crates-io]
-snapcast-server = { path = "../snapcast-rs/crates/snapcast-server" }
-snapcast-proto = { path = "../snapcast-rs/crates/snapcast-proto" }
