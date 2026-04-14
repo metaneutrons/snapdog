@@ -37,6 +37,12 @@ impl EmbeddedBackend {
         config: &AppConfig,
         store: state::SharedState,
     ) -> Result<(Self, EmbeddedEventReceiver)> {
+        // Validate codec
+        match config.audio.codec.as_str() {
+            "flac" | "f32lz4" | "f32lz4e" => {}
+            other => anyhow::bail!("unsupported codec '{other}', expected: flac, f32lz4, f32lz4e"),
+        }
+
         // Resolve f32lz4e → f32lz4 + encryption
         let (codec, encryption_psk) = if config.audio.codec == "f32lz4e" {
             let psk = config

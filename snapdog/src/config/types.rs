@@ -109,7 +109,7 @@ pub struct AudioConfig {
     /// Number of audio channels (typically 2 for stereo).
     #[serde(default = "default_channels")]
     pub channels: u16,
-    /// Snapcast codec: "flac", "pcm", "f32lz4", "f32lz4e", "opus", "ogg".
+    /// Snapcast codec: "flac", "f32lz4", "f32lz4e".
     #[serde(default = "default_codec")]
     pub codec: String,
     /// Pre-shared key for f32lz4e encryption (default: built-in key).

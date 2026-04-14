@@ -15,7 +15,7 @@ use snapcast_client::config::{self, Auth, ClientSettings, MixerMode, ServerSetti
     after_help = "\
   With 'url' = <tcp|ws|wss>://<snapserver host or IP or mDNS service name>[:port]\n\
   For example: 'tcp://192.168.1.1:1704', or 'ws://homeserver.local'\n\
-  If 'url' is not configured, snapclient defaults to 'tcp://_snapcast._tcp'"
+  If 'url' is not configured, snapdog-client defaults to 'tcp://_snapdog._tcp'"
 )]
 pub struct Cli {
     /// Snapserver URL: `<tcp|ws|wss>://<host>[:<port>]`
@@ -87,6 +87,10 @@ pub struct Cli {
     #[arg(long, default_value = "*:info")]
     pub logfilter: String,
 
+    /// mDNS service name for server discovery
+    #[arg(long, default_value = "_snapdog._tcp")]
+    pub mdns_name: String,
+
     /// Pre-shared key for f32lz4e decryption (default: built-in key)
     #[cfg(feature = "encryption")]
     #[arg(long)]
@@ -96,8 +100,8 @@ pub struct Cli {
 impl Cli {
     /// Parse CLI args and build a [`ClientSettings`].
     pub fn into_settings(self) -> Result<ClientSettings> {
-        let default_url = "tcp://_snapcast._tcp";
-        let url = self.url.as_deref().unwrap_or(default_url);
+        let default_url = format!("tcp://{}", self.mdns_name);
+        let url = self.url.as_deref().unwrap_or(&default_url);
         let mut server = parse_url(url)?;
 
         // TLS certificate options
@@ -281,9 +285,9 @@ mod tests {
 
     #[test]
     fn parse_mdns_service_name() {
-        let s = parse_url("tcp://_snapcast._tcp").unwrap();
+        let s = parse_url("tcp://_snapdog._tcp").unwrap();
         assert_eq!(s.scheme, "tcp");
-        assert_eq!(s.host, "_snapcast._tcp");
+        assert_eq!(s.host, "_snapdog._tcp");
         assert_eq!(s.port, 1704);
     }
 
@@ -293,7 +297,7 @@ mod tests {
         assert!(cli.url.is_none());
         let settings = cli.into_settings().unwrap();
         // With mdns feature, default host is mDNS service name
-        assert!(settings.server.host == "_snapcast._tcp" || settings.server.host == "localhost");
+        assert!(settings.server.host == "_snapdog._tcp" || settings.server.host == "localhost");
     }
 
     #[test]
