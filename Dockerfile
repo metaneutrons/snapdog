@@ -22,7 +22,7 @@ FROM debian:bookworm-slim AS snapserver-builder
 ARG SNAPCAST_VERSION=0.32.3
 
 RUN apt-get update && apt-get install -y \
-    build-essential cmake git \
+    build-essential cmake git pkg-config \
     libboost-dev libasound2-dev libflac-dev libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
