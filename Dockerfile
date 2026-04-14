@@ -10,6 +10,8 @@ RUN npm run build
 # ── Rust build stage ──────────────────────────────────────────
 FROM rust:1-bookworm AS builder
 
+RUN apt-get update && apt-get install -y cmake pkg-config && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
 COPY snapdog/ snapdog/
