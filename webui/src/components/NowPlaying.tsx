@@ -18,21 +18,21 @@ export function NowPlaying({ zone }: { zone: ZoneState }) {
 
   const fallback = (
     <div className="flex flex-col items-center justify-center size-full bg-gradient-to-br from-muted to-muted/60">
-      <span className="text-6xl md:text-4xl mb-2 drop-shadow-md">{zone.icon || "🎵"}</span>
+      <span className="text-6xl sm:text-4xl mb-2 drop-shadow-md">{zone.icon || "🎵"}</span>
       <span className="text-xs font-medium text-muted-foreground/60 tracking-wider uppercase">{zone.name}</span>
     </div>
   );
 
   if (isIdle || !coverUrl) {
     return (
-      <div className="relative w-full aspect-square rounded-2xl md:rounded-xl overflow-hidden shadow-lg">
+      <div className="relative w-full aspect-square rounded-2xl sm:rounded-xl overflow-hidden shadow-lg">
         {fallback}
       </div>
     );
   }
 
   return (
-    <div className="relative w-full aspect-square rounded-2xl md:rounded-xl overflow-hidden bg-muted shadow-lg shrink-0">
+    <div className="relative w-full aspect-square rounded-2xl sm:rounded-xl overflow-hidden bg-muted shadow-lg shrink-0">
       {coverError ? fallback : (
         <>
           <img

@@ -7,6 +7,7 @@ import {
   VolumeLowIcon,
   VolumeMute02Icon,
 } from "@hugeicons/core-free-icons";
+import { useTranslations } from "next-intl";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 
@@ -29,6 +30,7 @@ export function VolumeSlider({
   compact = false,
 }: VolumeSliderProps) {
   const [localVolume, setLocalVolume] = useState(volume);
+  const t = useTranslations("volume");
   const [dragging, setDragging] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -68,7 +70,7 @@ export function VolumeSlider({
 
   return (
     <div
-      className={`flex items-center gap-${compact ? "1.5" : "3"} w-full ${compact ? "" : "md:max-w-xs"}`}
+      className={`flex items-center gap-${compact ? "1.5" : "3"} w-full ${compact ? "" : "sm:max-w-xs"}`}
     >
       <Button
         variant="ghost"
@@ -76,6 +78,7 @@ export function VolumeSlider({
         onClick={onMuteToggle}
         onDragStart={(e) => e.preventDefault()}
         className={`${btnSize} shrink-0 rounded-full`}
+        aria-label={muted ? t("unmute") : t("mute")}
       >
         <HugeiconsIcon icon={volumeIcon} size={iconSize} />
       </Button>
@@ -87,6 +90,7 @@ export function VolumeSlider({
         onValueCommit={handleCommit}
         onDragStart={(e: React.DragEvent) => e.preventDefault()}
         className="flex-1 min-w-0"
+        aria-label={t("label")}
       />
       <span className={`text-muted-foreground tabular-nums text-right ${compact ? "text-[10px] w-5" : "text-xs w-7"}`}>
         {localVolume}
