@@ -1,5 +1,5 @@
 # ── WebUI build stage ─────────────────────────────────────────
-FROM node:22-slim AS webui-builder
+FROM node:25-slim AS webui-builder
 
 WORKDIR /build/webui
 COPY webui/package.json webui/package-lock.json ./
