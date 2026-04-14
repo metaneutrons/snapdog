@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { motion, AnimatePresence, type PanInfo } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion, type PanInfo } from "framer-motion";
 import type { ZoneState } from "@/stores/useAppStore";
 
 const SWIPE_THRESHOLD = 50;
@@ -16,6 +16,7 @@ interface ZoneSwitcherProps {
 
 export function ZoneSwitcher({ zones, selectedIndex, onSelect, children }: ZoneSwitcherProps) {
   const [direction, setDirection] = useState(0);
+  const reduced = useReducedMotion();
 
   if (zones.length === 0) return null;
 
@@ -43,11 +44,11 @@ export function ZoneSwitcher({ zones, selectedIndex, onSelect, children }: ZoneS
           <motion.div
             key={zone.index}
             custom={direction}
-            initial={{ x: direction > 0 ? "100%" : "-100%", opacity: 0 }}
+            initial={reduced ? false : { x: direction > 0 ? "100%" : "-100%", opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
-            exit={{ x: direction > 0 ? "-100%" : "100%", opacity: 0 }}
-            transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            drag="x"
+            exit={reduced ? { opacity: 0 } : { x: direction > 0 ? "-100%" : "100%", opacity: 0 }}
+            transition={reduced ? { duration: 0 } : { type: "spring", stiffness: 300, damping: 30 }}
+            drag={reduced ? false : "x"}
             dragConstraints={{ left: 0, right: 0 }}
             dragElastic={0.2}
             onDragEnd={handleDragEnd}
@@ -68,6 +69,8 @@ export function ZoneSwitcher({ zones, selectedIndex, onSelect, children }: ZoneS
               className={`size-1.5 rounded-full transition-all ${
                 i === safeIdx ? "bg-primary w-4" : "bg-muted-foreground/30"
               }`}
+              aria-label={z.name}
+              aria-current={i === safeIdx ? "true" : undefined}
             />
           ))}
         </div>

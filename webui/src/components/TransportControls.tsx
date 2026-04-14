@@ -1,5 +1,3 @@
-"use client";
-
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   PlayIcon,
@@ -8,7 +6,8 @@ import {
   NextIcon,
   PreviousIcon,
 } from "@hugeicons/core-free-icons";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
+import { useTranslations } from "next-intl";
 import type { ZoneState } from "@/stores/useAppStore";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
@@ -18,7 +17,10 @@ interface TransportControlsProps {
 }
 
 export function TransportControls({ zone }: TransportControlsProps) {
+  const t = useTranslations("transport");
   const { index, playback, source } = zone;
+  const reduced = useReducedMotion();
+  const tap = reduced ? {} : { scale: 0.9 };
   const isPlaying = playback === "playing";
   const isIdle = source === "idle";
   const isAirPlay = source === "airplay";
@@ -37,54 +39,23 @@ export function TransportControls({ zone }: TransportControlsProps) {
 
   return (
     <div className="flex items-center justify-center gap-2">
-      {/* Previous */}
-      <motion.div whileTap={{ scale: 0.9 }}>
-        <Button
-          variant="ghost"
-          size="icon"
-          disabled={isIdle || isAirPlay || isUrl || !hasNavigation}
-          onClick={() => cmd("previous")}
-          className="size-10 rounded-full"
-        >
+      <motion.div whileTap={tap}>
+        <Button variant="ghost" size="icon" disabled={isIdle || isAirPlay || isUrl || !hasNavigation} onClick={() => cmd("previous")} className="size-10 rounded-full" aria-label={t("previous")}>
           <HugeiconsIcon icon={PreviousIcon} size={20} />
         </Button>
       </motion.div>
-
-      {/* Play / Pause */}
-      <motion.div whileTap={{ scale: 0.9 }}>
-        <Button
-          variant="default"
-          size="icon"
-          disabled={isIdle}
-          onClick={() => cmd(isPlaying ? "pause" : "play")}
-          className="size-12 rounded-full"
-        >
+      <motion.div whileTap={tap}>
+        <Button variant="default" size="icon" disabled={isIdle} onClick={() => cmd(isPlaying ? "pause" : "play")} className="size-12 rounded-full" aria-label={isPlaying ? t("pause") : t("play")}>
           <HugeiconsIcon icon={isPlaying ? PauseIcon : PlayIcon} size={24} />
         </Button>
       </motion.div>
-
-      {/* Stop */}
-      <motion.div whileTap={{ scale: 0.9 }}>
-        <Button
-          variant="ghost"
-          size="icon"
-          disabled={isIdle}
-          onClick={() => cmd("stop")}
-          className="size-10 rounded-full"
-        >
+      <motion.div whileTap={tap}>
+        <Button variant="ghost" size="icon" disabled={isIdle} onClick={() => cmd("stop")} className="size-10 rounded-full" aria-label={t("stop")}>
           <HugeiconsIcon icon={StopIcon} size={20} />
         </Button>
       </motion.div>
-
-      {/* Next */}
-      <motion.div whileTap={{ scale: 0.9 }}>
-        <Button
-          variant="ghost"
-          size="icon"
-          disabled={isIdle || isAirPlay || isUrl || !hasNavigation}
-          onClick={() => cmd("next")}
-          className="size-10 rounded-full"
-        >
+      <motion.div whileTap={tap}>
+        <Button variant="ghost" size="icon" disabled={isIdle || isAirPlay || isUrl || !hasNavigation} onClick={() => cmd("next")} className="size-10 rounded-full" aria-label={t("next")}>
           <HugeiconsIcon icon={NextIcon} size={20} />
         </Button>
       </motion.div>

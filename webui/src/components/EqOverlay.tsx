@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { api, type EqBand, type EqConfig } from "@/lib/api";
@@ -18,6 +19,7 @@ interface EqOverlayProps {
 const DEFAULT_BAND: EqBand = { freq: 1000, gain: 0, q: 1.0, type: "peaking" };
 
 export function EqOverlay({ zoneId, zoneName, onClose }: EqOverlayProps) {
+  const t = useTranslations("eq");
   const [config, setConfig] = useState<EqConfig>({ enabled: false, bands: [], preset: "flat" });
   const [abBypass, setAbBypass] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -86,17 +88,17 @@ export function EqOverlay({ zoneId, zoneName, onClose }: EqOverlayProps) {
   if (loading) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-xl space-y-5">
+    <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label={t("title", { zone: zoneName })} onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}>
+      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onClose} role="presentation" />
+      <div className="relative z-10 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-xl space-y-5" ref={(el) => el?.focus()} tabIndex={-1}>
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">EQ — {zoneName}</h2>
+          <h2 className="text-lg font-semibold">{t("title", { zone: zoneName })}</h2>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={toggleAB} className={abBypass ? "text-muted-foreground" : "text-primary font-semibold"}>
               A/B
             </Button>
-            <Button variant="ghost" size="sm" onClick={onClose}>✕</Button>
+            <Button variant="ghost" size="sm" onClick={onClose} aria-label={t("close")}>✕</Button>
           </div>
         </div>
 
@@ -109,12 +111,13 @@ export function EqOverlay({ zoneId, zoneName, onClose }: EqOverlayProps) {
               onChange={(e) => update({ enabled: e.target.checked })}
               className="accent-primary"
             />
-            Enabled
+            {t("enabled")}
           </label>
           <select
             value={config.preset ?? ""}
             onChange={(e) => applyPreset(e.target.value)}
             className="text-sm bg-muted border border-border rounded px-2 py-1"
+            aria-label={t("preset")}
           >
             <option value="" disabled>Preset…</option>
             {PRESETS.map((p) => (
@@ -125,7 +128,7 @@ export function EqOverlay({ zoneId, zoneName, onClose }: EqOverlayProps) {
 
         {/* Frequency Response Curve */}
         <div className={abBypass ? "opacity-40 transition-opacity" : "transition-opacity"}>
-          <FrequencyResponseCurve response={response} />
+          <FrequencyResponseCurve response={response} curveLabel={t("curve")} />
         </div>
 
         {/* Bands */}
@@ -143,7 +146,7 @@ export function EqOverlay({ zoneId, zoneName, onClose }: EqOverlayProps) {
 
         {config.bands.length < 10 && (
           <Button variant="ghost" size="sm" onClick={addBand} className="w-full">
-            + Add Band
+            {t("addBand")}
           </Button>
         )}
       </div>
@@ -164,6 +167,7 @@ function BandRow({
   onChange: (patch: Partial<EqBand>) => void;
   onRemove: () => void;
 }) {
+  const t = useTranslations("eq");
   return (
     <div className="flex items-center gap-2 text-sm">
       <span className="w-5 text-muted-foreground text-xs">{index + 1}</span>
@@ -171,6 +175,7 @@ function BandRow({
         value={band.type}
         onChange={(e) => onChange({ type: e.target.value as EqBand["type"] })}
         className="bg-muted border border-border rounded px-1.5 py-1 text-xs w-20"
+        aria-label={t("filterType", { n: index + 1 })}
       >
         {FILTER_TYPES.map((t) => (
           <option key={t} value={t}>{t.replace("_", " ")}</option>
@@ -186,6 +191,7 @@ function BandRow({
             step={0.01}
             onValueChange={([v]) => onChange({ freq: Math.round(Math.pow(10, v)) })}
             className="flex-1"
+            aria-label={t("frequency")}
           />
           <span className="w-12 text-xs tabular-nums text-right">{band.freq >= 1000 ? `${(band.freq / 1000).toFixed(1)}k` : band.freq}</span>
         </div>
@@ -198,6 +204,7 @@ function BandRow({
             step={0.5}
             onValueChange={([v]) => onChange({ gain: v })}
             className="flex-1"
+            aria-label={t("gain")}
           />
           <span className="w-12 text-xs tabular-nums text-right">{band.gain > 0 ? "+" : ""}{band.gain.toFixed(1)}</span>
         </div>
@@ -210,18 +217,19 @@ function BandRow({
             step={0.1}
             onValueChange={([v]) => onChange({ q: Math.round(v * 10) / 10 })}
             className="flex-1"
+            aria-label={t("qFactor")}
           />
           <span className="w-12 text-xs tabular-nums text-right">{band.q.toFixed(1)}</span>
         </div>
       </div>
-      <Button variant="ghost" size="sm" onClick={onRemove} className="text-muted-foreground px-1">✕</Button>
+      <Button variant="ghost" size="sm" onClick={onRemove} className="text-muted-foreground px-1" aria-label={t("removeBand")}>✕</Button>
     </div>
   );
 }
 
 // ── Frequency Response Curve ──────────────────────────────────
 
-function FrequencyResponseCurve({ response }: { response: { freq: number; db: number }[] }) {
+function FrequencyResponseCurve({ response, curveLabel }: { response: { freq: number; db: number }[]; curveLabel: string }) {
   const width = 600;
   const height = 160;
   const pad = { top: 10, right: 10, bottom: 20, left: 35 };
@@ -244,7 +252,7 @@ function FrequencyResponseCurve({ response }: { response: { freq: number; db: nu
   const gridDbs = [-12, -6, 0, 6, 12];
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="w-full rounded-lg bg-muted/30 border border-border" style={{ minHeight: 120 }}>
+    <svg viewBox={`0 0 ${width} ${height}`} className="w-full rounded-lg bg-muted/30 border border-border" style={{ minHeight: 120 }} role="img" aria-label={curveLabel}>
       {/* Grid lines */}
       {gridFreqs.map((f) => (
         <line key={`f${f}`} x1={freqToX(f)} x2={freqToX(f)} y1={pad.top} y2={pad.top + plotH} stroke="currentColor" strokeOpacity={0.1} />

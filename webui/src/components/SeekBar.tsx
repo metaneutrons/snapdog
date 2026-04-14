@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import { Slider } from "@/components/ui/slider";
 import { api } from "@/lib/api";
 import type { ZoneState } from "@/stores/useAppStore";
@@ -13,6 +14,7 @@ function formatTime(ms: number): string {
 }
 
 export function SeekBar({ zone }: { zone: ZoneState }) {
+  const t = useTranslations("seek");
   const track = zone.track;
   const duration = track?.duration_ms ?? 0;
   const serverPosition = track?.position_ms ?? 0;
@@ -70,8 +72,8 @@ export function SeekBar({ zone }: { zone: ZoneState }) {
   );
 
   if (isIdle) return (
-    <div className="w-full md:max-w-xs space-y-1">
-      <Slider value={[0]} max={1} step={1} disabled className="w-full" />
+    <div className="w-full sm:max-w-xs space-y-1">
+      <Slider value={[0]} max={1} step={1} disabled className="w-full" aria-label={t("label")} />
       <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
         <span>--:--</span>
         <span>--:--</span>
@@ -80,7 +82,7 @@ export function SeekBar({ zone }: { zone: ZoneState }) {
   );
 
   return (
-    <div className="w-full md:max-w-xs space-y-1">
+    <div className="w-full sm:max-w-xs space-y-1">
       <Slider
         value={isEndless ? [0] : [localPosition]}
         max={isEndless ? 1 : (duration || 1)}
@@ -89,6 +91,7 @@ export function SeekBar({ zone }: { zone: ZoneState }) {
         onValueCommit={handleSeekCommit}
         disabled={!canSeek}
         className="w-full"
+        aria-label={t("label")}
       />
       <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
         <span>{formatTime(localPosition)}</span>
