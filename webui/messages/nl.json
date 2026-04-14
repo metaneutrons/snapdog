@@ -1,0 +1,91 @@
+{
+  "app": {
+    "title": "SnapDog",
+    "skipToContent": "Ga naar inhoud",
+    "connected": "Verbonden",
+    "disconnected": "Niet verbonden",
+    "language": "Taal"
+  },
+  "transport": {
+    "play": "Afspelen",
+    "pause": "Pauzeren",
+    "stop": "Stoppen",
+    "next": "Volgende",
+    "previous": "Vorige"
+  },
+  "shuffle": {
+    "on": "Willekeurig aan",
+    "off": "Willekeurig uit",
+    "repeatOn": "Herhaling aan",
+    "repeatOff": "Herhaling uit",
+    "trackRepeatOn": "Nummer herhalen aan",
+    "trackRepeatOff": "Nummer herhalen uit"
+  },
+  "volume": {
+    "label": "Volume",
+    "mute": "Dempen",
+    "unmute": "Dempen opheffen"
+  },
+  "seek": {
+    "label": "Zoeken"
+  },
+  "zone": {
+    "idle": "Inactief",
+    "noAudio": "Geen audio",
+    "playing": "Speelt af",
+    "navigation": "Zonenavigatie",
+    "zones": "Zones",
+    "unknownTitle": "Onbekend",
+    "unknownArtist": "Onbekende artiest",
+    "error": "Er is iets misgegaan",
+    "retry": "Opnieuw proberen"
+  },
+  "client": {
+    "clients": "{count, plural, one {# client} other {# clients}}",
+    "expand": "Clients tonen",
+    "collapse": "Clients verbergen",
+    "moveTo": "Verplaatsen naar zone",
+    "moveToLabel": "Verplaatsen naar",
+    "connected": "Verbonden",
+    "disconnected": "Niet verbonden",
+    "showOffline": "{count, plural, one {# offline — tonen} other {# offline — tonen}}",
+    "hideOffline": "Offline verbergen"
+  },
+  "eq": {
+    "title": "EQ — {zone}",
+    "close": "Equalizer sluiten",
+    "preset": "EQ-voorinstelling",
+    "enabled": "Ingeschakeld",
+    "addBand": "+ Band toevoegen",
+    "removeBand": "Band verwijderen",
+    "filterType": "Band {n} filtertype",
+    "frequency": "Frequentie",
+    "gain": "Versterking",
+    "qFactor": "Q-factor",
+    "curve": "EQ-frequentieresponsecurve"
+  },
+  "playlist": {
+    "loading": "Afspeellijsten laden…",
+    "empty": "Geen afspeellijsten beschikbaar",
+    "play": "{name} afspelen"
+  },
+  "auth": {
+    "title": "Authenticatie vereist",
+    "description": "Deze SnapDog-instantie vereist een API-sleutel. Voer een van de sleutels in die zijn geconfigureerd in {configKey} in uw {configFile}-bestand.",
+    "placeholder": "API-sleutel",
+    "submit": "Authenticeren",
+    "checking": "Controleren…",
+    "invalid": "Ongeldige API-sleutel. Probeer het opnieuw."
+  },
+  "connection": {
+    "lost": "Verbinding verbroken",
+    "reconnecting": "Opnieuw verbinden…"
+  },
+  "source": {
+    "radio": "Radio",
+    "subsonic_playlist": "Subsonic",
+    "subsonic_track": "Subsonic",
+    "airplay": "AirPlay",
+    "url": "URL"
+  }
+}
