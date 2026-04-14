@@ -8,7 +8,7 @@ use serde::Deserialize;
 // ── Raw TOML structs (what the user writes) ───────────────────
 
 /// Root of the TOML config file. Optional fields use defaults.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 pub struct RawConfig {
     /// System settings (log level, log file).
     #[serde(default)]

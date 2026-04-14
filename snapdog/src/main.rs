@@ -23,9 +23,33 @@ use snapdog::*;
 #[derive(Parser)]
 #[command(version, about)]
 struct Cli {
-    /// Path to configuration file
-    #[arg(short, long, default_value = "snapdog.toml")]
-    config: PathBuf,
+    /// Path to configuration file (optional — defaults are used if omitted)
+    #[arg(short, long)]
+    config: Option<PathBuf>,
+
+    /// HTTP API port
+    #[arg(short, long)]
+    port: Option<u16>,
+
+    /// Audio codec: flac, f32lz4, f32lz4e
+    #[arg(long)]
+    codec: Option<String>,
+
+    /// Sample rate
+    #[arg(long)]
+    sample_rate: Option<u32>,
+
+    /// Bit depth (16, 24, 32)
+    #[arg(long)]
+    bit_depth: Option<u16>,
+
+    /// Snapcast streaming port
+    #[arg(long)]
+    streaming_port: Option<u16>,
+
+    /// Log level: trace, debug, info, warn, error
+    #[arg(short, long)]
+    log_level: Option<String>,
 }
 
 /// Volume coalescing window — rapid volume changes within this window are merged.
@@ -37,9 +61,42 @@ const SNAPCAST_CMD_CHANNEL_SIZE: usize = 64;
 async fn main() -> Result<()> {
     // ── Parse config ──────────────────────────────────────────
     let cli = Cli::parse();
-    let config_path = &cli.config;
 
-    let config = Arc::new(config::load(config_path)?);
+    let mut app_config = if let Some(ref config_path) = cli.config {
+        config::load(config_path)?
+    } else if std::path::Path::new("snapdog.toml").exists() {
+        config::load(&PathBuf::from("snapdog.toml"))?
+    } else {
+        config::load_raw(config::RawConfig::default())?
+    };
+
+    // CLI overrides
+    if let Some(port) = cli.port {
+        app_config.http.port = port;
+    }
+    if let Some(ref codec) = cli.codec {
+        app_config.audio.codec = codec.clone();
+    }
+    if let Some(rate) = cli.sample_rate {
+        app_config.audio.sample_rate = rate;
+    }
+    if let Some(bits) = cli.bit_depth {
+        app_config.audio.bit_depth = bits;
+    }
+    if let Some(port) = cli.streaming_port {
+        app_config.snapcast.streaming_port = port;
+    }
+    if let Some(ref level) = cli.log_level {
+        app_config.system.log_level = level.clone();
+    }
+
+    let config_label = cli
+        .config
+        .as_deref()
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|| "defaults".into());
+
+    let config = Arc::new(app_config);
 
     // ── Initialize logging ────────────────────────────────────
     tracing_subscriber::fmt()
@@ -54,7 +111,7 @@ async fn main() -> Result<()> {
         clients = config.clients.len(),
         radios = config.radios.len(),
         "Configuration loaded from {}",
-        config_path.display()
+        config_label
     );
 
     // ── Initialize subsystems ─────────────────────────────────
@@ -133,7 +190,7 @@ async fn main() -> Result<()> {
     .await?;
 
     // ── API server ────────────────────────────────────────────
-    let api_config = config::load(&PathBuf::from(&config_path))?;
+    let api_config = (*config).clone();
     let api_store = store.clone();
     let api_commands = zone_commands.clone();
     let api_covers = covers.clone();
