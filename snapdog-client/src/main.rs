@@ -53,6 +53,7 @@ fn main() -> anyhow::Result<()> {
         instance: settings.instance,
         host_id: settings.host_id.clone(),
         latency: settings.player.latency,
+        client_name: "SnapDog".into(),
         ..ClientConfig::default()
     };
     let rt = tokio::runtime::Runtime::new()?;

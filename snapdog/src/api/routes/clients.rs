@@ -25,6 +25,7 @@ struct ClientInfo {
     volume: i32,
     muted: bool,
     connected: bool,
+    is_snapdog: bool,
 }
 
 pub fn router(state: SharedState) -> Router {
@@ -73,6 +74,7 @@ async fn get_all(State(state): State<SharedState>) -> Json<Vec<ClientInfo>> {
                     volume: cs.map_or(50, |s| s.base_volume),
                     muted: cs.is_some_and(|s| s.muted),
                     connected: cs.is_some_and(|s| s.connected),
+                    is_snapdog: cs.is_some_and(|s| s.is_snapdog),
                 }
             })
             .collect(),
@@ -92,6 +94,7 @@ async fn get_client(State(state): State<SharedState>, Path(idx): Path<usize>) ->
         volume: cs.map_or(50, |s| s.base_volume),
         muted: cs.is_some_and(|s| s.muted),
         connected: cs.is_some_and(|s| s.connected),
+        is_snapdog: cs.is_some_and(|s| s.is_snapdog),
     }))
 }
 

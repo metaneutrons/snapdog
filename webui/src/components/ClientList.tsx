@@ -98,13 +98,15 @@ function ClientCard({ client }: { client: ClientInfo }) {
               compact
             />
           </div>
-          <button
-            onClick={() => setShowEq(true)}
-            className="text-[10px] text-muted-foreground hover:text-foreground transition-colors px-1"
-            aria-label={`EQ ${client.name}`}
-          >
-            EQ
-          </button>
+          {client.is_snapdog && (
+            <button
+              onClick={() => setShowEq(true)}
+              className="text-[10px] text-muted-foreground hover:text-foreground transition-colors px-1"
+              aria-label={`EQ ${client.name}`}
+            >
+              EQ
+            </button>
+          )}
         </div>
       </div>
       {showEq && <EqOverlay clientId={client.index} label={client.name} onClose={() => setShowEq(false)} />}

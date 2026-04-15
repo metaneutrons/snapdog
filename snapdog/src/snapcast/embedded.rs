@@ -168,8 +168,8 @@ impl EmbeddedBackend {
     /// Map a `ServerEvent` to a `SnapcastEvent`.
     fn map_event(event: ServerEvent) -> Option<SnapcastEvent> {
         match event {
-            ServerEvent::ClientConnected { id, name, mac } => {
-                Some(SnapcastEvent::ClientConnected { id, name, mac })
+            ServerEvent::ClientConnected { id, hello } => {
+                Some(SnapcastEvent::ClientConnected { id, hello })
             }
             ServerEvent::ClientDisconnected { id } => {
                 Some(SnapcastEvent::ClientDisconnected { id })
@@ -504,12 +504,22 @@ mod tests {
     fn map_event_client_connected() {
         let event = ServerEvent::ClientConnected {
             id: "c1".into(),
-            name: "Kitchen".into(),
-            mac: "aa:bb:cc:dd:ee:ff".into(),
+            hello: snapcast_server::Hello {
+                mac: "aa:bb:cc:dd:ee:ff".into(),
+                host_name: "Kitchen".into(),
+                version: "0.1.0".into(),
+                client_name: "Snapclient".into(),
+                os: "Linux".into(),
+                arch: "x86_64".into(),
+                instance: 1,
+                id: "c1".into(),
+                snap_stream_protocol_version: 2,
+                auth: None,
+            },
         };
         let mapped = EmbeddedBackend::map_event(event).unwrap();
         assert!(
-            matches!(mapped, SnapcastEvent::ClientConnected { id, name, .. } if id == "c1" && name == "Kitchen")
+            matches!(mapped, SnapcastEvent::ClientConnected { id, ref hello } if id == "c1" && hello.host_name == "Kitchen")
         );
     }
 

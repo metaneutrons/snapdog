@@ -21,23 +21,30 @@ pub fn router(state: SharedState) -> Router {
         .with_state(state)
 }
 
-fn resolve_snap_id(state: &SharedState, idx: usize) -> Result<String, ApiError> {
-    let cfg = state
-        .config
-        .clients
-        .get(idx - 1)
-        .ok_or(ApiError::NotFound("client"))?;
-    // Use MAC as fallback identifier for snap_tx routing
-    Ok(cfg.mac.clone())
+/// Returns 400 if the client is not a SnapDog client.
+async fn require_snapdog(state: &SharedState, idx: usize) -> Result<(), ApiError> {
+    if idx == 0 || idx > state.config.clients.len() {
+        return Err(ApiError::NotFound("client"));
+    }
+    let store = state.store.read().await;
+    match store.clients.get(&idx) {
+        Some(c) if c.is_snapdog => Ok(()),
+        Some(_) => Err(ApiError::Unprocessable(
+            "Client does not support EQ (not a SnapDog client)".into(),
+        )),
+        None => Err(ApiError::NotFound("client")),
+    }
 }
 
 async fn snap_id(state: &SharedState, idx: usize) -> Result<String, ApiError> {
-    if let Some(client) = state.store.read().await.clients.get(&idx) {
-        if let Some(ref id) = client.snapcast_id {
-            return Ok(id.clone());
-        }
-    }
-    resolve_snap_id(state, idx)
+    state
+        .store
+        .read()
+        .await
+        .clients
+        .get(&idx)
+        .and_then(|c| c.snapcast_id.clone())
+        .ok_or(ApiError::NotFound("client"))
 }
 
 async fn send_eq(state: &SharedState, idx: usize, config: &EqConfig) -> Result<(), ApiError> {
@@ -57,11 +64,9 @@ async fn send_eq(state: &SharedState, idx: usize, config: &EqConfig) -> Result<(
 }
 
 async fn get_eq(State(state): State<SharedState>, Path(idx): Path<usize>) -> impl IntoResponse {
-    if idx == 0 || idx > state.config.clients.len() {
-        return Err(ApiError::NotFound("client"));
-    }
+    require_snapdog(&state, idx).await?;
     let config = state.eq_store.lock().unwrap().get_client(idx);
-    Ok(Json(config))
+    Ok::<_, ApiError>(Json(config))
 }
 
 async fn set_eq(
@@ -69,9 +74,7 @@ async fn set_eq(
     Path(idx): Path<usize>,
     Json(config): Json<EqConfig>,
 ) -> impl IntoResponse {
-    if idx == 0 || idx > state.config.clients.len() {
-        return Err(ApiError::NotFound("client"));
-    }
+    require_snapdog(&state, idx).await?;
     if config.bands.len() > 10 {
         return Err(ApiError::BadRequest("Maximum 10 EQ bands".into()));
     }
@@ -81,7 +84,7 @@ async fn set_eq(
         .unwrap()
         .set_client(idx, config.clone());
     send_eq(&state, idx, &config).await?;
-    Ok(Json(config))
+    Ok::<_, ApiError>(Json(config))
 }
 
 async fn set_band(
@@ -89,9 +92,7 @@ async fn set_band(
     Path((idx, band_idx)): Path<(usize, usize)>,
     Json(band): Json<EqBand>,
 ) -> impl IntoResponse {
-    if idx == 0 || idx > state.config.clients.len() {
-        return Err(ApiError::NotFound("client"));
-    }
+    require_snapdog(&state, idx).await?;
     let mut config = state.eq_store.lock().unwrap().get_client(idx);
     if band_idx >= config.bands.len() {
         return Err(ApiError::NotFound("band"));
@@ -104,7 +105,7 @@ async fn set_band(
         .unwrap()
         .set_client(idx, config.clone());
     send_eq(&state, idx, &config).await?;
-    Ok(Json(config))
+    Ok::<_, ApiError>(Json(config))
 }
 
 async fn apply_preset(
@@ -112,9 +113,7 @@ async fn apply_preset(
     Path(idx): Path<usize>,
     Json(name): Json<String>,
 ) -> impl IntoResponse {
-    if idx == 0 || idx > state.config.clients.len() {
-        return Err(ApiError::NotFound("client"));
-    }
+    require_snapdog(&state, idx).await?;
     let bands = eq::preset(&name).ok_or_else(|| {
         ApiError::BadRequest(format!(
             "Unknown preset '{}'. Available: {:?}",
@@ -133,5 +132,5 @@ async fn apply_preset(
         .unwrap()
         .set_client(idx, config.clone());
     send_eq(&state, idx, &config).await?;
-    Ok(Json(config))
+    Ok::<_, ApiError>(Json(config))
 }

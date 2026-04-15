@@ -43,20 +43,28 @@ async fn handle_event(
     eq_store: &SharedEqStore,
 ) {
     match event {
-        SnapcastEvent::ClientConnected { id, name, mac } => {
+        SnapcastEvent::ClientConnected { id, hello } => {
+            let is_snapdog = hello.client_name == "SnapDog";
             let zone_index = {
                 let mut s = store.write().await;
-                let matched = if mac.is_empty() {
-                    s.clients.iter_mut().find(|(_, c)| c.name == name)
+                let matched = if hello.mac.is_empty() {
+                    s.clients
+                        .iter_mut()
+                        .find(|(_, c)| c.name == hello.host_name)
                 } else {
                     s.clients
                         .iter_mut()
-                        .find(|(_, c)| c.mac.to_lowercase() == mac)
+                        .find(|(_, c)| c.mac.to_lowercase() == hello.mac)
                 };
                 if let Some((&client_index, client)) = matched {
                     client.connected = true;
                     client.snapcast_id = Some(id.clone());
-                    tracing::info!(client = %client.name, id = %id, "Client connected");
+                    client.is_snapdog = is_snapdog;
+                    tracing::info!(
+                        client = %client.name, id = %id,
+                        client_name = hello.client_name, version = hello.version,
+                        "Client connected"
+                    );
                     Some((client.zone_index, client_index))
                 } else {
                     None
@@ -84,19 +92,21 @@ async fn handle_event(
                     }
                 }
 
-                // Push persisted client EQ config
-                let eq_config = eq_store.lock().unwrap().get_client(client_index);
-                if eq_config.enabled && !eq_config.bands.is_empty() {
-                    if let Ok(payload) = serde_json::to_vec(&eq_config) {
-                        let _ = backend
-                            .execute(SnapcastCmd::Client {
-                                client_id: id,
-                                action: ClientAction::SendCustom {
-                                    type_id: TYPE_EQ_CONFIG,
-                                    payload,
-                                },
-                            })
-                            .await;
+                // Push persisted client EQ config (only to SnapDog clients)
+                if is_snapdog {
+                    let eq_config = eq_store.lock().unwrap().get_client(client_index);
+                    if eq_config.enabled && !eq_config.bands.is_empty() {
+                        if let Ok(payload) = serde_json::to_vec(&eq_config) {
+                            let _ = backend
+                                .execute(SnapcastCmd::Client {
+                                    client_id: id,
+                                    action: ClientAction::SendCustom {
+                                        type_id: TYPE_EQ_CONFIG,
+                                        payload,
+                                    },
+                                })
+                                .await;
+                        }
                     }
                 }
             }

@@ -65,6 +65,7 @@ export interface ClientInfo {
   volume: number;
   muted: boolean;
   connected: boolean;
+  is_snapdog: boolean;
 }
 
 // ── Media (Subsonic) ──────────────────────────────────────────
