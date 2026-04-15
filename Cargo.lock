@@ -4020,7 +4020,7 @@ dependencies = [
  "rustls-native-certs 0.8.3",
  "serde",
  "sha2",
- "snapcast-proto",
+ "snapcast-proto 0.6.0",
  "symphonia",
  "tokio",
  "tokio-rustls 0.26.4",
@@ -4031,6 +4031,18 @@ dependencies = [
 [[package]]
 name = "snapcast-proto"
 version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c48c4ac05677105ed5459be979b67255884a788695d5c0cab484d2ee83bce1a2"
+dependencies = [
+ "byteorder",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "snapcast-proto"
+version = "0.7.0"
 dependencies = [
  "byteorder",
  "serde",
@@ -4040,7 +4052,7 @@ dependencies = [
 
 [[package]]
 name = "snapcast-server"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "base64",
@@ -4055,7 +4067,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "snapcast-proto",
+ "snapcast-proto 0.7.0",
  "socket2 0.5.10",
  "subtle",
  "tokio",
@@ -4093,7 +4105,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shairplay",
- "snapcast-proto",
+ "snapcast-proto 0.7.0",
  "snapcast-server",
  "symphonia",
  "tempfile",
@@ -4120,7 +4132,7 @@ dependencies = [
  "cpal",
  "libc",
  "snapcast-client",
- "snapcast-proto",
+ "snapcast-proto 0.6.0",
  "tokio",
  "tracing",
  "tracing-appender",
