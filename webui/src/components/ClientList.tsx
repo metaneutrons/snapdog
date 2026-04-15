@@ -8,12 +8,14 @@ import { api } from "@/lib/api";
 import { useAppStore, type ZoneState } from "@/stores/useAppStore";
 import type { ClientInfo } from "@/lib/types";
 import { VolumeSlider } from "@/components/VolumeSlider";
+import { EqOverlay } from "@/components/EqOverlay";
 
 function ClientCard({ client }: { client: ClientInfo }) {
   const t = useTranslations("client");
   const zones = useAppStore((s) => s.zones);
   const otherZones = Array.from(zones.values()).filter((z) => z.index !== client.zone_index);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showEq, setShowEq] = useState(false);
 
   // Close menu on Escape
   useEffect(() => {
@@ -84,16 +86,28 @@ function ClientCard({ client }: { client: ClientInfo }) {
             </div>
           )}
         </div>
-        {/* Volume */}
-        <VolumeSlider
-          volume={client.volume}
-          muted={client.muted}
-          onVolumeChange={(v) => api.clients.setVolume(client.index, v).catch(() => {})}
-          onMuteToggle={() => api.clients.toggleMute(client.index).catch(() => {})}
-          onUnmute={() => api.clients.setMute(client.index, false).catch(() => {})}
-          compact
-        />
+        {/* Volume + EQ */}
+        <div className="flex items-center gap-1">
+          <div className="flex-1">
+            <VolumeSlider
+              volume={client.volume}
+              muted={client.muted}
+              onVolumeChange={(v) => api.clients.setVolume(client.index, v).catch(() => {})}
+              onMuteToggle={() => api.clients.toggleMute(client.index).catch(() => {})}
+              onUnmute={() => api.clients.setMute(client.index, false).catch(() => {})}
+              compact
+            />
+          </div>
+          <button
+            onClick={() => setShowEq(true)}
+            className="text-[10px] text-muted-foreground hover:text-foreground transition-colors px-1"
+            aria-label={`EQ ${client.name}`}
+          >
+            EQ
+          </button>
+        </div>
       </div>
+      {showEq && <EqOverlay clientId={client.index} label={client.name} onClose={() => setShowEq(false)} />}
     </div>
   );
 }
