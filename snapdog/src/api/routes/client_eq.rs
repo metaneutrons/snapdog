@@ -10,11 +10,8 @@ use axum::{Json, Router};
 
 use crate::api::SharedState;
 use crate::api::error::ApiError;
-use crate::audio::eq::{self, EqBand, EqConfig};
+use crate::audio::eq::{self, EqBand, EqConfig, TYPE_EQ_CONFIG};
 use crate::player::{ClientAction, SnapcastCmd};
-
-/// Custom message type ID for EQ config (9+ are free for custom use).
-const TYPE_EQ_CONFIG: u16 = 10;
 
 pub fn router(state: SharedState) -> Router {
     Router::new()

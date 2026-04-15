@@ -150,6 +150,11 @@ async fn main() -> Result<()> {
     #[cfg(all(feature = "snapcast-process", not(feature = "snapcast-embedded")))]
     let mut snap_notifications = snap.subscribe();
 
+    // EQ store (needed by event handler + zone players + API)
+    let eq_store = Arc::new(std::sync::Mutex::new(audio::eq::EqStore::load(
+        std::path::Path::new("eq.json"),
+    )));
+
     #[cfg(feature = "snapcast-embedded")]
     let (embedded_backend, embedded_events) =
         snapcast::embedded::EmbeddedBackend::start(&config, store.clone()).await?;
@@ -162,6 +167,7 @@ async fn main() -> Result<()> {
         backend.clone(),
         store.clone(),
         notify_tx.clone(),
+        eq_store.clone(),
     );
 
     #[cfg(all(feature = "snapcast-process", not(feature = "snapcast-embedded")))]
@@ -173,11 +179,6 @@ async fn main() -> Result<()> {
     // Snapcast command channel (used by zone players, API, MQTT, KNX)
     let (snap_cmd_tx, mut snap_cmd_rx) =
         tokio::sync::mpsc::channel::<player::SnapcastCmd>(SNAPCAST_CMD_CHANNEL_SIZE);
-
-    // EQ store
-    let eq_store = Arc::new(std::sync::Mutex::new(audio::eq::EqStore::load(
-        std::path::Path::new("eq.json"),
-    )));
 
     // ── Zone players ──────────────────────────────────────────
     let zone_commands = player::spawn_zone_players(player::ZonePlayerContext {

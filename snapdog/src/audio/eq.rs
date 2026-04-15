@@ -6,6 +6,9 @@
 //! Each band is a second-order IIR filter (biquad) applied independently
 //! per channel. Coefficients can be updated glitch-free between samples.
 
+/// Custom message type ID for EQ config over Snapcast custom-protocol.
+pub const TYPE_EQ_CONFIG: u16 = 10;
+
 use biquad::{Biquad, Coefficients, DirectForm2Transposed, Hertz, Q_BUTTERWORTH_F32, ToHertz};
 use serde::{Deserialize, Serialize};
 

@@ -6,10 +6,14 @@
 use std::sync::Arc;
 
 use crate::api;
+use crate::audio::eq::{EqStore, TYPE_EQ_CONFIG};
 use crate::config::AppConfig;
-use crate::player::{GroupAction, SnapcastCmd};
+use crate::player::{ClientAction, GroupAction, SnapcastCmd};
 use crate::snapcast::backend::{SnapcastBackend, SnapcastEvent};
 use crate::state;
+
+/// Shared EQ store type.
+pub type SharedEqStore = Arc<std::sync::Mutex<EqStore>>;
 
 /// Spawn a task that receives events from the backend and updates state.
 #[cfg(feature = "snapcast-embedded")]
@@ -19,11 +23,12 @@ pub fn spawn_event_handler(
     backend: Arc<dyn SnapcastBackend>,
     store: state::SharedState,
     notify: api::ws::NotifySender,
+    eq_store: SharedEqStore,
 ) {
     tokio::spawn(async move {
         tracing::info!("Snapcast event handler started");
         while let Some(event) = event_rx.recv().await {
-            handle_event(event, &config, &*backend, &store, &notify).await;
+            handle_event(event, &config, &*backend, &store, &notify, &eq_store).await;
         }
         tracing::info!("Snapcast event handler stopped");
     });
@@ -35,21 +40,24 @@ async fn handle_event(
     backend: &dyn SnapcastBackend,
     store: &state::SharedState,
     notify: &api::ws::NotifySender,
+    eq_store: &SharedEqStore,
 ) {
     match event {
         SnapcastEvent::ClientConnected { id, name, mac } => {
             let zone_index = {
                 let mut s = store.write().await;
                 let matched = if mac.is_empty() {
-                    s.clients.values_mut().find(|c| c.name == name)
+                    s.clients.iter_mut().find(|(_, c)| c.name == name)
                 } else {
-                    s.clients.values_mut().find(|c| c.mac.to_lowercase() == mac)
+                    s.clients
+                        .iter_mut()
+                        .find(|(_, c)| c.mac.to_lowercase() == mac)
                 };
-                if let Some(client) = matched {
+                if let Some((&client_index, client)) = matched {
                     client.connected = true;
                     client.snapcast_id = Some(id.clone());
                     tracing::info!(client = %client.name, id = %id, "Client connected");
-                    Some(client.zone_index)
+                    Some((client.zone_index, client_index))
                 } else {
                     None
                 }
@@ -59,7 +67,7 @@ async fn handle_event(
             // Setup zone group for connecting client.
             // - First connect: full setup (assign all connected clients, stream, name)
             // - Subsequent connects: only merge client into existing zone group if needed
-            if let Some(zone_index) = zone_index {
+            if let Some((zone_index, client_index)) = zone_index {
                 let zone_group_id = {
                     let s = store.read().await;
                     s.zones
@@ -73,6 +81,22 @@ async fn handle_event(
                     Some(gid) => {
                         // Client may be in a different group — merge into zone group
                         merge_client_into_group(&id, &gid, zone_index, backend, store).await;
+                    }
+                }
+
+                // Push persisted client EQ config
+                let eq_config = eq_store.lock().unwrap().get_client(client_index);
+                if eq_config.enabled && !eq_config.bands.is_empty() {
+                    if let Ok(payload) = serde_json::to_vec(&eq_config) {
+                        let _ = backend
+                            .execute(SnapcastCmd::Client {
+                                client_id: id,
+                                action: ClientAction::SendCustom {
+                                    type_id: TYPE_EQ_CONFIG,
+                                    payload,
+                                },
+                            })
+                            .await;
                     }
                 }
             }
