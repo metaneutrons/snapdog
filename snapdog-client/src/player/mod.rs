@@ -8,11 +8,17 @@ use snapcast_client::stream::Stream;
 use snapcast_client::time_provider::TimeProvider;
 use tokio::sync::mpsc;
 
+use crate::eq::ZoneEq;
+
+/// Shared EQ processor, updated from the event loop, read from the audio thread.
+pub type SharedEq = Arc<Mutex<ZoneEq>>;
+
 /// Start audio output. Waits for the Stream to have audio, then starts cpal.
 pub async fn play_audio(
     rx: mpsc::Receiver<AudioFrame>,
     stream: Arc<Mutex<Stream>>,
     time_provider: Arc<Mutex<TimeProvider>>,
+    eq: SharedEq,
 ) {
     // Drain audio_rx in background
     tokio::spawn(async move {
@@ -40,7 +46,7 @@ pub async fn play_audio(
     );
 
     std::thread::spawn(move || {
-        if let Err(e) = run_cpal(stream, time_provider, format) {
+        if let Err(e) = run_cpal(stream, time_provider, format, eq) {
             tracing::error!(error = %e, "Audio output failed");
         }
     });
@@ -50,6 +56,7 @@ fn run_cpal(
     stream: Arc<Mutex<Stream>>,
     time_provider: Arc<Mutex<TimeProvider>>,
     format: snapcast_proto::SampleFormat,
+    eq: SharedEq,
 ) -> anyhow::Result<()> {
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
@@ -122,6 +129,11 @@ fn run_cpal(
                     }
                 }
                 _ => data.fill(0.0),
+            }
+
+            // Apply EQ after PCM decode
+            if let Ok(mut eq) = eq.try_lock() {
+                eq.process(data);
             }
         },
         |err| tracing::error!(error = %err, "Audio stream error"),

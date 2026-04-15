@@ -10,8 +10,8 @@ name = "snapdog-client"
 path = "src/main.rs"
 
 [dependencies]
-snapcast-client = "0.6"
-snapcast-proto = "0.6"
+snapcast-client = "0.7"
+snapcast-proto = "0.7"
 tokio = { version = "1", features = ["full"] }
 clap = { version = "4", features = ["derive"] }
 tracing = "0.1"
@@ -21,6 +21,9 @@ anyhow = "1"
 base64 = "0.22"
 libc = "0.2"
 cpal = "0.15"
+biquad = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 [features]
 default = ["mdns", "f32lz4", "encryption", "custom-protocol"]

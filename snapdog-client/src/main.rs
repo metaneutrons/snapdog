@@ -1,4 +1,5 @@
 mod cli;
+mod eq;
 mod logging;
 mod player;
 
@@ -62,14 +63,19 @@ fn main() -> anyhow::Result<()> {
         let (mut client, mut events, audio_rx) = SnapClient::new(config);
         let cmd = client.command_sender();
 
+        // EQ processor — shared between event loop and audio thread
+        let eq = std::sync::Arc::new(std::sync::Mutex::new(eq::ZoneEq::new(48000, 2)));
+
         // Audio output: cpal callback reads from Stream directly
         let player_stream = std::sync::Arc::clone(&client.stream);
         let player_tp = std::sync::Arc::clone(&client.time_provider);
+        let player_eq = eq.clone();
         tokio::spawn(async move {
-            player::play_audio(audio_rx, player_stream, player_tp).await;
+            player::play_audio(audio_rx, player_stream, player_tp, player_eq).await;
         });
 
-        // Log events
+        // Event handler
+        let event_eq = eq.clone();
         tokio::spawn(async move {
             while let Some(event) = events.recv().await {
                 match event {
@@ -85,6 +91,23 @@ fn main() -> anyhow::Result<()> {
                     }
                     ClientEvent::StreamStarted { codec, format } => {
                         tracing::info!(%codec, %format, "Stream started");
+                    }
+                    #[cfg(feature = "custom-protocol")]
+                    ClientEvent::CustomMessage(msg) if msg.type_id == eq::TYPE_EQ_CONFIG => {
+                        match serde_json::from_slice::<eq::EqConfig>(&msg.payload) {
+                            Ok(config) => {
+                                tracing::info!(
+                                    enabled = config.enabled,
+                                    bands = config.bands.len(),
+                                    "EQ config received"
+                                );
+                                event_eq
+                                    .lock()
+                                    .unwrap_or_else(|e| e.into_inner())
+                                    .set_config(&config);
+                            }
+                            Err(e) => tracing::warn!(error = %e, "Invalid EQ config payload"),
+                        }
                     }
                     _ => {}
                 }

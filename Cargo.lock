@@ -388,6 +388,15 @@ dependencies = [
 
 [[package]]
 name = "biquad"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "820524f5e3e3add696ddf69f79575772e152c0e78e9f0370b56990a7e808ec3e"
+dependencies = [
+ "libm 0.1.4",
+]
+
+[[package]]
+name = "biquad"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8dee8f423f64504139bdc53d7fbe6a1cd8eff4f354be3652e7cf26385c9f1cb4"
@@ -2139,6 +2148,12 @@ dependencies = [
 
 [[package]]
 name = "libm"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7fc7aa29613bd6a620df431842069224d8bc9011086b1db4c0e0cd47fa03ec9a"
+
+[[package]]
+name = "libm"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
@@ -2698,7 +2713,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e661dda6640fad38e827a6d4a310ff4763082116fe217f279885c97f511bb0b7"
 dependencies = [
  "lazy_static",
- "libm",
+ "libm 0.2.16",
  "num-integer",
  "num-iter",
  "num-traits",
@@ -2760,7 +2775,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
- "libm",
+ "libm 0.2.16",
 ]
 
 [[package]]
@@ -4001,9 +4016,7 @@ checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 
 [[package]]
 name = "snapcast-client"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de027efd91b88f2f401796d79c0aed9f5ce873cf7a0699cf72e2ca991d0b8f43"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "chacha20poly1305",
@@ -4020,24 +4033,12 @@ dependencies = [
  "rustls-native-certs 0.8.3",
  "serde",
  "sha2",
- "snapcast-proto 0.6.0",
+ "snapcast-proto",
  "symphonia",
  "tokio",
  "tokio-rustls 0.26.4",
  "tokio-tungstenite 0.26.2",
  "tracing",
-]
-
-[[package]]
-name = "snapcast-proto"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c48c4ac05677105ed5459be979b67255884a788695d5c0cab484d2ee83bce1a2"
-dependencies = [
- "byteorder",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -4067,7 +4068,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "snapcast-proto 0.7.0",
+ "snapcast-proto",
  "socket2 0.5.10",
  "subtle",
  "tokio",
@@ -4081,7 +4082,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
- "biquad",
+ "biquad 0.6.0",
  "bytes",
  "clap",
  "crc32fast",
@@ -4105,7 +4106,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shairplay",
- "snapcast-proto 0.7.0",
+ "snapcast-proto",
  "snapcast-server",
  "symphonia",
  "tempfile",
@@ -4128,11 +4129,14 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "base64",
+ "biquad 0.4.2",
  "clap",
  "cpal",
  "libc",
+ "serde",
+ "serde_json",
  "snapcast-client",
- "snapcast-proto 0.6.0",
+ "snapcast-proto",
  "tokio",
  "tracing",
  "tracing-appender",
