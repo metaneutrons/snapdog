@@ -154,6 +154,12 @@ impl EmbeddedBackend {
                         latency: ms,
                     }]
                 }
+                ClientAction::SendCustom { type_id, payload } => {
+                    vec![ServerCommand::SendToClient {
+                        client_id,
+                        message: snapcast_server::CustomMessage::new(type_id, payload),
+                    }]
+                }
             },
             SnapcastCmd::ReconcileZones => unreachable!("handled in execute"),
         }
