@@ -86,6 +86,7 @@ fn main() -> anyhow::Result<()> {
         // Event handler
         let event_eq = eq.clone();
         tokio::spawn(async move {
+            let mut last_eq_config: Option<eq::EqConfig> = None;
             while let Some(event) = events.recv().await {
                 match event {
                     ClientEvent::Connected { host, port } => {
@@ -100,6 +101,11 @@ fn main() -> anyhow::Result<()> {
                     }
                     ClientEvent::StreamStarted { codec, format } => {
                         tracing::info!(%codec, %format, "Stream started");
+                        let mut eq = event_eq.lock().unwrap_or_else(|e| e.into_inner());
+                        *eq = eq::ZoneEq::new(format.rate(), format.channels());
+                        if let Some(ref config) = last_eq_config {
+                            eq.set_config(config);
+                        }
                     }
                     #[cfg(feature = "custom-protocol")]
                     ClientEvent::CustomMessage(msg) if msg.type_id == eq::TYPE_EQ_CONFIG => {
@@ -114,6 +120,7 @@ fn main() -> anyhow::Result<()> {
                                     .lock()
                                     .unwrap_or_else(|e| e.into_inner())
                                     .set_config(&config);
+                                last_eq_config = Some(config);
                             }
                             Err(e) => tracing::warn!(error = %e, "Invalid EQ config payload"),
                         }
