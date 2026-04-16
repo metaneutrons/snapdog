@@ -65,13 +65,22 @@ jobs:
           echo "OPENSSL_INCLUDE_DIR=/usr/include/aarch64-linux-gnu" >> $GITHUB_ENV
       - name: Build release
         run: cargo build --release --target ${{ matrix.target }}
+      - name: Package binary
+        shell: bash
+        run: |
+          cd target/${{ matrix.target }}/release
+          if [ -f snapdog.exe ]; then
+            mv snapdog.exe snapdog-${{ matrix.target }}.exe
+          else
+            mv snapdog snapdog-${{ matrix.target }}
+          fi
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: snapdog-${{ matrix.target }}
           path: |
-            target/${{ matrix.target }}/release/snapdog
-            target/${{ matrix.target }}/release/snapdog.exe
+            target/${{ matrix.target }}/release/snapdog-${{ matrix.target }}
+            target/${{ matrix.target }}/release/snapdog-${{ matrix.target }}.exe
 
   upload-release-artifacts:
     name: Upload Release Artifacts
