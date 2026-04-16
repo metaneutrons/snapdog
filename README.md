@@ -1,7 +1,7 @@
 <div align="center">
 
 <!-- Logo placeholder — replace with actual logo -->
-<img src="docs/logo.svg" alt="SnapDog" width="200">
+<img src="assets/snapdog-logo.svg" alt="SnapDog" width="200">
 
 # SnapDog
 
