@@ -15,8 +15,9 @@ RUN apt-get update && apt-get install -y cmake pkg-config && rm -rf /var/lib/apt
 WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
 COPY snapdog/ snapdog/
+COPY snapdog-client/ snapdog-client/
 COPY --from=webui-builder /build/webui/out webui/out
-RUN cargo build --release
+RUN cargo build --release -p snapdog
 
 # ── Runtime stage ─────────────────────────────────────────────
 FROM debian:bookworm-slim
