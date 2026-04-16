@@ -1,5 +1,5 @@
 FROM rust:1.94-alpine AS builder
-RUN apk add --no-cache musl-dev alsa-lib-dev pkgconf
+RUN apk add --no-cache musl-dev alsa-lib-dev alsa-lib-static pkgconf
 WORKDIR /build
 COPY . .
 RUN cargo build --release -p snapdog-client
