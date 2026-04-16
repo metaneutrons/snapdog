@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["snapdog"]
+members = ["snapdog", "snapdog-client"]
 
 [workspace.package]
 version = "0.1.0"
@@ -60,8 +60,8 @@ thiserror = "2"
 anyhow = "1"
 
 # Snapcast
-snapcast-server = { version = "0.6", features = ["flac", "encryption", "mdns"] }
-snapcast-proto = "0.6"
+snapcast-server = { version = "0.7", features = ["flac", "encryption", "mdns", "custom-protocol"] }
+snapcast-proto = "0.7"
 
 # Utilities
 md5 = "0.7"

@@ -80,7 +80,10 @@ pub async fn serve(
             "/api/v1/zones",
             routes::zones::router(state.clone()).merge(routes::eq::router(state.clone())),
         )
-        .nest("/api/v1/clients", routes::clients::router(state.clone()))
+        .nest(
+            "/api/v1/clients",
+            routes::clients::router(state.clone()).merge(routes::client_eq::router(state.clone())),
+        )
         .nest("/api/v1/media", routes::media::router(state.clone()))
         .nest("/api/v1/system", routes::system::router(state.clone()));
 

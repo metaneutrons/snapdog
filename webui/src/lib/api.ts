@@ -212,4 +212,11 @@ export const eq = {
   applyPreset: (zoneId: number, name: string) => post<EqConfig>(`${Z}/${zoneId}/eq/preset`, name),
 };
 
-export const api = { zones, clients, media, system, health, eq };
+export const clientEq = {
+  get: (clientId: number) => get<EqConfig>(`${C}/${clientId}/eq`),
+  set: (clientId: number, config: EqConfig) => put<EqConfig>(`${C}/${clientId}/eq`, config),
+  setBand: (clientId: number, idx: number, band: EqBand) => put<EqConfig>(`${C}/${clientId}/eq/${idx}`, band),
+  applyPreset: (clientId: number, name: string) => post<EqConfig>(`${C}/${clientId}/eq/preset`, name),
+};
+
+export const api = { zones, clients, media, system, health, eq, clientEq };

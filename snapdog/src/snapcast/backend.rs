@@ -17,10 +17,8 @@ pub enum SnapcastEvent {
     ClientConnected {
         /// Snapcast client ID.
         id: String,
-        /// Client hostname.
-        name: String,
-        /// Client MAC address (lowercase).
-        mac: String,
+        /// The client's Hello message.
+        hello: snapcast_server::Hello,
     },
     /// A client disconnected.
     ClientDisconnected {

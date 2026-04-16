@@ -11,28 +11,33 @@ const FILTER_TYPES = ["low_shelf", "high_shelf", "peaking", "low_pass", "high_pa
 const PRESETS = ["flat", "bass_boost", "treble_boost", "vocal", "loudness"];
 
 interface EqOverlayProps {
-  zoneId: number;
-  zoneName: string;
+  zoneId?: number;
+  clientId?: number;
+  label: string;
   onClose: () => void;
 }
 
 const DEFAULT_BAND: EqBand = { freq: 1000, gain: 0, q: 1.0, type: "peaking" };
 
-export function EqOverlay({ zoneId, zoneName, onClose }: EqOverlayProps) {
+export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) {
   const t = useTranslations("eq");
   const [config, setConfig] = useState<EqConfig>({ enabled: false, bands: [], preset: "flat" });
   const [abBypass, setAbBypass] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const eqApi = clientId
+    ? { get: () => api.clientEq.get(clientId), set: (c: EqConfig) => api.clientEq.set(clientId, c), applyPreset: (n: string) => api.clientEq.applyPreset(clientId, n) }
+    : { get: () => api.eq.get(zoneId!), set: (c: EqConfig) => api.eq.set(zoneId!, c), applyPreset: (n: string) => api.eq.applyPreset(zoneId!, n) };
+
   // Load current EQ
   useEffect(() => {
-    api.eq.get(zoneId).then((c) => { setConfig(c); setLoading(false); }).catch(() => setLoading(false));
-  }, [zoneId]);
+    eqApi.get().then((c) => { setConfig(c); setLoading(false); }).catch(() => setLoading(false));
+  }, [zoneId, clientId]);
 
   // Debounced push to server
   const pushConfig = useCallback(
-    (c: EqConfig) => { api.eq.set(zoneId, c).catch(() => {}); },
-    [zoneId],
+    (c: EqConfig) => { eqApi.set(c).catch(() => {}); },
+    [zoneId, clientId],
   );
 
   const update = useCallback(
@@ -68,7 +73,7 @@ export function EqOverlay({ zoneId, zoneName, onClose }: EqOverlayProps) {
   };
 
   const applyPreset = (name: string) => {
-    api.eq.applyPreset(zoneId, name).then(setConfig).catch(() => {});
+    eqApi.applyPreset(name).then(setConfig).catch(() => {});
   };
 
   const toggleAB = () => {
@@ -88,12 +93,12 @@ export function EqOverlay({ zoneId, zoneName, onClose }: EqOverlayProps) {
   if (loading) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label={t("title", { zone: zoneName })} onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label={t("title", { zone: label })} onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}>
       <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onClose} role="presentation" />
       <div className="relative z-10 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-xl space-y-5" ref={(el) => el?.focus()} tabIndex={-1}>
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{t("title", { zone: zoneName })}</h2>
+          <h2 className="text-lg font-semibold">{t("title", { zone: label })}</h2>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={toggleAB} className={abBypass ? "text-muted-foreground" : "text-primary font-semibold"}>
               A/B
