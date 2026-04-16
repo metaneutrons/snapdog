@@ -86,8 +86,3 @@ lto = true
 strip = true
 codegen-units = 1
 
-
-[patch.crates-io]
-snapcast-server = { path = "../snapcast-rs/crates/snapcast-server" }
-snapcast-client = { path = "../snapcast-rs/crates/snapcast-client" }
-snapcast-proto = { path = "../snapcast-rs/crates/snapcast-proto" }

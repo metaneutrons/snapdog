@@ -4017,6 +4017,8 @@ checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 [[package]]
 name = "snapcast-client"
 version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2bd4c1338b3fa67da32491d20c07f39e35773880828a428a76a68d1ae6bc00e"
 dependencies = [
  "anyhow",
  "chacha20poly1305",
@@ -4044,6 +4046,8 @@ dependencies = [
 [[package]]
 name = "snapcast-proto"
 version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28f08a6a5ca90ac3817c8a8a0e1b91964c3328757c632af390b36a985df3d151"
 dependencies = [
  "byteorder",
  "serde",
@@ -4054,6 +4058,8 @@ dependencies = [
 [[package]]
 name = "snapcast-server"
 version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe978bb66263c8beb7390b9dbcb9199fc515a64b6352f10cda918e9c0f1814a4"
 dependencies = [
  "anyhow",
  "base64",
