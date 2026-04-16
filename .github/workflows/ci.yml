@@ -106,7 +106,7 @@ jobs:
           SNAPDOG_TEST_MQTT_PASSWORD=
           EOF
       - name: Run integration tests
-        run: cargo test --test integration -- --test-threads=1
+        run: cargo test --features snapcast-process --test integration -- --test-threads=1
 
   audit:
     name: Security Audit
