@@ -18,6 +18,7 @@ fn main() -> anyhow::Result<()> {
 
     #[cfg(feature = "encryption")]
     let encryption_psk = cli.encryption_psk.clone();
+    let null_player = cli.player == "null";
     let settings = cli.into_settings()?;
 
     #[cfg(unix)]
@@ -70,9 +71,17 @@ fn main() -> anyhow::Result<()> {
         let player_stream = std::sync::Arc::clone(&client.stream);
         let player_tp = std::sync::Arc::clone(&client.time_provider);
         let player_eq = eq.clone();
-        tokio::spawn(async move {
-            player::play_audio(audio_rx, player_stream, player_tp, player_eq).await;
-        });
+        if null_player {
+            tracing::info!("Null player — audio output disabled");
+            tokio::spawn(async move {
+                let mut rx = audio_rx;
+                while rx.recv().await.is_some() {}
+            });
+        } else {
+            tokio::spawn(async move {
+                player::play_audio(audio_rx, player_stream, player_tp, player_eq).await;
+            });
+        }
 
         // Event handler
         let event_eq = eq.clone();

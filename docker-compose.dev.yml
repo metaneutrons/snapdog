@@ -19,7 +19,7 @@ services:
     build:
       context: .
       dockerfile: devcontainer/snapdog-client/Dockerfile
-    command: ["snapdog-client", "--url", "tcp://host.docker.internal"]
+    command: ["snapdog-client", "--url", "tcp://host.docker.internal", "--player", "null"]
     networks:
       snapdog-dev:
         mac_address: 02:42:ac:11:00:12

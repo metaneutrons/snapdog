@@ -1,0 +1,7 @@
+target/
+devcontainer/
+.git/
+.github/
+webui/node_modules/
+webui/.next/
+*.md
