@@ -94,6 +94,13 @@ pub enum ClientAction {
     Mute(bool),
     /// Set the client latency offset in milliseconds.
     Latency(i32),
+    /// Send a custom binary message to the client.
+    SendCustom {
+        /// Custom message type ID (9+).
+        type_id: u16,
+        /// Raw payload bytes.
+        payload: Vec<u8>,
+    },
 }
 
 /// Stop the current decode task and clear the PCM receiver.

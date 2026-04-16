@@ -37,6 +37,12 @@ impl EmbeddedBackend {
         config: &AppConfig,
         store: state::SharedState,
     ) -> Result<(Self, EmbeddedEventReceiver)> {
+        // Validate codec
+        match config.audio.codec.as_str() {
+            "flac" | "f32lz4" | "f32lz4e" => {}
+            other => anyhow::bail!("unsupported codec '{other}', expected: flac, f32lz4, f32lz4e"),
+        }
+
         // Resolve f32lz4e → f32lz4 + encryption
         let (codec, encryption_psk) = if config.audio.codec == "f32lz4e" {
             let psk = config
@@ -59,6 +65,8 @@ impl EmbeddedBackend {
             sample_format: config.audio.sample_format(),
             encryption_psk,
             state_file: Some("snapcast-state.json".into()),
+            mdns_service_type: config.snapcast.mdns_service_type.clone(),
+            mdns_name: config.snapcast.mdns_name.clone(),
             ..ServerConfig::default()
         };
 
@@ -146,6 +154,12 @@ impl EmbeddedBackend {
                         latency: ms,
                     }]
                 }
+                ClientAction::SendCustom { type_id, payload } => {
+                    vec![ServerCommand::SendToClient {
+                        client_id,
+                        message: snapcast_server::CustomMessage::new(type_id, payload),
+                    }]
+                }
             },
             SnapcastCmd::ReconcileZones => unreachable!("handled in execute"),
         }
@@ -154,8 +168,8 @@ impl EmbeddedBackend {
     /// Map a `ServerEvent` to a `SnapcastEvent`.
     fn map_event(event: ServerEvent) -> Option<SnapcastEvent> {
         match event {
-            ServerEvent::ClientConnected { id, name, mac } => {
-                Some(SnapcastEvent::ClientConnected { id, name, mac })
+            ServerEvent::ClientConnected { id, hello } => {
+                Some(SnapcastEvent::ClientConnected { id, hello })
             }
             ServerEvent::ClientDisconnected { id } => {
                 Some(SnapcastEvent::ClientDisconnected { id })
@@ -490,12 +504,22 @@ mod tests {
     fn map_event_client_connected() {
         let event = ServerEvent::ClientConnected {
             id: "c1".into(),
-            name: "Kitchen".into(),
-            mac: "aa:bb:cc:dd:ee:ff".into(),
+            hello: snapcast_server::Hello {
+                mac: "aa:bb:cc:dd:ee:ff".into(),
+                host_name: "Kitchen".into(),
+                version: "0.1.0".into(),
+                client_name: "Snapclient".into(),
+                os: "Linux".into(),
+                arch: "x86_64".into(),
+                instance: 1,
+                id: "c1".into(),
+                snap_stream_protocol_version: 2,
+                auth: None,
+            },
         };
         let mapped = EmbeddedBackend::map_event(event).unwrap();
         assert!(
-            matches!(mapped, SnapcastEvent::ClientConnected { id, name, .. } if id == "c1" && name == "Kitchen")
+            matches!(mapped, SnapcastEvent::ClientConnected { id, ref hello } if id == "c1" && hello.host_name == "Kitchen")
         );
     }
 

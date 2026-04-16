@@ -16,8 +16,10 @@ services:
     restart: unless-stopped
 
   snapclient-bedroom:
-    build: ./devcontainer/snapcast-client
-    command: ["snapclient", "--host", "host.docker.internal", "--player", "file:filename=/dev/null"]
+    build:
+      context: .
+      dockerfile: devcontainer/snapdog-client/Dockerfile
+    command: ["snapdog-client", "--url", "tcp://host.docker.internal", "--player", "null"]
     networks:
       snapdog-dev:
         mac_address: 02:42:ac:11:00:12

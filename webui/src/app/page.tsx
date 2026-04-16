@@ -256,7 +256,7 @@ function ZoneDetail({ zone }: { zone: ZoneState }) {
         <ClientList zone={zone} />
         <PlaylistBrowser zone={zone} />
       </div>
-      {showEq && <EqOverlay zoneId={zone.index} zoneName={zone.name} onClose={() => setShowEq(false)} />}
+      {showEq && <EqOverlay zoneId={zone.index} label={zone.name} onClose={() => setShowEq(false)} />}
     </div>
   );
 }

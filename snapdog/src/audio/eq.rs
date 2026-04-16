@@ -6,6 +6,9 @@
 //! Each band is a second-order IIR filter (biquad) applied independently
 //! per channel. Coefficients can be updated glitch-free between samples.
 
+/// Custom message type ID for EQ config over Snapcast custom-protocol.
+pub const TYPE_EQ_CONFIG: u16 = 10;
+
 use biquad::{Biquad, Coefficients, DirectForm2Transposed, Hertz, Q_BUTTERWORTH_F32, ToHertz};
 use serde::{Deserialize, Serialize};
 
@@ -68,46 +71,70 @@ impl Default for EqConfig {
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-/// Per-zone EQ store. Loads from / saves to eq.json.
+/// Serialized form for eq.json.
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct EqStoreData {
+    #[serde(default)]
+    zones: HashMap<usize, EqConfig>,
+    #[serde(default)]
+    clients: HashMap<usize, EqConfig>,
+}
+
+/// Per-zone and per-client EQ store. Loads from / saves to eq.json.
 pub struct EqStore {
-    configs: HashMap<usize, EqConfig>,
+    data: EqStoreData,
     path: Option<PathBuf>,
 }
 
 impl EqStore {
     /// Load from file, or create empty.
     pub fn load(path: &Path) -> Self {
-        let configs = if path.exists() {
+        let data: EqStoreData = if path.exists() {
             std::fs::read_to_string(path)
                 .ok()
                 .and_then(|s| serde_json::from_str(&s).ok())
                 .unwrap_or_default()
         } else {
-            HashMap::new()
+            EqStoreData::default()
         };
-        if !configs.is_empty() {
-            tracing::info!(zones = configs.len(), "EQ config loaded");
+        if !data.zones.is_empty() || !data.clients.is_empty() {
+            tracing::info!(
+                zones = data.zones.len(),
+                clients = data.clients.len(),
+                "EQ config loaded"
+            );
         }
         Self {
-            configs,
+            data,
             path: Some(path.to_owned()),
         }
     }
 
     /// Get EQ config for a zone.
     pub fn get(&self, zone: usize) -> EqConfig {
-        self.configs.get(&zone).cloned().unwrap_or_default()
+        self.data.zones.get(&zone).cloned().unwrap_or_default()
     }
 
     /// Set EQ config for a zone and persist.
     pub fn set(&mut self, zone: usize, config: EqConfig) {
-        self.configs.insert(zone, config);
+        self.data.zones.insert(zone, config);
+        self.save();
+    }
+
+    /// Get EQ config for a client.
+    pub fn get_client(&self, client: usize) -> EqConfig {
+        self.data.clients.get(&client).cloned().unwrap_or_default()
+    }
+
+    /// Set EQ config for a client and persist.
+    pub fn set_client(&mut self, client: usize, config: EqConfig) {
+        self.data.clients.insert(client, config);
         self.save();
     }
 
     fn save(&self) {
         if let Some(ref path) = self.path {
-            if let Ok(json) = serde_json::to_string_pretty(&self.configs) {
+            if let Ok(json) = serde_json::to_string_pretty(&self.data) {
                 if let Err(e) = std::fs::write(path, json) {
                     tracing::warn!(error = %e, "Failed to save eq.json");
                 }

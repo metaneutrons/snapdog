@@ -113,6 +113,9 @@ pub struct ClientState {
     pub connected: bool,
     /// Snapcast client ID (set after Snapcast sync).
     pub snapcast_id: Option<String>,
+    /// Whether this is a SnapDog client (supports custom protocol features like EQ).
+    #[serde(default)]
+    pub is_snapdog: bool,
 }
 
 fn default_volume() -> i32 {
@@ -259,6 +262,7 @@ impl Store {
                         latency_ms: 0,
                         connected: false,
                         snapcast_id: None,
+                        is_snapdog: false,
                     },
                 )
             })
