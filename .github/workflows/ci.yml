@@ -63,15 +63,6 @@ jobs:
     name: Integration Tests
     runs-on: ubuntu-latest
     services:
-      mqtt:
-        image: eclipse-mosquitto:2.0
-        ports:
-          - 1883:1883
-        options: >-
-          --health-cmd "mosquitto_sub -t '$$SYS/#' -C 1 -W 3 || true"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 5
       navidrome:
         image: deluan/navidrome:latest
         ports:
@@ -91,10 +82,12 @@ jobs:
       - name: Build WebUI
         working-directory: webui
         run: npm ci && npm run build
-      - name: Install snapserver
+      - name: Install snapserver + mosquitto
         run: |
           sudo apt-get update
-          sudo apt-get install -y snapserver libasound2-dev
+          sudo apt-get install -y snapserver libasound2-dev mosquitto
+          printf "listener 1883\nallow_anonymous true\n" | sudo tee /etc/mosquitto/conf.d/ci.conf
+          sudo systemctl restart mosquitto
       - name: Create test env
         run: |
           cat > .env.test << EOF
