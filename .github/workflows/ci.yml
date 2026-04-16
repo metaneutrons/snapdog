@@ -30,6 +30,7 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev
       - uses: actions/setup-node@v6
         with:
           node-version: 25
@@ -47,6 +48,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev
       - uses: actions/setup-node@v6
         with:
           node-version: 25
@@ -92,7 +94,7 @@ jobs:
       - name: Install snapserver
         run: |
           sudo apt-get update
-          sudo apt-get install -y snapserver
+          sudo apt-get install -y snapserver libasound2-dev
       - name: Create test env
         run: |
           cat > .env.test << EOF
