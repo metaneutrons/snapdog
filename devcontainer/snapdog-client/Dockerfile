@@ -1,11 +1,13 @@
-FROM rust:1.94-alpine AS builder
-RUN apk add --no-cache musl-dev alsa-lib-dev alsa-lib-static pkgconf
+FROM rust:1-bookworm AS builder
+RUN apt-get update && apt-get install -y libasound2-dev pkg-config && rm -rf /var/lib/apt/lists/*
 WORKDIR /build
 COPY . .
 RUN cargo build --release -p snapdog-client
 
-FROM alpine:3.21
-RUN apk add --no-cache dumb-init alsa-lib
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libasound2 ca-certificates dumb-init \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /build/target/release/snapdog-client /usr/local/bin/
 ENTRYPOINT ["dumb-init", "snapdog-client"]
 CMD ["--url", "tcp://host.docker.internal"]
