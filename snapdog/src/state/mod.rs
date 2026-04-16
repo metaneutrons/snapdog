@@ -162,6 +162,8 @@ pub enum SourceType {
     Url,
     /// AirPlay receiver (passive, preempts other sources).
     AirPlay,
+    /// Spotify Connect receiver (passive, preempts other sources).
+    Spotify,
 }
 
 impl std::fmt::Display for SourceType {
@@ -173,6 +175,7 @@ impl std::fmt::Display for SourceType {
             Self::SubsonicTrack => write!(f, "subsonic_track"),
             Self::Url => write!(f, "url"),
             Self::AirPlay => write!(f, "airplay"),
+            Self::Spotify => write!(f, "spotify"),
         }
     }
 }

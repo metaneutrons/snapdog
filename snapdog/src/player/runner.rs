@@ -97,6 +97,38 @@ async fn run(
         }
     };
 
+    // Spotify Connect: F32 audio channel + event channel + receiver instance
+    #[cfg(feature = "spotify")]
+    let (mut spotify_audio_rx, mut spotify_event_rx, mut _spotify_receiver) = {
+        let (audio_tx, audio_rx) = crate::receiver::audio_channel(128);
+        let (event_tx, event_rx) = mpsc::channel::<crate::receiver::ReceiverEvent>(32);
+        let receiver = if let Some(ref sp_config) = config.spotify {
+            let mut sp = crate::receiver::spotify::SpotifyReceiver::new(
+                crate::config::SpotifyConfig {
+                    name: format!("{} (Spotify)", zone_config.name),
+                    bitrate: sp_config.bitrate,
+                },
+                zone_index,
+            );
+            match sp.start(audio_tx, event_tx).await {
+                Ok(()) => Some(sp),
+                Err(e) => {
+                    tracing::warn!(zone = zone_index, error = %e, "Spotify receiver failed to start");
+                    None
+                }
+            }
+        } else {
+            None
+        };
+        (audio_rx, event_rx, receiver)
+    };
+    #[cfg(not(feature = "spotify"))]
+    let (mut spotify_audio_rx, mut spotify_event_rx) = {
+        let (_tx1, rx1) = crate::receiver::audio_channel(1);
+        let (_tx2, rx2) = mpsc::channel::<crate::receiver::ReceiverEvent>(1);
+        (rx1, rx2)
+    };
+
     // Decode task state
     let mut current_decode: Option<JoinHandle<()>> = None;
     let mut decode_rx: Option<mpsc::Receiver<audio::PcmMessage>> = None;
@@ -202,7 +234,7 @@ async fn run(
                         }
                     }
                     ZoneCommand::Play => {
-                        if matches!(source, ActiveSource::AirPlay) {
+                        if matches!(source, ActiveSource::AirPlay | ActiveSource::Spotify) {
                             if let Some(ref rc) = remote_control {
                                 if let Err(e) = rc.send_command(crate::receiver::RemoteCommand::Play) { tracing::warn!(error = %e, "Remote play failed"); }
                             }
@@ -259,7 +291,7 @@ async fn run(
                         }
                     }
                     ZoneCommand::Pause => {
-                        if matches!(source, ActiveSource::AirPlay) {
+                        if matches!(source, ActiveSource::AirPlay | ActiveSource::Spotify) {
                             if let Some(ref rc) = remote_control {
                                 if let Err(e) = rc.send_command(crate::receiver::RemoteCommand::Pause) { tracing::warn!(error = %e, "Remote pause failed"); }
                             }
@@ -274,14 +306,14 @@ async fn run(
                         update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Stopped; z.source = SourceType::Idle; z.track = None; z.cover_url = None; }).await;
                     }
                     ZoneCommand::Next => {
-                        if matches!(source, ActiveSource::AirPlay) {
+                        if matches!(source, ActiveSource::AirPlay | ActiveSource::Spotify) {
                             if let Some(ref rc) = remote_control { let _ = rc.send_command(crate::receiver::RemoteCommand::NextTrack); }
                         } else {
                             handle_next(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers }).await;
                         }
                     }
                     ZoneCommand::Previous => {
-                        if matches!(source, ActiveSource::AirPlay) {
+                        if matches!(source, ActiveSource::AirPlay | ActiveSource::Spotify) {
                             if let Some(ref rc) = remote_control { let _ = rc.send_command(crate::receiver::RemoteCommand::PreviousTrack); }
                         } else {
                             handle_previous(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers }).await;
@@ -550,10 +582,77 @@ async fn run(
                         remote_control = Some(remote);
                     }
                     ReceiverEvent::SessionEnded => {
-                        source = ActiveSource::Idle;
-                        remote_control = None;
-                        covers.write().await.clear(zone_index);
-                        update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Stopped; z.source = SourceType::Idle; z.track = None; z.cover_url = None; }).await;
+                        if matches!(source, ActiveSource::AirPlay) {
+                            source = ActiveSource::Idle;
+                            remote_control = None;
+                            covers.write().await.clear(zone_index);
+                            update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Stopped; z.source = SourceType::Idle; z.track = None; z.cover_url = None; }).await;
+                        }
+                    }
+                }
+            }
+            // ── Spotify Connect: audio ────────────────────────────
+            Some(samples) = spotify_audio_rx.recv() => {
+                if !matches!(source, ActiveSource::Spotify) {
+                    stop_decode(&mut current_decode, &mut decode_rx).await; position_offset_ms = 0;
+                    source = ActiveSource::Spotify;
+                    update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Playing; z.source = SourceType::Spotify; }).await;
+                }
+                let mut samples = match &mut receiver_resampler {
+                    Some(r) => match r.process(&samples) {
+                        Some(resampled) => resampled,
+                        None => continue,
+                    },
+                    None => samples,
+                };
+                zone_eq.process(&mut samples);
+                if let Err(e) = backend.send_audio(zone_index, &samples, config.audio.sample_rate, config.audio.channels).await {
+                    tracing::error!(zone = zone_index, error = %e, "Audio send failed (Spotify)");
+                }
+            }
+            // ── Spotify Connect: events ───────────────────────────
+            Some(event) = spotify_event_rx.recv() => {
+                use crate::receiver::ReceiverEvent;
+                match event {
+                    ReceiverEvent::SessionStarted { format } => {
+                        receiver_resampler = Some(audio::resample::F32Resampling::new(format.sample_rate, config.audio.sample_rate, format.channels));
+                    }
+                    ReceiverEvent::Metadata { title, artist, album } => {
+                        update_and_notify(store, zone_index, notify, |z| {
+                            z.track = Some(TrackInfo { title, artist, album, album_artist: None, genre: None, year: None, track_number: None, disc_number: None, duration_ms: 0, position_ms: 0, seekable: false, source: SourceType::Spotify, bitrate_kbps: None, content_type: None, sample_rate: None });
+                        }).await;
+                    }
+                    ReceiverEvent::CoverArt { bytes } => {
+                        let mut cache = covers.write().await;
+                        cache.set_auto_mime(zone_index, bytes);
+                        let hash = cache.get(zone_index).map(|e| e.hash.clone());
+                        drop(cache);
+                        if let Some(h) = hash {
+                            let url = format!("/api/v1/zones/{zone_index}/cover?h={h}");
+                            update_and_notify(store, zone_index, notify, |z| {
+                                z.cover_url = Some(url.clone());
+                            }).await;
+                        }
+                    }
+                    ReceiverEvent::Progress { position_ms, duration_ms } => {
+                        update_and_notify(store, zone_index, notify, |z| { if let Some(ref mut t) = z.track { t.position_ms = position_ms as i64; t.duration_ms = duration_ms as i64; } }).await;
+                    }
+                    ReceiverEvent::Volume { percent } => {
+                        update_and_notify(store, zone_index, notify, |z| z.volume = percent).await;
+                        if let Some(ref gid) = group_id {
+                            let _ = ctx.snap_tx.send(SnapcastCmd::Group { group_id: gid.clone(), action: GroupAction::Volume(percent) }).await;
+                        }
+                    }
+                    ReceiverEvent::RemoteAvailable { remote } => {
+                        remote_control = Some(remote);
+                    }
+                    ReceiverEvent::SessionEnded => {
+                        if matches!(source, ActiveSource::Spotify) {
+                            source = ActiveSource::Idle;
+                            remote_control = None;
+                            covers.write().await.clear(zone_index);
+                            update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Stopped; z.source = SourceType::Idle; z.track = None; z.cover_url = None; }).await;
+                        }
                     }
                 }
             }

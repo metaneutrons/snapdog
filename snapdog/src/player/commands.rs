@@ -95,4 +95,6 @@ pub enum ActiveSource {
     Url,
     /// Receiving audio from an AirPlay client.
     AirPlay,
+    /// Receiving audio from a Spotify Connect client.
+    Spotify,
 }

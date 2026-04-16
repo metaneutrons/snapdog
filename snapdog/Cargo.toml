@@ -54,7 +54,7 @@ snapcast-server = { workspace = true, optional = true }
 snapcast-proto = { workspace = true }
 
 [features]
-default = ["snapcast-embedded"]
+default = ["snapcast-embedded", "spotify"]
 snapcast-embedded = ["dep:snapcast-server"]
 snapcast-process = []
 ap2 = ["shairplay/ap2"]
