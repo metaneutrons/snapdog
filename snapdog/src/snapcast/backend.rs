@@ -10,6 +10,19 @@ use anyhow::Result;
 
 use crate::player::SnapcastCmd;
 
+/// Client identification from the Snapcast Hello handshake.
+#[derive(Debug, Clone, Default)]
+pub struct ClientHello {
+    /// Client-reported name (e.g. "SnapDog").
+    pub client_name: String,
+    /// MAC address.
+    pub mac: String,
+    /// Hostname.
+    pub host_name: String,
+    /// Client version string.
+    pub version: String,
+}
+
 /// Events emitted by the Snapcast backend to the consumer.
 #[derive(Debug)]
 pub enum SnapcastEvent {
@@ -18,7 +31,7 @@ pub enum SnapcastEvent {
         /// Snapcast client ID.
         id: String,
         /// The client's Hello message.
-        hello: snapcast_server::Hello,
+        hello: ClientHello,
     },
     /// A client disconnected.
     ClientDisconnected {

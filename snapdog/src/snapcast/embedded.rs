@@ -168,9 +168,15 @@ impl EmbeddedBackend {
     /// Map a `ServerEvent` to a `SnapcastEvent`.
     fn map_event(event: ServerEvent) -> Option<SnapcastEvent> {
         match event {
-            ServerEvent::ClientConnected { id, hello } => {
-                Some(SnapcastEvent::ClientConnected { id, hello })
-            }
+            ServerEvent::ClientConnected { id, hello } => Some(SnapcastEvent::ClientConnected {
+                id,
+                hello: super::backend::ClientHello {
+                    client_name: hello.client_name,
+                    mac: hello.mac,
+                    host_name: hello.host_name,
+                    version: hello.version,
+                },
+            }),
             ServerEvent::ClientDisconnected { id } => {
                 Some(SnapcastEvent::ClientDisconnected { id })
             }

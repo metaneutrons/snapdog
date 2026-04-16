@@ -163,6 +163,10 @@ impl SnapcastBackend for ProcessBackend {
                     }
                     ClientAction::Mute(muted) => self.snap.client_set_mute(&client_id, muted).await,
                     ClientAction::Latency(ms) => self.snap.client_set_latency(&client_id, ms).await,
+                    ClientAction::SendCustom { .. } => {
+                        tracing::warn!("custom-protocol not supported in process mode");
+                        Ok(())
+                    }
                 },
                 SnapcastCmd::ReconcileZones => Ok(()), // handled at higher level
             }

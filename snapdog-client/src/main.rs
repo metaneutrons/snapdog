@@ -86,6 +86,7 @@ fn main() -> anyhow::Result<()> {
         // Event handler
         let event_eq = eq.clone();
         tokio::spawn(async move {
+            #[allow(unused_mut)]
             let mut last_eq_config: Option<eq::EqConfig> = None;
             while let Some(event) = events.recv().await {
                 match event {
