@@ -453,6 +453,8 @@ pub struct AppConfig {
     pub airplay: AirplayConfig,
     /// Subsonic connection (if configured).
     pub subsonic: Option<SubsonicConfig>,
+    /// Spotify Connect receiver settings (if configured).
+    pub spotify: Option<SpotifyConfig>,
     /// MQTT bridge (if configured).
     pub mqtt: Option<MqttConfig>,
     /// KNX settings.

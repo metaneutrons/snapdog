@@ -60,6 +60,7 @@ pub fn load_raw(raw: RawConfig) -> Result<AppConfig> {
         snapcast: raw.snapcast,
         airplay: raw.airplay,
         subsonic: raw.subsonic,
+        spotify: raw.spotify,
         mqtt: raw.mqtt,
         knx: raw.knx,
         zones,

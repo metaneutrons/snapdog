@@ -1,9 +1,7 @@
 <div align="center">
 
 <!-- Logo placeholder — replace with actual logo -->
-<img src="assets/snapdog-logo.svg" alt="SnapDog" width="200">
-
-# SnapDog
+<img src="https://raw.githubusercontent.com/metaneutrons/snapdog/main/assets/snapdog-logo.svg" alt="SnapDog" width="200">
 
 **Multi-room audio system with smart home integration**
 
@@ -26,6 +24,7 @@ SnapDog turns a Linux box (or Mac) into a synchronized multi-room audio system w
 | | |
 |---|---|
 | 🎵 **AirPlay 1 + 2** | Per-zone receivers, stream from iPhone/Mac |
+| 🎧 **Spotify Connect** | Per-zone receivers via librespot |
 | 🔊 **Snapcast** | Synchronized playback, embedded server or external process |
 | 📚 **Subsonic/Navidrome** | Personal music library with playlist navigation and seek |
 | 📻 **Internet Radio** | Station list with live ICY metadata |
@@ -126,36 +125,56 @@ When using Navidrome, ensure transcoding is configured for the format specified 
 
 </details>
 
+## Ecosystem
+
+SnapDog builds on a family of Rust crates:
+
+| Crate | Description |
+|-------|-------------|
+| [snapcast-server](https://github.com/metaneutrons/snapcast-rs) | Embeddable Snapcast server with per-stream codecs, custom protocol, encryption |
+| [shairplay-rust](https://github.com/metaneutrons/shairplay-rust) | AirPlay 1 + 2 receiver library (RAOP/AirTunes) |
+| [knxkit](https://github.com/metaneutrons/knxkit) | KNX/IP tunnel + router with typed DPT encoding |
+
+### snapdog-client
+
+A specialized Snapcast client that understands SnapDog's custom protocol extensions:
+
+- **F32+LZ4 codec** — lossless 32-bit float audio with LZ4 compression (not supported by stock snapclients)
+- **Per-client parametric EQ** — receives EQ curves via custom protocol, applies biquad filters before output
+- **Encryption** — PSK-based chunk encryption matching the embedded server
+
+Available as binary and Docker image (`ghcr.io/metaneutrons/snapdog-client`).
+
 ## Architecture
 
-```
+``` plain
 ┌─────────────────────────────────────────────────────┐
 │                     SnapDog                         │
 │                                                     │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐         │
+│  ┌───────────┐  ┌───────────┐  ┌───────────┐        │
 │  │ ZonePlayer│  │ ZonePlayer│  │ ZonePlayer│  ...   │
-│  │ (tokio)  │  │ (tokio)  │  │ (tokio)  │         │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘         │
+│  │ (tokio)   │  │ (tokio)   │  │ (tokio)   │        │
+│  └────┬──────┘  └────┬──────┘  └────┬──────┘        │
 │       │              │              │               │
-│  ┌────┴──────────────┴──────────────┴────┐         │
-│  │        Embedded Snapcast Server       │         │
-│  │     (per-zone streams + encoders)     │         │
-│  └───────────────────┬───────────────────┘         │
+│  ┌────┴──────────────┴──────────────┴─────┐         │
+│  │        Embedded Snapcast Server        │         │
+│  │      (per-zone streams + encoders)     │         │
+│  └───────────────────┬────────────────────┘         │
 │                      │                              │
-│  ┌─────────┐  ┌─────┴─────┐  ┌──────────┐         │
-│  │ AirPlay │  │  REST API  │  │   MQTT   │         │
-│  │receivers│  │  + WebUI   │  │  bridge  │         │
-│  └─────────┘  └───────────┘  └──────────┘         │
-│                                    ┌──────────┐    │
-│                                    │   KNX    │    │
-│                                    │  bridge  │    │
-│                                    └──────────┘    │
+│  ┌─────────┐  ┌──────┴────┐  ┌──────────┐           │
+│  │ AirPlay │  │  REST API │  │   MQTT   │           │
+│  │receivers│  │  + WebUI  │  │  bridge  │           │
+│  └─────────┘  └───────────┘  └──────────┘           │
+│                                    ┌──────────┐     │
+│                                    │   KNX    │     │
+│                                    │  bridge  │     │
+│                                    └──────────┘     │
 └─────────────────────────────────────────────────────┘
-         │                    │
-    ┌────┴────┐          ┌───┴───┐
-    │snapclients│        │speakers│
-    │(per room) │        │(ALSA) │
-    └──────────┘         └───────┘
+         │                   
+    ┌────┴──────┐        
+    │snapclients│        
+    │(per room) │        
+    └───────────┘        
 ```
 
 - **ZonePlayer** — per-zone tokio task, owns audio pipeline (decode → resample → encode → Snapcast)
@@ -170,7 +189,7 @@ When using Navidrome, ensure transcoding is configured for the format specified 
 | `snapcast-embedded` | ✅ | In-process Snapcast server ([snapcast-server](https://crates.io/crates/snapcast-server)) |
 | `snapcast-process` | — | External snapserver binary + JSON-RPC |
 | `ap2` | — | AirPlay 2 (encrypted transport, HAP pairing) |
-| `spotify` | — | Spotify Connect receiver (librespot, WIP) |
+| `spotify` | ✅ | Spotify Connect receiver ([librespot](https://github.com/librespot-org/librespot)) |
 
 See [Architecture Decision Records](docs/architecture/decisions.md) for design rationale.
 
