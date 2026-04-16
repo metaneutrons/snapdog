@@ -65,11 +65,11 @@ fn run_cpal(
         .default_output_device()
         .ok_or_else(|| anyhow::anyhow!("no output device"))?;
 
-    tracing::info!(device = %device.name().unwrap_or_default(), "Using audio device");
+    tracing::info!(device = %device.description().map(|d| format!("{d}")).unwrap_or_default(), "Using audio device");
 
     let config = cpal::StreamConfig {
         channels: format.channels(),
-        sample_rate: cpal::SampleRate(format.rate()),
+        sample_rate: format.rate(),
         buffer_size: cpal::BufferSize::Default,
     };
 

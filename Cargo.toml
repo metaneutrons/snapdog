@@ -40,7 +40,7 @@ rubato = "0.16"
 biquad = "0.6"
 
 # MQTT
-rumqttc = "0.24"
+rumqttc = "0.25"
 
 # KNX
 knxkit = { git = "https://github.com/metaneutrons/knxkit", branch = "metaneutrons/v0.2-dev" }
