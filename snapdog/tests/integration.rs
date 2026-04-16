@@ -2,6 +2,7 @@
 // Copyright (C) 2025 Fabian Schmieder
 
 //! Integration tests — uses real snapserver (must be installed locally).
+#![cfg(feature = "snapcast-process")]
 
 // Run integration tests sequentially — each starts its own snapserver
 // and streams real audio from the internet.
@@ -16,7 +17,7 @@ use tokio::sync::mpsc;
 use snapdog::config::{self, AppConfig, RawConfig};
 use snapdog::player::{self, ZoneCommand, ZoneCommandSender, ZonePlayerContext};
 use snapdog::process::SnapserverHandle;
-use snapdog::snapcast::Snapcast;
+use snapdog::snapcast::SnapcastClient;
 use snapdog::state;
 
 // ── Test Harness ──────────────────────────────────────────────
@@ -138,7 +139,7 @@ async fn start_system(
         managed_config.snapcast.streaming_port + 1
     );
 
-    let mut snap = Snapcast::from_config(&managed_config).await.unwrap();
+    let mut snap = SnapcastClient::from_config(&managed_config).await.unwrap();
     snap.init().await.unwrap();
     let snap_state = snap.state().clone();
 
@@ -388,7 +389,7 @@ async fn start_system_with_api(
     let snapserver = SnapserverHandle::start(&api_config).await.unwrap();
     tokio::time::sleep(Duration::from_secs(2)).await;
 
-    let mut snap = Snapcast::from_config(&api_config).await.unwrap();
+    let mut snap = SnapcastClient::from_config(&api_config).await.unwrap();
     snap.init().await.unwrap();
     let snap_state = snap.state().clone();
 
