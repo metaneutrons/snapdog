@@ -68,19 +68,21 @@ jobs:
       - name: Package binary
         shell: bash
         run: |
-          cd target/${{ matrix.target }}/release
-          if [ -f snapdog.exe ]; then
-            mv snapdog.exe snapdog-${{ matrix.target }}.exe
-          else
-            mv snapdog snapdog-${{ matrix.target }}
-          fi
+          tag="${GITHUB_REF_NAME:-dev}"
+          archive="snapdog-${tag}-${{ matrix.target }}"
+          mkdir "$archive"
+          cp "target/${{ matrix.target }}/release/snapdog" "$archive/" 2>/dev/null || \
+          cp "target/${{ matrix.target }}/release/snapdog.exe" "$archive/"
+          cp LICENSE README.md "$archive/" 2>/dev/null || true
+          tar czf "${archive}.tar.gz" "$archive"
+          shasum -a 256 "${archive}.tar.gz" > "${archive}.tar.gz.sha256"
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: snapdog-${{ matrix.target }}
           path: |
-            target/${{ matrix.target }}/release/snapdog-${{ matrix.target }}
-            target/${{ matrix.target }}/release/snapdog-${{ matrix.target }}.exe
+            snapdog-*.tar.gz
+            snapdog-*.tar.gz.sha256
 
   upload-release-artifacts:
     name: Upload Release Artifacts
