@@ -238,10 +238,8 @@ pub async fn handle_previous(ds: &mut DecodeState<'_>, ctx: &PlaybackCtx<'_>) {
             playlist_id,
             track_index,
             track_count,
-        } => {
-            if track_index > 0 {
-                advance_playlist_track(ds, &playlist_id, track_index - 1, track_count, ctx).await;
-            }
+        } if track_index > 0 => {
+            advance_playlist_track(ds, &playlist_id, track_index - 1, track_count, ctx).await;
         }
         _ => {}
     }
