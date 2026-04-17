@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/metaneutrons/snapdog/compare/v0.2.0...v0.3.0) (2026-04-16)
+
+
+### Features
+
+* wire Spotify Connect into ZonePlayer, update README ([745a2e7](https://github.com/metaneutrons/snapdog/commit/745a2e717bbafad7eda15bde713bd23e21910c7c))
+
+
+### Bug Fixes
+
+* collapse if into match guard (clippy) ([d1a36e6](https://github.com/metaneutrons/snapdog/commit/d1a36e6cba843299502629d2ec146c3a61e73564))
+
 ## [0.2.0](https://github.com/metaneutrons/snapdog/compare/v0.1.0...v0.2.0) (2026-04-16)
 
 
