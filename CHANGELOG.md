@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/metaneutrons/snapdog/compare/v0.5.0...v0.5.1) (2026-04-18)
+
+
+### Bug Fixes
+
+* **webui:** restore EQ enabled state when closing with A/B bypass active ([4c5af55](https://github.com/metaneutrons/snapdog/commit/4c5af5584256b3b792928ad9fb712dcfb689b0a7))
+
 ## [0.5.0](https://github.com/metaneutrons/snapdog/compare/v0.4.1...v0.5.0) (2026-04-18)
 
 
