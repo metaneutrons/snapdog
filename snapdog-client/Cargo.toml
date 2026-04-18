@@ -24,6 +24,7 @@ cpal = "0.17"
 biquad = { workspace = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+midir = "0.11.0"
 
 [features]
 default = ["mdns", "f32lz4", "encryption", "custom-protocol"]

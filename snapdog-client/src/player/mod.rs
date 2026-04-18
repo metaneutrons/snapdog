@@ -1,5 +1,6 @@
 //! Audio output — cpal callback reads from Stream directly.
 
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 
 use snapcast_client::AudioFrame;
@@ -13,12 +14,209 @@ use crate::eq::ZoneEq;
 /// Shared EQ processor, updated from the event loop, read from the audio thread.
 pub type SharedEq = Arc<Mutex<ZoneEq>>;
 
+/// Shared volume state, updated from the event loop, read from the audio thread.
+pub struct VolumeState {
+    pub percent: AtomicU8,
+    pub muted: AtomicBool,
+}
+
+impl VolumeState {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self {
+            percent: AtomicU8::new(100),
+            muted: AtomicBool::new(false),
+        })
+    }
+
+    pub fn gain(&self) -> f32 {
+        if self.muted.load(Ordering::Relaxed) {
+            return 0.0;
+        }
+        let pct = self.percent.load(Ordering::Relaxed) as f32 / 100.0;
+        // Perceptual volume curve (quadratic)
+        pct * pct
+    }
+}
+
+/// Mixer implementation dispatched by mode.
+pub enum Mixer {
+    /// PCM amplitude scaling in the audio callback.
+    Software(Arc<VolumeState>),
+    /// ALSA hardware mixer control (Linux only).
+    #[cfg(target_os = "linux")]
+    Hardware {
+        control: String,
+        volume: Arc<VolumeState>,
+    },
+    /// MIDI CC volume control.
+    Midi {
+        conn: Mutex<midir::MidiOutputConnection>,
+        channel: u8,
+        cc: u8,
+    },
+    /// No volume control.
+    None,
+}
+
+impl Mixer {
+    pub fn from_cli(raw: &str, volume: Arc<VolumeState>) -> Self {
+        let (mode, param) = raw.split_once(':').unwrap_or((raw, ""));
+        match mode {
+            "software" | "" => Mixer::Software(volume),
+            #[cfg(target_os = "linux")]
+            "hardware" => {
+                let control = if param.is_empty() {
+                    "Master".to_string()
+                } else {
+                    param.to_string()
+                };
+                Mixer::Hardware { control, volume }
+            }
+            #[cfg(not(target_os = "linux"))]
+            "hardware" => {
+                tracing::warn!(
+                    "Hardware mixer not supported on this platform, falling back to software"
+                );
+                Mixer::Software(volume)
+            }
+            "midi" => match parse_midi_param(param) {
+                Ok((conn, channel, cc)) => {
+                    tracing::info!(channel = channel + 1, cc, "MIDI mixer connected");
+                    Mixer::Midi {
+                        conn: Mutex::new(conn),
+                        channel,
+                        cc,
+                    }
+                }
+                Err(e) => {
+                    tracing::error!(error = %e, "MIDI mixer init failed, falling back to software");
+                    Mixer::Software(volume)
+                }
+            },
+            "none" => Mixer::None,
+            other => {
+                tracing::warn!(mode = other, "Unknown mixer mode, using software");
+                Mixer::Software(volume)
+            }
+        }
+    }
+
+    /// Apply a volume change.
+    pub fn set_volume(&self, percent: u8, muted: bool) {
+        match self {
+            Mixer::Software(vol) => {
+                vol.percent.store(percent, Ordering::Relaxed);
+                vol.muted.store(muted, Ordering::Relaxed);
+            }
+            #[cfg(target_os = "linux")]
+            Mixer::Hardware {
+                control, volume, ..
+            } => {
+                volume.percent.store(percent, Ordering::Relaxed);
+                volume.muted.store(muted, Ordering::Relaxed);
+                set_alsa_volume(control, percent, muted);
+            }
+            Mixer::Midi { conn, channel, cc } => {
+                let value = if muted {
+                    0
+                } else {
+                    (percent as u16 * 127 / 100).min(127) as u8
+                };
+                if let Ok(mut conn) = conn.lock() {
+                    // CC message: 0xB0 | channel, cc, value
+                    if let Err(e) = conn.send(&[0xB0 | channel, *cc, value]) {
+                        tracing::warn!(error = %e, "MIDI send failed");
+                    }
+                }
+            }
+            Mixer::None => {}
+        }
+    }
+
+    /// Get the software gain to apply in the audio callback.
+    /// Returns 1.0 for hardware/midi/none (volume is handled elsewhere).
+    pub fn software_gain(&self) -> f32 {
+        match self {
+            Mixer::Software(vol) => vol.gain(),
+            _ => 1.0,
+        }
+    }
+}
+
+/// Parse `interface:ch[:cc]` → (MidiOutputConnection, channel_0based, cc)
+fn parse_midi_param(param: &str) -> anyhow::Result<(midir::MidiOutputConnection, u8, u8)> {
+    let parts: Vec<&str> = param.rsplitn(3, ':').collect();
+    // rsplitn reverses: "IAC Driver:1:7" → ["7", "1", "IAC Driver"]
+    let (interface, channel_1, cc) = match parts.len() {
+        3 => (parts[2], parts[1], parts[0].parse::<u8>().unwrap_or(7)),
+        2 => (parts[1], parts[0], 7u8),
+        _ => anyhow::bail!("expected midi:interface:ch[:cc]"),
+    };
+    let channel: u8 = channel_1
+        .parse::<u8>()
+        .ok()
+        .filter(|&c| (1..=16).contains(&c))
+        .map(|c| c - 1)
+        .ok_or_else(|| anyhow::anyhow!("MIDI channel must be 1-16, got '{channel_1}'"))?;
+
+    let midi_out = midir::MidiOutput::new("snapdog-client")?;
+    let port = midi_out
+        .ports()
+        .into_iter()
+        .find(|p| {
+            midi_out
+                .port_name(p)
+                .map(|n| n.to_lowercase().contains(&interface.to_lowercase()))
+                .unwrap_or(false)
+        })
+        .ok_or_else(|| {
+            let available: Vec<_> = midir::MidiOutput::new("probe")
+                .ok()
+                .map(|m| {
+                    m.ports()
+                        .iter()
+                        .filter_map(|p| m.port_name(p).ok())
+                        .collect()
+                })
+                .unwrap_or_default();
+            anyhow::anyhow!("MIDI interface '{interface}' not found. Available: {available:?}")
+        })?;
+    let conn = midi_out.connect(&port, "snapdog-mixer")?;
+    Ok((conn, channel, cc))
+}
+
+#[cfg(target_os = "linux")]
+fn set_alsa_volume(control: &str, percent: u8, muted: bool) {
+    use std::process::Command;
+    // Use amixer for simplicity — avoids alsa-sys dependency
+    let vol_arg = if muted {
+        "0%".to_string()
+    } else {
+        format!("{percent}%")
+    };
+    match Command::new("amixer")
+        .args(["sset", control, &vol_arg])
+        .output()
+    {
+        Ok(output) if !output.status.success() => {
+            tracing::warn!(
+                control,
+                "amixer failed: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+        Err(e) => tracing::warn!(control, error = %e, "Failed to run amixer"),
+        _ => tracing::debug!(control, percent, muted, "Hardware volume set"),
+    }
+}
+
 /// Start audio output. Waits for the Stream to have audio, then starts cpal.
 pub async fn play_audio(
     rx: mpsc::Receiver<AudioFrame>,
     stream: Arc<Mutex<Stream>>,
     time_provider: Arc<Mutex<TimeProvider>>,
     eq: SharedEq,
+    mixer: Arc<Mixer>,
 ) {
     // Drain audio_rx in background
     tokio::spawn(async move {
@@ -46,7 +244,7 @@ pub async fn play_audio(
     );
 
     std::thread::spawn(move || {
-        if let Err(e) = run_cpal(stream, time_provider, format, eq) {
+        if let Err(e) = run_cpal(stream, time_provider, format, eq, mixer) {
             tracing::error!(error = %e, "Audio output failed");
         }
     });
@@ -57,6 +255,7 @@ fn run_cpal(
     time_provider: Arc<Mutex<TimeProvider>>,
     format: snapcast_proto::SampleFormat,
     eq: SharedEq,
+    mixer: Arc<Mixer>,
 ) -> anyhow::Result<()> {
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
@@ -134,6 +333,14 @@ fn run_cpal(
             // Apply EQ after PCM decode
             if let Ok(mut eq) = eq.try_lock() {
                 eq.process(data);
+            }
+
+            // Apply software volume (no-op for hardware/none mixer)
+            let gain = mixer.software_gain();
+            if gain < 1.0 {
+                for sample in data.iter_mut() {
+                    *sample *= gain;
+                }
             }
         },
         |err| tracing::error!(error = %err, "Audio stream error"),

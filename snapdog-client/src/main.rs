@@ -19,6 +19,7 @@ fn main() -> anyhow::Result<()> {
     #[cfg(feature = "encryption")]
     let encryption_psk = cli.encryption_psk.clone();
     let null_player = cli.player == "null";
+    let mixer_raw = cli.mixer.clone();
     let settings = cli.into_settings()?;
 
     #[cfg(unix)]
@@ -67,10 +68,15 @@ fn main() -> anyhow::Result<()> {
         // EQ processor — shared between event loop and audio thread
         let eq = std::sync::Arc::new(std::sync::Mutex::new(eq::ZoneEq::new(48000, 2)));
 
+        // Mixer — dispatches volume to software, hardware, midi, or none
+        let volume = player::VolumeState::new();
+        let mixer = std::sync::Arc::new(player::Mixer::from_cli(&mixer_raw, volume));
+
         // Audio output: cpal callback reads from Stream directly
         let player_stream = std::sync::Arc::clone(&client.stream);
         let player_tp = std::sync::Arc::clone(&client.time_provider);
         let player_eq = eq.clone();
+        let player_mixer = mixer.clone();
         if null_player {
             tracing::info!("Null player — audio output disabled");
             tokio::spawn(async move {
@@ -79,12 +85,14 @@ fn main() -> anyhow::Result<()> {
             });
         } else {
             tokio::spawn(async move {
-                player::play_audio(audio_rx, player_stream, player_tp, player_eq).await;
+                player::play_audio(audio_rx, player_stream, player_tp, player_eq, player_mixer)
+                    .await;
             });
         }
 
         // Event handler
         let event_eq = eq.clone();
+        let event_mixer = mixer.clone();
         tokio::spawn(async move {
             #[allow(unused_mut)]
             let mut last_eq_config: Option<eq::EqConfig> = None;
@@ -96,6 +104,7 @@ fn main() -> anyhow::Result<()> {
                     ClientEvent::Disconnected { .. } => {}
                     ClientEvent::VolumeChanged { volume, muted } => {
                         tracing::info!(volume, muted, "Volume changed");
+                        event_mixer.set_volume(volume as u8, muted);
                     }
                     ClientEvent::TimeSyncComplete { diff_ms } => {
                         tracing::info!(diff_ms, "Time sync complete");

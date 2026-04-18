@@ -65,7 +65,13 @@ pub struct Cli {
     #[arg(long, default_value = "")]
     pub player: String,
 
-    /// Mixer mode: `software|hardware|script|none|?[:<params>]`
+    /// Mixer mode: `software|hardware|midi|none|?[:<params>]`
+    ///
+    /// Examples:
+    ///   --mixer software (default, PCM amplitude scaling)
+    ///   --mixer hardware:Master (ALSA control, Linux only)
+    ///   --mixer midi:interface:ch[:cc] (MIDI CC, default CC7)
+    ///   --mixer none
     #[arg(long, default_value = "software")]
     pub mixer: String,
 
@@ -148,6 +154,7 @@ impl Cli {
             "hardware" => MixerMode::Hardware,
             "script" => MixerMode::Script,
             "none" => MixerMode::None,
+            "midi" => MixerMode::None, // handled by snapdog-client Mixer
             other => bail!("unknown mixer mode: {other}"),
         };
 
