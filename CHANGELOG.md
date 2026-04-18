@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/metaneutrons/snapdog/compare/v0.3.1...v0.4.0) (2026-04-18)
+
+
+### Features
+
+* add .deb and AUR packaging for snapdog + snapdog-client ([e98f8b5](https://github.com/metaneutrons/snapdog/commit/e98f8b5be5bd4e6813599580e36f03afea0c3ba4))
+
+
+### Bug Fixes
+
+* **ci:** add --repo to gh workflow dispatch ([2406b40](https://github.com/metaneutrons/snapdog/commit/2406b4043ef494169b8224916495cc83c72ffbbe))
+
 ## [0.3.1](https://github.com/metaneutrons/snapdog/compare/v0.3.0...v0.3.1) (2026-04-18)
 
 
