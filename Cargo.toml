@@ -3,10 +3,6 @@ resolver = "2"
 members = [
   "snapdog",
   "snapdog-client",
-  "knx-rs/knx-core",
-  "knx-rs/knx-ip",
-  "knx-rs/knx-device",
-  "knx-rs/knx-tp",
 ]
 
 [workspace.package]

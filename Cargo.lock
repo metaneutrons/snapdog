@@ -1986,6 +1986,9 @@ name = "knx-ip"
 version = "0.1.0"
 dependencies = [
  "knx-core",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
