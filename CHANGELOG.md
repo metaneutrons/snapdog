@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1](https://github.com/metaneutrons/snapdog/compare/v0.3.0...v0.3.1) (2026-04-18)
+
+
+### Bug Fixes
+
+* **ci:** include snapdog-client binary in release archives ([b240046](https://github.com/metaneutrons/snapdog/commit/b2400462ef1a0d80053368dfc9a398129d796ea5))
+* **ci:** trigger release workflow from release-please ([e028a56](https://github.com/metaneutrons/snapdog/commit/e028a56a5be552623c5dc62d3311a73c3308ae6e))
+
 ## [0.3.0](https://github.com/metaneutrons/snapdog/compare/v0.2.0...v0.3.0) (2026-04-16)
 
 
