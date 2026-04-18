@@ -159,7 +159,7 @@ fn parse_midi_param(param: &str) -> anyhow::Result<(midir::MidiOutputConnection,
         .map(|c| c - 1)
         .ok_or_else(|| anyhow::anyhow!("MIDI channel must be 1-16, got '{channel_1}'"))?;
 
-    let midi_out = midir::MidiOutput::new("snapdog-client")?;
+    let midi_out = midir::MidiOutput::new("snapdog-client").map_err(|e| anyhow::anyhow!("{e}"))?;
     let port = midi_out
         .ports()
         .into_iter()
@@ -181,7 +181,9 @@ fn parse_midi_param(param: &str) -> anyhow::Result<(midir::MidiOutputConnection,
                 .unwrap_or_default();
             anyhow::anyhow!("MIDI interface '{interface}' not found. Available: {available:?}")
         })?;
-    let conn = midi_out.connect(&port, "snapdog-mixer")?;
+    let conn = midi_out
+        .connect(&port, "snapdog-mixer")
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
     Ok((conn, channel, cc))
 }
 
