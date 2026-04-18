@@ -1,4 +1,4 @@
-// Copyright (C) 2025 Fabian Schmieder
+// Copyright (C) 2026 Fabian Schmieder
 
 //! Spotify Connect receiver implementing [`ReceiverProvider`].
 //!

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Copyright (C) 2025 Fabian Schmieder
+// Copyright (C) 2026 Fabian Schmieder
 
 //! Subsonic API client for music library access.
 //!
