@@ -66,3 +66,14 @@ tempfile = { workspace = true }
 wiremock = { workspace = true }
 dotenvy = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
+
+[package.metadata.deb]
+section = "sound"
+copyright = "2026 Fabian Schmieder"
+depends = "libasound2"
+conf-files = ["/etc/snapdog/snapdog.toml"]
+assets = [
+  ["target/release/snapdog", "usr/bin/", "755"],
+  ["../snapdog.example.toml", "etc/snapdog/snapdog.toml", "644"],
+]
+systemd-units = { unit-name = "snapdog", enable = false, start = false }

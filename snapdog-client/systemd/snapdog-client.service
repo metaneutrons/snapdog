@@ -1,0 +1,18 @@
+[Unit]
+Description=SnapDog Client (Snapcast audio receiver)
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/snapdog-client
+Restart=on-failure
+RestartSec=5
+DynamicUser=yes
+SupplementaryGroups=audio
+ProtectSystem=strict
+ProtectHome=yes
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

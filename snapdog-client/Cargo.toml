@@ -34,3 +34,12 @@ tls = ["snapcast-client/tls"]
 resampler = ["snapcast-client/resampler"]
 custom-protocol = ["snapcast-client/custom-protocol"]
 encryption = ["snapcast-client/encryption"]
+
+[package.metadata.deb]
+section = "sound"
+copyright = "2026 Fabian Schmieder"
+depends = "libasound2"
+assets = [
+  ["target/release/snapdog-client", "usr/bin/", "755"],
+]
+systemd-units = { unit-name = "snapdog-client", enable = true, start = true }
