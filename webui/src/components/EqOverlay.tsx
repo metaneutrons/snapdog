@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -24,6 +24,7 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
   const [config, setConfig] = useState<EqConfig>({ enabled: false, bands: [], preset: "flat" });
   const [abBypass, setAbBypass] = useState(false);
   const [loading, setLoading] = useState(true);
+  const enabledBeforeBypass = useRef(false);
 
   const eqApi = clientId
     ? { get: () => api.clientEq.get(clientId), set: (c: EqConfig) => api.clientEq.set(clientId, c), applyPreset: (n: string) => api.clientEq.applyPreset(clientId, n) }
@@ -78,10 +79,19 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
 
   const toggleAB = () => {
     const next = !abBypass;
+    if (next) enabledBeforeBypass.current = config.enabled;
     setAbBypass(next);
-    // Send enabled=false to bypass, restore on un-bypass
-    const c = { ...config, enabled: !next };
+    const c = { ...config, enabled: next ? false : enabledBeforeBypass.current };
+    setConfig(c);
     pushConfig(c);
+  };
+
+  const handleClose = () => {
+    if (abBypass) {
+      const c = { ...config, enabled: enabledBeforeBypass.current };
+      pushConfig(c);
+    }
+    onClose();
   };
 
   // Frequency response curve
@@ -93,8 +103,8 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
   if (loading) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label={t("title", { zone: label })} onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}>
-      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onClose} role="presentation" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label={t("title", { zone: label })} onKeyDown={(e) => { if (e.key === "Escape") handleClose(); }}>
+      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={handleClose} role="presentation" />
       <div className="relative z-10 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-xl space-y-5" ref={(el) => el?.focus()} tabIndex={-1}>
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -103,7 +113,7 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
             <Button variant="ghost" size="sm" onClick={toggleAB} className={abBypass ? "text-muted-foreground" : "text-primary font-semibold"}>
               A/B
             </Button>
-            <Button variant="ghost" size="sm" onClick={onClose} aria-label={t("close")}>✕</Button>
+            <Button variant="ghost" size="sm" onClick={handleClose} aria-label={t("close")}>✕</Button>
           </div>
         </div>
 
