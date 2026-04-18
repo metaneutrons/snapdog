@@ -144,7 +144,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v7
         with:
           path: artifacts
       - name: Collect assets
@@ -228,6 +228,7 @@ jobs:
           file: ${{ matrix.file }}
           platforms: ${{ matrix.platform }}
           outputs: type=image,name=ghcr.io/${{ github.repository }}${{ matrix.image == 'snapdog-client' && '-client' || '' }},push-by-digest=true,name-canonical=true,push=true
+          provenance: false
       - name: Export digest
         run: |
           mkdir -p /tmp/digests
@@ -257,7 +258,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v7
         with:
           pattern: digest-${{ matrix.image }}-*
           merge-multiple: true
