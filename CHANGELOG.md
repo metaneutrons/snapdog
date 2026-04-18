@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.1](https://github.com/metaneutrons/snapdog/compare/v0.4.0...v0.4.1) (2026-04-18)
+
+
+### Bug Fixes
+
+* **ci:** add actions:write permission for release dispatch ([4fba6e7](https://github.com/metaneutrons/snapdog/commit/4fba6e7c4230f5ee772f064190e2dcc94d7b7723))
+* restore knx-rs workspace members (accidentally deleted) ([a89c643](https://github.com/metaneutrons/snapdog/commit/a89c643efdf73eecd7640ec0cfe08cc1d1b2b9f4))
+
 ## [0.4.0](https://github.com/metaneutrons/snapdog/compare/v0.3.1...v0.4.0) (2026-04-18)
 
 
