@@ -11,8 +11,23 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  meta:
+    name: Release metadata
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - name: Parse version
+        id: meta
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          VERSION=${TAG#v}
+          { echo "tag=${TAG}"; echo "version=${VERSION}"; } >> "$GITHUB_OUTPUT"
+
   build:
     name: Build (${{ matrix.target }})
+    needs: meta
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -48,16 +63,13 @@ jobs:
         run: |
           sudo dpkg --add-architecture arm64
           . /etc/os-release
-          # Pin existing sources to amd64 only
           sudo sed -i 's/^Types: deb$/Types: deb\nArchitectures: amd64/' /etc/apt/sources.list.d/ubuntu.sources
-          # Add arm64 from ports (includes security)
           cat <<EOF | sudo tee /etc/apt/sources.list.d/arm64.list
           deb [arch=arm64] http://ports.ubuntu.com/ ${VERSION_CODENAME} main restricted universe
           deb [arch=arm64] http://ports.ubuntu.com/ ${VERSION_CODENAME}-updates main restricted universe
           deb [arch=arm64] http://ports.ubuntu.com/ ${VERSION_CODENAME}-security main restricted universe
           EOF
           sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu cmake libssl-dev:arm64 libasound2-dev:arm64 pkg-config
-          # Export for subsequent steps
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
           echo "PKG_CONFIG_SYSROOT_DIR=/usr/aarch64-linux-gnu" >> $GITHUB_ENV
           echo "PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig" >> $GITHUB_ENV
@@ -68,8 +80,9 @@ jobs:
       - name: Package binary
         shell: bash
         run: |
-          tag="${GITHUB_REF_NAME:-dev}"
-          archive="snapdog-${tag}-${{ matrix.target }}"
+          VERSION=${{ needs.meta.outputs.version }}
+          TAG=${{ needs.meta.outputs.tag }}
+          archive="snapdog-${TAG}-${{ matrix.target }}"
           mkdir "$archive"
           cp "target/${{ matrix.target }}/release/snapdog" "$archive/" 2>/dev/null || \
           cp "target/${{ matrix.target }}/release/snapdog.exe" "$archive/"
@@ -86,18 +99,93 @@ jobs:
             snapdog-*.tar.gz
             snapdog-*.tar.gz.sha256
 
+  build-deb:
+    name: Debian ${{ matrix.pkg }} (${{ matrix.arch }})
+    needs: meta
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm]
+        pkg: [snapdog, snapdog-client]
+        include:
+          - os: ubuntu-latest
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install deps
+        run: |
+          sudo apt-get update && sudo apt-get install -y libasound2-dev
+          cargo install cargo-deb
+      - uses: actions/setup-node@v6
+        if: matrix.pkg == 'snapdog'
+        with:
+          node-version: 25
+          cache: npm
+          cache-dependency-path: webui/package-lock.json
+      - name: Build WebUI
+        if: matrix.pkg == 'snapdog'
+        working-directory: webui
+        run: npm ci && npm run build
+      - run: cargo build --release -p ${{ matrix.pkg }}
+      - run: cargo deb -p ${{ matrix.pkg }} --no-build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: deb-${{ matrix.pkg }}-${{ matrix.arch }}
+          path: target/debian/*.deb
+
   upload-release-artifacts:
     name: Upload Release Artifacts
     runs-on: ubuntu-latest
-    needs: [build]
+    needs: [meta, build, build-deb]
     permissions:
       contents: write
     steps:
       - uses: actions/download-artifact@v8
-      - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
         with:
-          files: snapdog-*/snapdog*
+          path: artifacts
+      - name: Collect assets
+        run: |
+          mkdir release-assets
+          find artifacts -type f \( -name "*.tar.gz" -o -name "*.tar.gz.sha256" -o -name "*.deb" \) -exec cp {} release-assets/ \;
+          cd release-assets && sha256sum * > SHA256SUMS
+      - name: Upload to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ needs.meta.outputs.tag }}" release-assets/* \
+            --repo ${{ github.repository }} --clobber
+
+  publish-aur:
+    name: AUR (${{ matrix.pkg }})
+    needs: [meta, upload-release-artifacts]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - pkg: snapdog
+            pkgbuild: aur/snapdog/PKGBUILD
+          - pkg: snapdog-client
+            pkgbuild: aur/snapdog-client/PKGBUILD
+    steps:
+      - uses: actions/checkout@v6
+      - name: Update PKGBUILD version
+        run: |
+          VERSION=${{ needs.meta.outputs.version }}
+          sed -i "s/^pkgver=.*/pkgver=${VERSION}/" ${{ matrix.pkgbuild }}
+          sed -i "s/^pkgrel=.*/pkgrel=1/" ${{ matrix.pkgbuild }}
+      - uses: KSXGitHub/github-actions-deploy-aur@v4.1.2
+        with:
+          pkgname: ${{ matrix.pkg }}
+          pkgbuild: ${{ matrix.pkgbuild }}
+          commit_username: metaneutrons
+          commit_email: aur@metaneutrons.github.io
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: "Update to ${{ needs.meta.outputs.version }}"
+          ssh_keyscan_types: rsa,ecdsa,ed25519
 
   docker:
     name: Docker Image (snapdog)

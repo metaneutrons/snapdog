@@ -1,0 +1,20 @@
+[Unit]
+Description=SnapDog multiroom audio server
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/snapdog --config /etc/snapdog/snapdog.toml
+Restart=on-failure
+RestartSec=5
+DynamicUser=yes
+SupplementaryGroups=audio
+StateDirectory=snapdog
+ConfigurationDirectory=snapdog
+ProtectSystem=strict
+ProtectHome=yes
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target
