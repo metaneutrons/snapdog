@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Copyright (C) 2025 Fabian Schmieder
+// Copyright (C) 2026 Fabian Schmieder
 
 //! Cover art cache — in-memory store for zone cover images.
 //! Served via GET /api/v1/zones/{id}/cover with correct MIME type.
