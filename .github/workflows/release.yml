@@ -73,6 +73,8 @@ jobs:
           mkdir "$archive"
           cp "target/${{ matrix.target }}/release/snapdog" "$archive/" 2>/dev/null || \
           cp "target/${{ matrix.target }}/release/snapdog.exe" "$archive/"
+          cp "target/${{ matrix.target }}/release/snapdog-client" "$archive/" 2>/dev/null || \
+          cp "target/${{ matrix.target }}/release/snapdog-client.exe" "$archive/" 2>/dev/null || true
           cp LICENSE README.md "$archive/" 2>/dev/null || true
           tar czf "${archive}.tar.gz" "$archive"
           shasum -a 256 "${archive}.tar.gz" > "${archive}.tar.gz.sha256"
