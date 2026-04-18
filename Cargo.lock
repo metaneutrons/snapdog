@@ -1966,39 +1966,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "knx-core"
-version = "0.1.0"
-dependencies = [
- "libm",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "knx-device"
-version = "0.1.0"
-dependencies = [
- "knx-core",
-]
-
-[[package]]
-name = "knx-ip"
-version = "0.1.0"
-dependencies = [
- "knx-core",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "knx-tp"
-version = "0.1.0"
-dependencies = [
- "knx-core",
-]
-
-[[package]]
 name = "knxkit"
 version = "0.1.3"
 source = "git+https://github.com/metaneutrons/knxkit?branch=metaneutrons%2Fv0.2-dev#adf15ec469f8b18a18a34e54ef52c9c1c13a9440"
@@ -3992,7 +3959,7 @@ dependencies = [
 
 [[package]]
 name = "snapdog"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -4039,7 +4006,7 @@ dependencies = [
 
 [[package]]
 name = "snapdog-client"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "base64",
