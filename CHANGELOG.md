@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/metaneutrons/snapdog/compare/v0.4.1...v0.5.0) (2026-04-18)
+
+
+### Features
+
+* **client:** add mixer support — software, hardware, midi, none ([b87951e](https://github.com/metaneutrons/snapdog/commit/b87951e20aec77395fae57dbc52e08deca1772c7))
+
+
+### Bug Fixes
+
+* **ci:** use native arm64 runners for Docker builds ([b5ff760](https://github.com/metaneutrons/snapdog/commit/b5ff760895016b4d4a06afe88ed43719c5e4263e))
+
 ## [0.4.1](https://github.com/metaneutrons/snapdog/compare/v0.4.0...v0.4.1) (2026-04-18)
 
 
