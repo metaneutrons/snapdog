@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SnapDog Zone template — 30 communication objects per zone -->
+<Module xmlns="http://knx.org/xml/project/20">
+
+  <ComObject>
+    <!-- Transport commands (receive) -->
+    <ComObject Name="Zone %C% Play"                Number="%K0%"  FunctionText="Play"                DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled" CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+    <ComObject Name="Zone %C% Pause"               Number="%K1%"  FunctionText="Pause"               DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled" CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+    <ComObject Name="Zone %C% Stop"                Number="%K2%"  FunctionText="Stop"                DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled" CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+    <ComObject Name="Zone %C% Track Next"          Number="%K3%"  FunctionText="Track Next"          DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled" CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+    <ComObject Name="Zone %C% Track Previous"      Number="%K4%"  FunctionText="Track Previous"      DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled" CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+    <!-- Volume -->
+    <ComObject Name="Zone %C% Volume"              Number="%K5%"  FunctionText="Volume"              DatapointType="DPST-5-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled" CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+    <ComObject Name="Zone %C% Volume Status"       Number="%K6%"  FunctionText="Volume Status"       DatapointType="DPST-5-1"  Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
+    <ComObject Name="Zone %C% Volume Dim"          Number="%K7%"  FunctionText="Volume Dim"          DatapointType="DPST-3-7"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled" CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+    <!-- Mute -->
+    <ComObject Name="Zone %C% Mute"                Number="%K8%"  FunctionText="Mute"                DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled" CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+    <ComObject Name="Zone %C% Mute Status"         Number="%K9%"  FunctionText="Mute Status"         DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
+    <ComObject Name="Zone %C% Mute Toggle"         Number="%K10%" FunctionText="Mute Toggle"         DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled" CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+    <!-- Playback status -->
+    <ComObject Name="Zone %C% Control Status"      Number="%K11%" FunctionText="Control Status"      DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
+    <ComObject Name="Zone %C% Track Playing"       Number="%K12%" FunctionText="Track Playing"       DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
+    <!-- Shuffle -->
+    <ComObject Name="Zone %C% Shuffle"             Number="%K13%" FunctionText="Shuffle"             DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled" CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+    <ComObject Name="Zone %C% Shuffle Status"      Number="%K14%" FunctionText="Shuffle Status"      DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
+    <ComObject Name="Zone %C% Shuffle Toggle"      Number="%K15%" FunctionText="Shuffle Toggle"      DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled" CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+    <!-- Repeat (playlist) -->
+    <ComObject Name="Zone %C% Repeat"              Number="%K16%" FunctionText="Repeat"              DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled" CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+    <ComObject Name="Zone %C% Repeat Status"       Number="%K17%" FunctionText="Repeat Status"       DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
+    <ComObject Name="Zone %C% Repeat Toggle"       Number="%K18%" FunctionText="Repeat Toggle"       DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled" CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+    <!-- Repeat (single track) -->
+    <ComObject Name="Zone %C% Track Repeat"        Number="%K19%" FunctionText="Track Repeat"        DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled" CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+    <ComObject Name="Zone %C% Track Repeat Status" Number="%K20%" FunctionText="Track Repeat Status" DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
+    <ComObject Name="Zone %C% Track Repeat Toggle" Number="%K21%" FunctionText="Track Repeat Toggle" DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled" CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+    <!-- Playlist -->
+    <ComObject Name="Zone %C% Playlist"            Number="%K22%" FunctionText="Playlist"            DatapointType="DPST-5-10" Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled" CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+    <ComObject Name="Zone %C% Playlist Status"     Number="%K23%" FunctionText="Playlist Status"     DatapointType="DPST-5-10" Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
+    <ComObject Name="Zone %C% Playlist Next"       Number="%K24%" FunctionText="Playlist Next"       DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled" CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+    <ComObject Name="Zone %C% Playlist Previous"   Number="%K25%" FunctionText="Playlist Previous"   DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled" CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+    <!-- Track metadata (send only) -->
+    <ComObject Name="Zone %C% Track Title"         Number="%K26%" FunctionText="Track Title"         DatapointType="DPST-16-1" Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
+    <ComObject Name="Zone %C% Track Artist"        Number="%K27%" FunctionText="Track Artist"        DatapointType="DPST-16-1" Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
+    <ComObject Name="Zone %C% Track Album"         Number="%K28%" FunctionText="Track Album"         DatapointType="DPST-16-1" Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
+    <ComObject Name="Zone %C% Track Progress"      Number="%K29%" FunctionText="Track Progress"      DatapointType="DPST-5-1"  Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
+  </ComObject>
+
+  <Dynamic>
+    <!-- ETS shows these COs grouped under the zone channel -->
+  </Dynamic>
+
+</Module>
