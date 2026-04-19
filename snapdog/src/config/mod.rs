@@ -53,6 +53,25 @@ pub fn load_raw(raw: RawConfig) -> Result<AppConfig> {
 
     let radios: Vec<RadioConfig> = raw.radio.into_iter().map(Into::into).collect();
 
+    // ── KNX mode validation ───────────────────────────────────
+    if raw.knx.enabled {
+        match raw.knx.mode.as_str() {
+            "client" => {
+                anyhow::ensure!(
+                    raw.knx.url.is_some(),
+                    "KNX client mode requires 'url' (e.g. udp://192.168.1.50:3671)"
+                );
+            }
+            "device" => {
+                anyhow::ensure!(
+                    raw.knx.individual_address.is_some(),
+                    "KNX device mode requires 'individual_address' (e.g. 1.1.100)"
+                );
+            }
+            other => anyhow::bail!("Unknown KNX mode '{other}' — use 'client' or 'device'"),
+        }
+    }
+
     Ok(AppConfig {
         system: raw.system,
         audio: raw.audio,
@@ -203,5 +222,89 @@ mod tests {
         assert_eq!(config.zones[1].tcp_source_port, 4954);
         assert_eq!(config.zones[1].knx.play, None);
         assert_eq!(config.clients[0].zone_index, 2);
+    }
+
+    #[test]
+    fn knx_client_mode_requires_url() {
+        let raw: RawConfig = toml::from_str(
+            r#"
+            [knx]
+            enabled = true
+            mode = "client"
+
+            [[zone]]
+            name = "A"
+            [[client]]
+            name = "X"
+            mac = "00:00:00:00:00:00"
+            zone = "A"
+        "#,
+        )
+        .unwrap();
+        assert!(load_raw(raw).unwrap_err().to_string().contains("url"));
+    }
+
+    #[test]
+    fn knx_device_mode_requires_individual_address() {
+        let raw: RawConfig = toml::from_str(
+            r#"
+            [knx]
+            enabled = true
+            mode = "device"
+
+            [[zone]]
+            name = "A"
+            [[client]]
+            name = "X"
+            mac = "00:00:00:00:00:00"
+            zone = "A"
+        "#,
+        )
+        .unwrap();
+        assert!(
+            load_raw(raw)
+                .unwrap_err()
+                .to_string()
+                .contains("individual_address")
+        );
+    }
+
+    #[test]
+    fn knx_rejects_unknown_mode() {
+        let raw: RawConfig = toml::from_str(
+            r#"
+            [knx]
+            enabled = true
+            mode = "bogus"
+
+            [[zone]]
+            name = "A"
+            [[client]]
+            name = "X"
+            mac = "00:00:00:00:00:00"
+            zone = "A"
+        "#,
+        )
+        .unwrap();
+        assert!(load_raw(raw).unwrap_err().to_string().contains("bogus"));
+    }
+
+    #[test]
+    fn knx_disabled_skips_validation() {
+        let raw: RawConfig = toml::from_str(
+            r#"
+            [knx]
+            enabled = false
+
+            [[zone]]
+            name = "A"
+            [[client]]
+            name = "X"
+            mac = "00:00:00:00:00:00"
+            zone = "A"
+        "#,
+        )
+        .unwrap();
+        assert!(load_raw(raw).is_ok());
     }
 }

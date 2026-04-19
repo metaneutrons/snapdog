@@ -286,9 +286,22 @@ pub struct KnxConfig {
     /// Enable KNX integration.
     #[serde(default)]
     pub enabled: bool,
-    /// KNX connection URL. Unicast = tunnel, multicast = router.
+    /// Operating mode: `"client"` (default) connects to a gateway,
+    /// `"device"` runs as ETS-programmable KNX/IP device on port 3671.
+    #[serde(default = "default_knx_mode")]
+    pub mode: String,
+    /// KNX connection URL (client mode only). Unicast = tunnel, multicast = router.
     /// Examples: `udp://192.168.1.50:3671`, `udp://224.0.23.12:3671`
     pub url: Option<String>,
+    /// KNX individual address (device mode only). Example: `"1.1.100"`
+    pub individual_address: Option<String>,
+    /// Persist ETS-programmed configuration across restarts (device mode only).
+    /// Defaults to `true` when mode is `"device"`.
+    pub persist_ets_config: Option<bool>,
+}
+
+fn default_knx_mode() -> String {
+    "client".to_string()
 }
 
 // ── Raw zone/client/radio (user-facing, optional fields) ──────
