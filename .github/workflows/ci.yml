@@ -111,3 +111,30 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           # Unfixable transitive deps — review periodically
           ignore: RUSTSEC-2023-0071,RUSTSEC-2026-0049,RUSTSEC-2026-0098,RUSTSEC-2026-0099,RUSTSEC-2025-0134,RUSTSEC-2026-0097
+
+  knxprod:
+    name: KNX Product Database
+    runs-on: ubuntu-latest
+    env:
+      PRODUCER_VERSION: v4.3.5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/cache@v4
+        id: producer-cache
+        with:
+          path: tools/OpenKNXproducer
+          key: openknxproducer-${{ env.PRODUCER_VERSION }}-linux-x64
+      - uses: actions/setup-dotnet@v4
+        if: steps.producer-cache.outputs.cache-hit != 'true'
+        with:
+          dotnet-version: '9.0'
+      - name: Build OpenKNXproducer
+        if: steps.producer-cache.outputs.cache-hit != 'true'
+        run: make tools/OpenKNXproducer
+      - name: Generate knxprod
+        run: make knxprod
+      - uses: actions/upload-artifact@v4
+        with:
+          name: snapdog-knxprod
+          path: knx/SnapDog.knxprod
+          if-no-files-found: error

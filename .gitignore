@@ -18,3 +18,9 @@ webui/.next/
 snapdog.dev.toml
 snapcast-state.json
 .cargo/
+
+# OpenKNXproducer
+tools/
+knx/*.knxprod
+knx/*.debug.xml
+include/
