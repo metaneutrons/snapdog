@@ -17,7 +17,9 @@ use std::str::FromStr;
 use anyhow::{Context, Result};
 use knx_core::address::GroupAddress;
 use knx_core::cemi::CemiFrame;
-use knx_core::dpt::{self, DPT_SCALING, DPT_STRING_8859_1, DPT_SWITCH, Dpt, DptValue};
+use knx_core::dpt::{
+    self, DPT_SCALING, DPT_STRING_8859_1, DPT_SWITCH, DPT_VALUE_1_UCOUNT, Dpt, DptValue,
+};
 use knx_ip::multiplex::{MultiplexHandle, Multiplexer};
 use knx_ip::ops::GroupOps;
 
@@ -145,8 +147,8 @@ async fn publish_zone_state(
         write(
             handle,
             ga,
-            DPT_SCALING,
-            &DptValue::Float(f64::from(zone.playlist_index.unwrap_or(0) as u8)),
+            DPT_VALUE_1_UCOUNT,
+            &DptValue::from(zone.playlist_index.unwrap_or(0) as u8),
         )
         .await;
     }
@@ -265,8 +267,8 @@ async fn publish_client_state(
         write(
             handle,
             ga,
-            DPT_SCALING,
-            &DptValue::Float(f64::from(client.zone_index as u8)),
+            DPT_VALUE_1_UCOUNT,
+            &DptValue::from(client.zone_index as u8),
         )
         .await;
     }
@@ -274,8 +276,8 @@ async fn publish_client_state(
         write(
             handle,
             ga,
-            DPT_SCALING,
-            &DptValue::Float(f64::from(client.latency_ms.clamp(0, 255) as u8)),
+            DPT_VALUE_1_UCOUNT,
+            &DptValue::from(client.latency_ms.clamp(0, 255) as u8),
         )
         .await;
     }
@@ -336,6 +338,7 @@ pub(crate) fn build_zone_ga_map(config: &AppConfig) -> HashMap<String, (usize, &
             (&knx.track_repeat, "track_repeat"),
             (&knx.track_repeat_toggle, "track_repeat_toggle"),
             (&knx.volume, "volume"),
+            (&knx.volume_dim, "volume_dim"),
             (&knx.playlist, "playlist"),
             (&knx.playlist_next, "playlist_next"),
             (&knx.playlist_previous, "playlist_previous"),
@@ -358,6 +361,7 @@ pub(crate) fn build_client_ga_map(config: &AppConfig) -> HashMap<String, (usize,
             (&knx.mute, "mute"),
             (&knx.mute_toggle, "mute_toggle"),
             (&knx.volume, "volume"),
+            (&knx.volume_dim, "volume_dim"),
             (&knx.latency, "latency"),
             (&knx.zone, "zone"),
         ];
@@ -400,9 +404,8 @@ pub(crate) async fn handle_incoming(
                 "repeat" => Some(ZoneCommand::SetRepeat(decode_bool(&data))),
                 "track_repeat" => Some(ZoneCommand::SetTrackRepeat(decode_bool(&data))),
                 "volume" => decode_percent(&data).map(|v| ZoneCommand::SetVolume(v as i32)),
-                "playlist" => {
-                    decode_percent(&data).map(|v| ZoneCommand::SetPlaylist(v as usize, 0))
-                }
+                "volume_dim" => decode_dim(&data).map(ZoneCommand::AdjustVolume),
+                "playlist" => decode_u8(&data).map(|v| ZoneCommand::SetPlaylist(v as usize, 0)),
                 "playlist_next" => Some(ZoneCommand::NextPlaylist),
                 "playlist_previous" => Some(ZoneCommand::PreviousPlaylist),
                 _ => None,
@@ -422,9 +425,10 @@ pub(crate) async fn handle_incoming(
                     "mute_toggle" => Some(ClientAction::Mute(!client.muted)),
                     "mute" => Some(ClientAction::Mute(decode_bool(&data))),
                     "volume" => decode_percent(&data).map(|v| ClientAction::Volume(v as i32)),
-                    "latency" => decode_percent(&data).map(|v| ClientAction::Latency(v as i32)),
+                    "volume_dim" => decode_dim(&data).map(ClientAction::AdjustVolume),
+                    "latency" => decode_u8(&data).map(|v| ClientAction::Latency(v as i32)),
                     "zone" => {
-                        if let Some(target_zone) = decode_percent(&data) {
+                        if let Some(target_zone) = decode_u8(&data) {
                             drop(s);
                             if let Some(c) = store.write().await.clients.get_mut(&client_idx) {
                                 c.zone_index = target_zone as usize;
@@ -454,6 +458,9 @@ pub(crate) async fn handle_incoming(
 
 // ── DPT decode helpers ────────────────────────────────────────
 
+/// DPT 3.007 — Controlled dimming.
+const DPT_CONTROL_DIMMING: Dpt = Dpt::new(3, 7);
+
 fn decode_bool(payload: &[u8]) -> bool {
     dpt::decode(DPT_SWITCH, payload)
         .ok()
@@ -466,6 +473,38 @@ fn decode_percent(payload: &[u8]) -> Option<u8> {
         .ok()
         .and_then(|v| v.as_f64())
         .map(|v| v.clamp(0.0, 100.0).round() as u8)
+}
+
+fn decode_u8(payload: &[u8]) -> Option<u8> {
+    dpt::decode(DPT_VALUE_1_UCOUNT, payload)
+        .ok()
+        .and_then(|v| v.as_u32())
+        .map(|v| v.min(255) as u8)
+}
+
+/// Decode DPT 3.007 into a relative volume delta.
+/// Returns `None` for stop (stepcode=0), `Some(delta)` otherwise.
+/// Delta is positive for increase, negative for decrease.
+fn decode_dim(payload: &[u8]) -> Option<i32> {
+    let raw = dpt::decode(DPT_CONTROL_DIMMING, payload)
+        .ok()
+        .and_then(|v| v.as_u32())? as u8;
+    let stepcode = raw & 0x07;
+    if stepcode == 0 {
+        return None; // stop
+    }
+    let increase = raw & 0x08 != 0;
+    // stepcode 1=64%, 2=32%, 3=16%, 4=8%, 5=4%, 6=2%, 7=1%
+    let step = match stepcode {
+        1 => 64,
+        2 => 32,
+        3 => 16,
+        4 => 8,
+        5 => 4,
+        6 => 2,
+        _ => 1,
+    };
+    Some(if increase { step } else { -step })
 }
 
 // ── Write helper ──────────────────────────────────────────────
@@ -503,6 +542,10 @@ mod tests {
 
     fn encode_string(value: &str) -> Vec<u8> {
         dpt::encode(DPT_STRING_8859_1, &DptValue::from(value)).unwrap()
+    }
+
+    fn encode_u8(value: u8) -> Vec<u8> {
+        dpt::encode(DPT_VALUE_1_UCOUNT, &DptValue::from(value)).unwrap()
     }
 
     /// Build a GroupValueWrite CemiFrame for testing.
@@ -582,6 +625,7 @@ mod tests {
         m.insert("1/0/8".into(), (1, "mute_toggle"));
         m.insert("1/0/9".into(), (1, "shuffle_toggle"));
         m.insert("1/0/10".into(), (1, "playlist"));
+        m.insert("1/0/11".into(), (1, "volume_dim"));
         m
     }
 
@@ -680,7 +724,7 @@ mod tests {
         cmds.insert(1, tx);
         let (snap_tx, _snap_rx) = mpsc::channel(16);
         let state = test_state();
-        let cemi = make_cemi("1/0/10", Some(&encode_percent(3)));
+        let cemi = make_cemi("1/0/10", Some(&encode_u8(3)));
         handle_incoming(
             &cemi,
             &zone_ga_map(),
@@ -793,5 +837,58 @@ mod tests {
         .await;
         assert!(rx.try_recv().is_err());
         assert!(snap_rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn round_trips_u8() {
+        assert_eq!(decode_u8(&encode_u8(0)), Some(0));
+        assert_eq!(decode_u8(&encode_u8(255)), Some(255));
+        assert_eq!(decode_u8(&encode_u8(42)), Some(42));
+    }
+
+    #[test]
+    fn decode_dim_increase() {
+        // control=1 (increase), stepcode=3 (16%) → 0b1_011 = 0x0B
+        let encoded = dpt::encode(DPT_CONTROL_DIMMING, &DptValue::UInt(0x0B)).unwrap();
+        assert_eq!(decode_dim(&encoded), Some(16));
+    }
+
+    #[test]
+    fn decode_dim_decrease() {
+        // control=0 (decrease), stepcode=1 (64%) → 0b0_001 = 0x01
+        let encoded = dpt::encode(DPT_CONTROL_DIMMING, &DptValue::UInt(0x01)).unwrap();
+        assert_eq!(decode_dim(&encoded), Some(-64));
+    }
+
+    #[test]
+    fn decode_dim_stop() {
+        // stepcode=0 → stop
+        let encoded = dpt::encode(DPT_CONTROL_DIMMING, &DptValue::UInt(0x08)).unwrap();
+        assert_eq!(decode_dim(&encoded), None);
+    }
+
+    #[tokio::test]
+    async fn zone_volume_dim_from_knx() {
+        let (tx, mut rx) = mpsc::channel(16);
+        let mut cmds = HashMap::new();
+        cmds.insert(1, tx);
+        let (snap_tx, _snap_rx) = mpsc::channel(16);
+        let state = test_state();
+        // increase, stepcode=2 (32%) → 0b1_010 = 0x0A
+        let encoded = dpt::encode(DPT_CONTROL_DIMMING, &DptValue::UInt(0x0A)).unwrap();
+        let cemi = make_cemi("1/0/11", Some(&encoded));
+        handle_incoming(
+            &cemi,
+            &zone_ga_map(),
+            &client_ga_map(),
+            &cmds,
+            &snap_tx,
+            &state,
+        )
+        .await;
+        assert!(matches!(
+            rx.recv().await,
+            Some(ZoneCommand::AdjustVolume(32))
+        ));
     }
 }

@@ -167,6 +167,10 @@ impl SnapcastBackend for ProcessBackend {
                         tracing::warn!("custom-protocol not supported in process mode");
                         Ok(())
                     }
+                    ClientAction::AdjustVolume(_) => {
+                        // Converted to absolute Volume in main loop before reaching backend
+                        Ok(())
+                    }
                 },
                 SnapcastCmd::ReconcileZones => Ok(()), // handled at higher level
             }

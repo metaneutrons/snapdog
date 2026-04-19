@@ -45,6 +45,8 @@ pub enum ZoneCommand {
     // ── Zone settings ─────────────────────────────────────────
     /// Set the zone volume (0–100).
     SetVolume(i32),
+    /// Adjust the zone volume by a relative delta (from DPT 3.007 dimming).
+    AdjustVolume(i32),
     /// Set the zone mute state.
     SetMute(bool),
     /// Toggle the zone mute state.

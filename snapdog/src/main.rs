@@ -283,6 +283,18 @@ async fn main() -> Result<()> {
         tokio::select! {
             // Snapcast commands from zone players / API / MQTT / KNX
             Some(cmd) = snap_cmd_rx.recv() => {
+                // Convert relative volume adjustments to absolute
+                let cmd = if let player::SnapcastCmd::Client { ref client_id, action: player::ClientAction::AdjustVolume(delta) } = cmd {
+                    let current = store.read().await.clients.values()
+                        .find(|c| c.snapcast_id.as_deref() == Some(client_id))
+                        .map_or(50, |c| c.base_volume);
+                    player::SnapcastCmd::Client {
+                        client_id: client_id.clone(),
+                        action: player::ClientAction::Volume((current + delta).clamp(0, 100)),
+                    }
+                } else {
+                    cmd
+                };
                 // Coalesce client volume commands (50ms window)
                 if let player::SnapcastCmd::Client { ref client_id, action: player::ClientAction::Volume(v) } = cmd {
                     pending_volumes.insert(client_id.clone(), v);

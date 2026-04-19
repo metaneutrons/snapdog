@@ -160,6 +160,10 @@ impl EmbeddedBackend {
                         message: snapcast_server::CustomMessage::new(type_id, payload),
                     }]
                 }
+                ClientAction::AdjustVolume(_) => {
+                    // Converted to absolute Volume in main loop before reaching backend
+                    vec![]
+                }
             },
             SnapcastCmd::ReconcileZones => unreachable!("handled in execute"),
         }

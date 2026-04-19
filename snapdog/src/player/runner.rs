@@ -474,6 +474,16 @@ async fn run(
                             let _ = ctx.snap_tx.send(SnapcastCmd::Group { group_id: gid.clone(), action: GroupAction::Volume(v) }).await;
                         }
                     }
+                    ZoneCommand::AdjustVolume(delta) => {
+                        let new_vol = {
+                            let s = store.read().await;
+                            s.zones.get(&zone_index).map_or(50, |z| (z.volume + delta).clamp(0, 100))
+                        };
+                        update_and_notify(store, zone_index, notify, |z| z.volume = new_vol).await;
+                        if let Some(ref gid) = group_id {
+                            let _ = ctx.snap_tx.send(SnapcastCmd::Group { group_id: gid.clone(), action: GroupAction::Volume(new_vol) }).await;
+                        }
+                    }
                     ZoneCommand::SetMute(m) => {
                         if let Some(ref gid) = group_id {
                             let _ = ctx.snap_tx.send(SnapcastCmd::Group { group_id: gid.clone(), action: GroupAction::Mute(m) }).await;
