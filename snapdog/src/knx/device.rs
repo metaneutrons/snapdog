@@ -37,37 +37,39 @@ enum BauCmd {
     ProcessFrame { frame: knx_core::cemi::CemiFrame },
 }
 
-/// Device-mode transport: KNX/IP device on port 3671.
-pub(crate) struct DeviceTransport {
+/// Device-mode publisher: sends values to the BAU task.
+pub(crate) struct DevicePublisher {
     cmd_tx: mpsc::Sender<BauCmd>,
+}
+
+/// Device-mode listener: receives group object updates from the BAU task.
+pub(crate) struct DeviceListener {
     update_rx: mpsc::Receiver<(GroupAddress, Vec<u8>)>,
 }
 
-impl DeviceTransport {
-    /// Start the device server and BAU.
-    pub(crate) async fn start(
-        individual_address: &str,
-        _config: &crate::config::AppConfig,
-    ) -> Result<Self> {
-        let ia = IndividualAddress::from_str(individual_address)
-            .map_err(|e| anyhow::anyhow!("Invalid individual address: {e}"))?;
+/// Start the device server and BAU, returning a publisher/listener pair.
+pub(crate) async fn start_device_transport(
+    individual_address: &str,
+    _config: &crate::config::AppConfig,
+) -> Result<(DevicePublisher, DeviceListener)> {
+    let ia = IndividualAddress::from_str(individual_address)
+        .map_err(|e| anyhow::anyhow!("Invalid individual address: {e}"))?;
 
-        let server = DeviceServer::start(Ipv4Addr::UNSPECIFIED)
-            .await
-            .context("Failed to start KNX device server")?;
+    let server = DeviceServer::start(Ipv4Addr::UNSPECIFIED)
+        .await
+        .context("Failed to start KNX device server")?;
 
-        let (cmd_tx, cmd_rx) = mpsc::channel(64);
-        let (update_tx, update_rx) = mpsc::channel(64);
+    let (cmd_tx, cmd_rx) = mpsc::channel(64);
+    let (update_tx, update_rx) = mpsc::channel(64);
 
-        tokio::spawn(bau_task(ia, server, cmd_rx, update_tx));
+    tokio::spawn(bau_task(ia, server, cmd_rx, update_tx));
 
-        tracing::info!(%individual_address, "KNX device mode started");
+    tracing::info!(%individual_address, "KNX device mode started");
 
-        Ok(Self { cmd_tx, update_rx })
-    }
+    Ok((DevicePublisher { cmd_tx }, DeviceListener { update_rx }))
 }
 
-impl KnxTransport for DeviceTransport {
+impl KnxTransport for DevicePublisher {
     async fn write(&self, ga: GroupAddress, dpt: Dpt, value: &DptValue) {
         let _ = self
             .cmd_tx
@@ -77,6 +79,17 @@ impl KnxTransport for DeviceTransport {
                 value: value.clone(),
             })
             .await;
+    }
+
+    async fn recv_group_write(&mut self) -> Option<(GroupAddress, Vec<u8>)> {
+        // Publisher doesn't receive — block forever
+        std::future::pending().await
+    }
+}
+
+impl KnxTransport for DeviceListener {
+    async fn write(&self, _ga: GroupAddress, _dpt: Dpt, _value: &DptValue) {
+        // Listener doesn't write
     }
 
     async fn recv_group_write(&mut self) -> Option<(GroupAddress, Vec<u8>)> {

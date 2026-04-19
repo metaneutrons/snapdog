@@ -35,9 +35,22 @@ use transport::KnxTransport;
 
 // ── Start ─────────────────────────────────────────────────────
 
-/// Start the KNX bridge. Parses the URL to auto-detect tunnel vs router,
-/// creates a multiplexer, and spawns independent publisher and listener tasks.
+/// Start the KNX bridge in the configured mode (client or device).
 pub async fn start(
+    config: &AppConfig,
+    store: state::SharedState,
+    notify_rx: tokio::sync::broadcast::Receiver<crate::api::ws::Notification>,
+    zone_commands: HashMap<usize, ZoneCommandSender>,
+    snap_tx: tokio::sync::mpsc::Sender<SnapcastCmd>,
+) -> Result<()> {
+    match config.knx.mode.as_str() {
+        "client" => start_client(config, store, notify_rx, zone_commands, snap_tx).await,
+        "device" => start_device(config, store, notify_rx, zone_commands, snap_tx).await,
+        other => anyhow::bail!("Unknown KNX mode '{other}'"),
+    }
+}
+
+async fn start_client(
     config: &AppConfig,
     store: state::SharedState,
     notify_rx: tokio::sync::broadcast::Receiver<crate::api::ws::Notification>,
@@ -48,12 +61,12 @@ pub async fn start(
         .knx
         .url
         .as_deref()
-        .context("KNX requires url (e.g. udp://192.168.1.50:3671)")?;
+        .context("KNX client mode requires 'url'")?;
     let spec = knx_ip::parse_url(url).context("Invalid KNX URL")?;
     let conn = knx_ip::connect(spec)
         .await
         .context("KNX connection failed")?;
-    tracing::info!(%url, "KNX connected");
+    tracing::info!(%url, "KNX client connected");
 
     let mux = knx_ip::Multiplexer::new(conn);
     let pub_transport = client::ClientTransport::new(mux.handle());
@@ -69,7 +82,33 @@ pub async fn start(
         zone_commands,
         snap_tx,
     );
+    Ok(())
+}
 
+async fn start_device(
+    config: &AppConfig,
+    store: state::SharedState,
+    notify_rx: tokio::sync::broadcast::Receiver<crate::api::ws::Notification>,
+    zone_commands: HashMap<usize, ZoneCommandSender>,
+    snap_tx: tokio::sync::mpsc::Sender<SnapcastCmd>,
+) -> Result<()> {
+    let addr = config
+        .knx
+        .individual_address
+        .as_deref()
+        .context("KNX device mode requires 'individual_address'")?;
+
+    let (pub_transport, listen_transport) = device::start_device_transport(addr, config).await?;
+
+    spawn_bridge(
+        pub_transport,
+        listen_transport,
+        config,
+        store,
+        notify_rx,
+        zone_commands,
+        snap_tx,
+    );
     Ok(())
 }
 
