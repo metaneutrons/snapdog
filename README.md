@@ -29,7 +29,7 @@ SnapDog turns a Linux box (or Mac) into a synchronized multi-room audio system w
 | 📚 **Subsonic/Navidrome** | Personal music library with playlist navigation and seek |
 | 📻 **Internet Radio** | Station list with live ICY metadata |
 | 🏠 **MQTT** | Bidirectional smart home integration |
-| 🏢 **KNX** | Building automation (tunnel + router, typed DPT encoding) |
+| 🏢 **KNX** | Building automation — client mode (tunnel/router) or device mode (ETS-programmable, 410 group objects) |
 | 🎛️ **Parametric EQ** | Per-zone and per-client, real-time via custom protocol |
 | 🌐 **REST API** | ~90 endpoints, full zone/client/media control |
 | 📡 **WebSocket** | Real-time state push notifications |
@@ -91,7 +91,10 @@ password = "pass"
 
 [knx]
 enabled = true
+# mode = "client"                     # Connect to a KNX/IP gateway
 url = "udp://192.168.1.50:3671"
+# mode = "device"                     # Run as ETS-programmable KNX/IP device
+# individual_address = "1.1.100"
 
 [[zone]]
 name = "Living Room"
@@ -106,7 +109,7 @@ name = "Deutschlandfunk"
 url = "https://st01.sslstream.dlf.de/dlf/01/high/aac/stream.aac"
 ```
 
-Snapcast sink paths, stream names, and AirPlay names are auto-generated from zone/client definitions. KNX addresses are explicit (fits into existing installations).
+Snapcast sink paths, stream names, and AirPlay names are auto-generated from zone/client definitions. KNX addresses are explicit in client mode (fits into existing installations). In device mode, ETS assigns group addresses via the `.knxprod` product database.
 
 <details>
 <summary><strong>API Authentication</strong></summary>
