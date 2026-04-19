@@ -7,6 +7,7 @@
 //! the transport communicates via channels.
 
 use std::net::Ipv4Addr;
+use std::path::PathBuf;
 use std::str::FromStr;
 
 use anyhow::{Context, Result};
@@ -47,10 +48,13 @@ pub(crate) struct DeviceListener {
     update_rx: mpsc::Receiver<(GroupAddress, Vec<u8>)>,
 }
 
+/// Default path for persisted ETS memory.
+const ETS_MEMORY_PATH: &str = "knx-memory.bin";
+
 /// Start the device server and BAU, returning a publisher/listener pair.
 pub(crate) async fn start_device_transport(
     individual_address: &str,
-    _config: &crate::config::AppConfig,
+    config: &crate::config::AppConfig,
 ) -> Result<(DevicePublisher, DeviceListener)> {
     let ia = IndividualAddress::from_str(individual_address)
         .map_err(|e| anyhow::anyhow!("Invalid individual address: {e}"))?;
@@ -59,12 +63,19 @@ pub(crate) async fn start_device_transport(
         .await
         .context("Failed to start KNX device server")?;
 
+    let persist = config.knx.persist_ets_config.unwrap_or(true);
+    let persist_path = if persist {
+        Some(PathBuf::from(ETS_MEMORY_PATH))
+    } else {
+        None
+    };
+
     let (cmd_tx, cmd_rx) = mpsc::channel(64);
     let (update_tx, update_rx) = mpsc::channel(64);
 
-    tokio::spawn(bau_task(ia, server, cmd_rx, update_tx));
+    tokio::spawn(bau_task(ia, server, cmd_rx, update_tx, persist_path));
 
-    tracing::info!(%individual_address, "KNX device mode started");
+    tracing::info!(%individual_address, persist, "KNX device mode started");
 
     Ok((DevicePublisher { cmd_tx }, DeviceListener { update_rx }))
 }
@@ -104,12 +115,23 @@ async fn bau_task(
     mut server: DeviceServer,
     mut cmd_rx: mpsc::Receiver<BauCmd>,
     update_tx: mpsc::Sender<(GroupAddress, Vec<u8>)>,
+    persist_path: Option<PathBuf>,
 ) {
     let mut bau = build_bau(ia);
 
+    // Load persisted ETS memory if available
+    if let Some(ref path) = persist_path {
+        if let Ok(data) = std::fs::read(path) {
+            bau.set_memory_area(data);
+            // TODO: load_tables_from_memory requires known offsets —
+            // these are determined by the ETS application program layout.
+            // For now, the memory area is restored so ETS MemoryRead works.
+            tracing::info!(path = %path.display(), "Loaded persisted ETS memory");
+        }
+    }
+
     loop {
         tokio::select! {
-            // Incoming frames from the network (ETS or multicast)
             event = server.recv() => {
                 let Some(event) = event else { break };
                 let frame = match event {
@@ -118,16 +140,13 @@ async fn bau_task(
                 bau.process_frame(&frame);
                 bau.poll();
 
-                // Send outgoing frames (responses to ETS, group value responses)
                 while let Some(out) = bau.next_outgoing_frame() {
                     let _ = server.send_frame(out).await;
                 }
 
-                // Check for GOs updated from the bus → forward to listener
                 dispatch_updated_gos(&mut bau, &update_tx).await;
             }
 
-            // Commands from the publisher (write values to GOs)
             cmd = cmd_rx.recv() => {
                 let Some(cmd) = cmd else { break };
                 match cmd {
