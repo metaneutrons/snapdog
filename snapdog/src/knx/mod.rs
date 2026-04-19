@@ -7,25 +7,27 @@
 //! - **Publisher**: writes zone/client status to KNX group addresses on state changes
 //! - **Listener**: receives KNX group writes and routes them as zone/client commands
 //!
-//! Uses knx-ip's [`Multiplexer`] to fan out a single connection into
-//! independent publisher and listener handles. Supports both tunnel
-//! (unicast) and router (multicast) connections via URL auto-detection.
+//! Transport-agnostic: both client mode (gateway connection) and device mode
+//! (ETS-programmable KNX/IP device) share the same publisher/listener logic
+//! via the [`KnxTransport`] trait.
+
+mod client;
+mod transport;
 
 use std::collections::HashMap;
 use std::str::FromStr;
 
 use anyhow::{Context, Result};
 use knx_core::address::GroupAddress;
-use knx_core::cemi::CemiFrame;
 use knx_core::dpt::{
     self, DPT_SCALING, DPT_STRING_8859_1, DPT_SWITCH, DPT_VALUE_1_UCOUNT, Dpt, DptValue,
 };
-use knx_ip::multiplex::{MultiplexHandle, Multiplexer};
-use knx_ip::ops::GroupOps;
 
 use crate::config::AppConfig;
 use crate::player::{ClientAction, SnapcastCmd, ZoneCommand, ZoneCommandSender};
 use crate::state;
+
+use transport::KnxTransport;
 
 // ── Start ─────────────────────────────────────────────────────
 
@@ -49,29 +51,56 @@ pub async fn start(
         .context("KNX connection failed")?;
     tracing::info!(%url, "KNX connected");
 
-    let mux = Multiplexer::new(conn);
-    let pub_handle = mux.handle();
-    let listen_handle = mux.handle();
+    let mux = knx_ip::Multiplexer::new(conn);
+    let pub_transport = client::ClientTransport::new(mux.handle());
+    let listen_transport = client::ClientTransport::new(mux.handle());
     tokio::spawn(mux.run());
 
+    spawn_bridge(
+        pub_transport,
+        listen_transport,
+        config,
+        store,
+        notify_rx,
+        zone_commands,
+        snap_tx,
+    );
+
+    Ok(())
+}
+
+fn spawn_bridge(
+    pub_transport: impl KnxTransport + 'static,
+    listen_transport: impl KnxTransport + 'static,
+    config: &AppConfig,
+    store: state::SharedState,
+    notify_rx: tokio::sync::broadcast::Receiver<crate::api::ws::Notification>,
+    zone_commands: HashMap<usize, ZoneCommandSender>,
+    snap_tx: tokio::sync::mpsc::Sender<SnapcastCmd>,
+) {
     let pub_config = config.clone();
     let pub_store = store.clone();
     tokio::spawn(async move {
-        publisher(pub_handle, pub_config, pub_store, notify_rx).await;
+        publisher(pub_transport, pub_config, pub_store, notify_rx).await;
     });
 
     let listen_config = config.clone();
     tokio::spawn(async move {
-        listener(listen_handle, listen_config, store, zone_commands, snap_tx).await;
+        listener(
+            listen_transport,
+            listen_config,
+            store,
+            zone_commands,
+            snap_tx,
+        )
+        .await;
     });
-
-    Ok(())
 }
 
 // ── Publisher ─────────────────────────────────────────────────
 
 async fn publisher(
-    handle: MultiplexHandle,
+    transport: impl KnxTransport,
     config: AppConfig,
     store: state::SharedState,
     mut notify_rx: tokio::sync::broadcast::Receiver<crate::api::ws::Notification>,
@@ -80,16 +109,16 @@ async fn publisher(
     loop {
         match notify_rx.recv().await {
             Ok(crate::api::ws::Notification::ZoneStateChanged { zone, .. }) => {
-                publish_zone_state(zone, &config, &store, &handle).await;
+                publish_zone_state(zone, &config, &store, &transport).await;
             }
             Ok(crate::api::ws::Notification::ZoneTrackChanged { zone, .. }) => {
-                publish_zone_track(zone, &config, &store, &handle).await;
+                publish_zone_track(zone, &config, &store, &transport).await;
             }
             Ok(crate::api::ws::Notification::ZoneProgress { zone, .. }) => {
-                publish_zone_progress(zone, &config, &store, &handle).await;
+                publish_zone_progress(zone, &config, &store, &transport).await;
             }
             Ok(crate::api::ws::Notification::ClientStateChanged { client, .. }) => {
-                publish_client_state(client, &config, &store, &handle).await;
+                publish_client_state(client, &config, &store, &transport).await;
             }
             Ok(_) => {}
             Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
@@ -104,7 +133,7 @@ async fn publish_zone_state(
     zone_index: usize,
     config: &AppConfig,
     store: &state::SharedState,
-    handle: &MultiplexHandle,
+    transport: &impl KnxTransport,
 ) {
     let s = store.read().await;
     let Some(zone) = s.zones.get(&zone_index) else {
@@ -118,7 +147,7 @@ async fn publish_zone_state(
 
     if let Some(ref ga) = knx.volume_status {
         write(
-            handle,
+            transport,
             ga,
             DPT_SCALING,
             &DptValue::Float(f64::from(zone.volume.clamp(0, 100) as u8)),
@@ -126,26 +155,26 @@ async fn publish_zone_state(
         .await;
     }
     if let Some(ref ga) = knx.mute_status {
-        write(handle, ga, DPT_SWITCH, &zone.muted.into()).await;
+        write(transport, ga, DPT_SWITCH, &zone.muted.into()).await;
     }
     if let Some(ref ga) = knx.shuffle_status {
-        write(handle, ga, DPT_SWITCH, &zone.shuffle.into()).await;
+        write(transport, ga, DPT_SWITCH, &zone.shuffle.into()).await;
     }
     if let Some(ref ga) = knx.repeat_status {
-        write(handle, ga, DPT_SWITCH, &zone.repeat.into()).await;
+        write(transport, ga, DPT_SWITCH, &zone.repeat.into()).await;
     }
     if let Some(ref ga) = knx.track_playing_status {
-        write(handle, ga, DPT_SWITCH, &playing.into()).await;
+        write(transport, ga, DPT_SWITCH, &playing.into()).await;
     }
     if let Some(ref ga) = knx.track_repeat_status {
-        write(handle, ga, DPT_SWITCH, &zone.track_repeat.into()).await;
+        write(transport, ga, DPT_SWITCH, &zone.track_repeat.into()).await;
     }
     if let Some(ref ga) = knx.control_status {
-        write(handle, ga, DPT_SWITCH, &playing.into()).await;
+        write(transport, ga, DPT_SWITCH, &playing.into()).await;
     }
     if let Some(ref ga) = knx.playlist_status {
         write(
-            handle,
+            transport,
             ga,
             DPT_VALUE_1_UCOUNT,
             &DptValue::from(zone.playlist_index.unwrap_or(0) as u8),
@@ -158,7 +187,7 @@ async fn publish_zone_track(
     zone_index: usize,
     config: &AppConfig,
     store: &state::SharedState,
-    handle: &MultiplexHandle,
+    transport: &impl KnxTransport,
 ) {
     let s = store.read().await;
     let Some(zone) = s.zones.get(&zone_index) else {
@@ -172,7 +201,7 @@ async fn publish_zone_track(
     if let Some(ref track) = zone.track {
         if let Some(ref ga) = knx.track_title_status {
             write(
-                handle,
+                transport,
                 ga,
                 DPT_STRING_8859_1,
                 &DptValue::from(track.title.as_str()),
@@ -181,7 +210,7 @@ async fn publish_zone_track(
         }
         if let Some(ref ga) = knx.track_artist_status {
             write(
-                handle,
+                transport,
                 ga,
                 DPT_STRING_8859_1,
                 &DptValue::from(track.artist.as_str()),
@@ -190,7 +219,7 @@ async fn publish_zone_track(
         }
         if let Some(ref ga) = knx.track_album_status {
             write(
-                handle,
+                transport,
                 ga,
                 DPT_STRING_8859_1,
                 &DptValue::from(track.album.as_str()),
@@ -203,7 +232,7 @@ async fn publish_zone_track(
             } else {
                 0.0
             };
-            write(handle, ga, DPT_SCALING, &DptValue::Float(pct)).await;
+            write(transport, ga, DPT_SCALING, &DptValue::Float(pct)).await;
         }
     }
 }
@@ -212,7 +241,7 @@ async fn publish_zone_progress(
     zone_index: usize,
     config: &AppConfig,
     store: &state::SharedState,
-    handle: &MultiplexHandle,
+    transport: &impl KnxTransport,
 ) {
     let s = store.read().await;
     let Some(zone) = s.zones.get(&zone_index) else {
@@ -229,7 +258,7 @@ async fn publish_zone_progress(
                 0.0
             }
         });
-        write(handle, ga, DPT_SCALING, &DptValue::Float(pct)).await;
+        write(transport, ga, DPT_SCALING, &DptValue::Float(pct)).await;
     }
 }
 
@@ -237,7 +266,7 @@ async fn publish_client_state(
     client_index: usize,
     config: &AppConfig,
     store: &state::SharedState,
-    handle: &MultiplexHandle,
+    transport: &impl KnxTransport,
 ) {
     let s = store.read().await;
     let Some(client) = s.clients.get(&client_index) else {
@@ -250,7 +279,7 @@ async fn publish_client_state(
 
     if let Some(ref ga) = knx.volume_status {
         write(
-            handle,
+            transport,
             ga,
             DPT_SCALING,
             &DptValue::Float(f64::from(client.base_volume.clamp(0, 100) as u8)),
@@ -258,14 +287,14 @@ async fn publish_client_state(
         .await;
     }
     if let Some(ref ga) = knx.mute_status {
-        write(handle, ga, DPT_SWITCH, &client.muted.into()).await;
+        write(transport, ga, DPT_SWITCH, &client.muted.into()).await;
     }
     if let Some(ref ga) = knx.connected_status {
-        write(handle, ga, DPT_SWITCH, &client.connected.into()).await;
+        write(transport, ga, DPT_SWITCH, &client.connected.into()).await;
     }
     if let Some(ref ga) = knx.zone_status {
         write(
-            handle,
+            transport,
             ga,
             DPT_VALUE_1_UCOUNT,
             &DptValue::from(client.zone_index as u8),
@@ -274,7 +303,7 @@ async fn publish_client_state(
     }
     if let Some(ref ga) = knx.latency_status {
         write(
-            handle,
+            transport,
             ga,
             DPT_VALUE_1_UCOUNT,
             &DptValue::from(client.latency_ms.clamp(0, 255) as u8),
@@ -286,7 +315,7 @@ async fn publish_client_state(
 // ── Listener ──────────────────────────────────────────────────
 
 async fn listener(
-    mut handle: MultiplexHandle,
+    mut transport: impl KnxTransport,
     config: AppConfig,
     store: state::SharedState,
     zone_commands: HashMap<usize, ZoneCommandSender>,
@@ -302,12 +331,13 @@ async fn listener(
     );
 
     loop {
-        let Some(cemi) = handle.recv().await else {
+        let Some((ga, data)) = transport.recv_group_write().await else {
             tracing::warn!("KNX connection closed");
             break;
         };
         handle_incoming(
-            &cemi,
+            ga,
+            &data,
             &zone_ga_map,
             &client_ga_map,
             &zone_commands,
@@ -375,16 +405,14 @@ pub(crate) fn build_client_ga_map(config: &AppConfig) -> HashMap<String, (usize,
 }
 
 pub(crate) async fn handle_incoming(
-    cemi: &CemiFrame,
+    ga: GroupAddress,
+    data: &[u8],
     zone_ga_map: &HashMap<String, (usize, &str)>,
     client_ga_map: &HashMap<String, (usize, &str)>,
     zone_commands: &HashMap<usize, ZoneCommandSender>,
     snap_tx: &tokio::sync::mpsc::Sender<SnapcastCmd>,
     store: &state::SharedState,
 ) {
-    let Some((ga, data)) = cemi.as_group_write() else {
-        return;
-    };
     let ga_str = format!("{ga}");
 
     if let Some(&(zone_idx, action)) = zone_ga_map.get(&ga_str) {
@@ -399,13 +427,13 @@ pub(crate) async fn handle_incoming(
                 "shuffle_toggle" => Some(ZoneCommand::ToggleShuffle),
                 "repeat_toggle" => Some(ZoneCommand::ToggleRepeat),
                 "track_repeat_toggle" => Some(ZoneCommand::ToggleTrackRepeat),
-                "mute" => Some(ZoneCommand::SetMute(decode_bool(&data))),
-                "shuffle" => Some(ZoneCommand::SetShuffle(decode_bool(&data))),
-                "repeat" => Some(ZoneCommand::SetRepeat(decode_bool(&data))),
-                "track_repeat" => Some(ZoneCommand::SetTrackRepeat(decode_bool(&data))),
-                "volume" => decode_percent(&data).map(|v| ZoneCommand::SetVolume(v as i32)),
-                "volume_dim" => decode_dim(&data).map(ZoneCommand::AdjustVolume),
-                "playlist" => decode_u8(&data).map(|v| ZoneCommand::SetPlaylist(v as usize, 0)),
+                "mute" => Some(ZoneCommand::SetMute(decode_bool(data))),
+                "shuffle" => Some(ZoneCommand::SetShuffle(decode_bool(data))),
+                "repeat" => Some(ZoneCommand::SetRepeat(decode_bool(data))),
+                "track_repeat" => Some(ZoneCommand::SetTrackRepeat(decode_bool(data))),
+                "volume" => decode_percent(data).map(|v| ZoneCommand::SetVolume(v as i32)),
+                "volume_dim" => decode_dim(data).map(ZoneCommand::AdjustVolume),
+                "playlist" => decode_u8(data).map(|v| ZoneCommand::SetPlaylist(v as usize, 0)),
                 "playlist_next" => Some(ZoneCommand::NextPlaylist),
                 "playlist_previous" => Some(ZoneCommand::PreviousPlaylist),
                 _ => None,
@@ -423,12 +451,12 @@ pub(crate) async fn handle_incoming(
             if let Some(ref snap_id) = client.snapcast_id {
                 let cmd = match action {
                     "mute_toggle" => Some(ClientAction::Mute(!client.muted)),
-                    "mute" => Some(ClientAction::Mute(decode_bool(&data))),
-                    "volume" => decode_percent(&data).map(|v| ClientAction::Volume(v as i32)),
-                    "volume_dim" => decode_dim(&data).map(ClientAction::AdjustVolume),
-                    "latency" => decode_u8(&data).map(|v| ClientAction::Latency(v as i32)),
+                    "mute" => Some(ClientAction::Mute(decode_bool(data))),
+                    "volume" => decode_percent(data).map(|v| ClientAction::Volume(v as i32)),
+                    "volume_dim" => decode_dim(data).map(ClientAction::AdjustVolume),
+                    "latency" => decode_u8(data).map(|v| ClientAction::Latency(v as i32)),
                     "zone" => {
-                        if let Some(target_zone) = decode_u8(&data) {
+                        if let Some(target_zone) = decode_u8(data) {
                             drop(s);
                             if let Some(c) = store.write().await.clients.get_mut(&client_idx) {
                                 c.zone_index = target_zone as usize;
@@ -509,7 +537,7 @@ fn decode_dim(payload: &[u8]) -> Option<i32> {
 
 // ── Write helper ──────────────────────────────────────────────
 
-async fn write(handle: &MultiplexHandle, ga_str: &str, dpt: Dpt, value: &DptValue) {
+async fn write(transport: &impl KnxTransport, ga_str: &str, dpt: Dpt, value: &DptValue) {
     let ga = match GroupAddress::from_str(ga_str) {
         Ok(ga) => ga,
         Err(e) => {
@@ -517,18 +545,14 @@ async fn write(handle: &MultiplexHandle, ga_str: &str, dpt: Dpt, value: &DptValu
             return;
         }
     };
-    if let Err(e) = handle.group_write_value(ga, dpt, value).await {
-        tracing::warn!(ga = ga_str, error = %e, "KNX write failed");
-    }
+    transport.write(ga, dpt, value).await;
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::player::ZoneCommand;
-    use knx_core::address::{DestinationAddress, IndividualAddress};
-    use knx_core::message::MessageCode;
-    use knx_core::types::Priority;
+    use knx_core::address::GroupAddress;
     use std::sync::Arc;
     use tokio::sync::{RwLock, mpsc};
 
@@ -548,29 +572,8 @@ mod tests {
         dpt::encode(DPT_VALUE_1_UCOUNT, &DptValue::from(value)).unwrap()
     }
 
-    /// Build a GroupValueWrite CemiFrame for testing.
-    fn make_cemi(ga_str: &str, data: Option<&[u8]>) -> CemiFrame {
-        let ga = GroupAddress::from_str(ga_str).unwrap();
-        let mut payload = vec![0x00]; // TPCI: unnumbered data
-        match data {
-            Some(d) if d.len() == 1 && d[0] <= 0x3F => {
-                payload.push(0x80 | (d[0] & 0x3F));
-            }
-            Some(d) => {
-                payload.push(0x80);
-                payload.extend_from_slice(d);
-            }
-            None => {
-                payload.push(0x80); // GroupValueWrite, no data
-            }
-        }
-        CemiFrame::new_l_data(
-            MessageCode::LDataInd,
-            IndividualAddress::from_raw(0x1001),
-            DestinationAddress::Group(ga),
-            Priority::Low,
-            &payload,
-        )
+    fn ga(s: &str) -> GroupAddress {
+        GroupAddress::from_str(s).unwrap()
     }
 
     #[test]
@@ -637,103 +640,55 @@ mod tests {
         m
     }
 
-    #[tokio::test]
-    async fn zone_play_command() {
-        let (tx, mut rx) = mpsc::channel(16);
+    async fn run_incoming(
+        ga_str: &str,
+        data: &[u8],
+        state: &state::SharedState,
+    ) -> (mpsc::Receiver<ZoneCommand>, mpsc::Receiver<SnapcastCmd>) {
+        let (tx, rx) = mpsc::channel(16);
         let mut cmds = HashMap::new();
         cmds.insert(1, tx);
-        let (snap_tx, _snap_rx) = mpsc::channel(16);
-        let state = test_state();
-        let cemi = make_cemi("1/0/1", None);
+        let (snap_tx, snap_rx) = mpsc::channel(16);
         handle_incoming(
-            &cemi,
+            ga(ga_str),
+            data,
             &zone_ga_map(),
             &client_ga_map(),
             &cmds,
             &snap_tx,
-            &state,
+            state,
         )
         .await;
+        (rx, snap_rx)
+    }
+
+    #[tokio::test]
+    async fn zone_play_command() {
+        let (mut rx, _) = run_incoming("1/0/1", &[], &test_state()).await;
         assert!(matches!(rx.recv().await, Some(ZoneCommand::Play)));
     }
 
     #[tokio::test]
     async fn zone_volume_from_knx() {
-        let (tx, mut rx) = mpsc::channel(16);
-        let mut cmds = HashMap::new();
-        cmds.insert(1, tx);
-        let (snap_tx, _snap_rx) = mpsc::channel(16);
-        let state = test_state();
-        let cemi = make_cemi("1/0/6", Some(&encode_percent(75)));
-        handle_incoming(
-            &cemi,
-            &zone_ga_map(),
-            &client_ga_map(),
-            &cmds,
-            &snap_tx,
-            &state,
-        )
-        .await;
+        let (mut rx, _) = run_incoming("1/0/6", &encode_percent(75), &test_state()).await;
         assert!(matches!(rx.recv().await, Some(ZoneCommand::SetVolume(75))));
     }
 
     #[tokio::test]
     async fn zone_mute_from_knx() {
-        let (tx, mut rx) = mpsc::channel(16);
-        let mut cmds = HashMap::new();
-        cmds.insert(1, tx);
-        let (snap_tx, _snap_rx) = mpsc::channel(16);
-        let state = test_state();
-        let cemi = make_cemi("1/0/7", Some(&encode_bool(true)));
-        handle_incoming(
-            &cemi,
-            &zone_ga_map(),
-            &client_ga_map(),
-            &cmds,
-            &snap_tx,
-            &state,
-        )
-        .await;
+        let (mut rx, _) = run_incoming("1/0/7", &encode_bool(true), &test_state()).await;
         assert!(matches!(rx.recv().await, Some(ZoneCommand::SetMute(true))));
     }
 
     #[tokio::test]
     async fn zone_mute_toggle() {
-        let (tx, mut rx) = mpsc::channel(16);
-        let mut cmds = HashMap::new();
-        cmds.insert(1, tx);
-        let (snap_tx, _snap_rx) = mpsc::channel(16);
-        let state = test_state();
-        let cemi = make_cemi("1/0/8", None);
-        handle_incoming(
-            &cemi,
-            &zone_ga_map(),
-            &client_ga_map(),
-            &cmds,
-            &snap_tx,
-            &state,
-        )
-        .await;
+        let (mut rx, _) = run_incoming("1/0/8", &[], &test_state()).await;
         assert!(matches!(rx.recv().await, Some(ZoneCommand::ToggleMute)));
     }
 
     #[tokio::test]
     async fn zone_playlist_from_knx() {
-        let (tx, mut rx) = mpsc::channel(16);
-        let mut cmds = HashMap::new();
-        cmds.insert(1, tx);
-        let (snap_tx, _snap_rx) = mpsc::channel(16);
-        let state = test_state();
-        let cemi = make_cemi("1/0/10", Some(&encode_u8(3)));
-        handle_incoming(
-            &cemi,
-            &zone_ga_map(),
-            &client_ga_map(),
-            &cmds,
-            &snap_tx,
-            &state,
-        )
-        .await;
+        let (mut rx, _) = run_incoming("1/0/10", &encode_u8(3), &test_state()).await;
         assert!(matches!(
             rx.recv().await,
             Some(ZoneCommand::SetPlaylist(3, 0))
@@ -742,21 +697,7 @@ mod tests {
 
     #[tokio::test]
     async fn client_volume_from_knx() {
-        let (tx, _rx) = mpsc::channel(16);
-        let mut cmds = HashMap::new();
-        cmds.insert(1, tx);
-        let (snap_tx, mut snap_rx) = mpsc::channel(16);
-        let state = test_state();
-        let cemi = make_cemi("2/0/1", Some(&encode_percent(80)));
-        handle_incoming(
-            &cemi,
-            &zone_ga_map(),
-            &client_ga_map(),
-            &cmds,
-            &snap_tx,
-            &state,
-        )
-        .await;
+        let (_, mut snap_rx) = run_incoming("2/0/1", &encode_percent(80), &test_state()).await;
         assert!(matches!(
             snap_rx.recv().await,
             Some(SnapcastCmd::Client {
@@ -768,21 +709,7 @@ mod tests {
 
     #[tokio::test]
     async fn client_mute_from_knx() {
-        let (tx, _rx) = mpsc::channel(16);
-        let mut cmds = HashMap::new();
-        cmds.insert(1, tx);
-        let (snap_tx, mut snap_rx) = mpsc::channel(16);
-        let state = test_state();
-        let cemi = make_cemi("2/0/2", Some(&encode_bool(true)));
-        handle_incoming(
-            &cemi,
-            &zone_ga_map(),
-            &client_ga_map(),
-            &cmds,
-            &snap_tx,
-            &state,
-        )
-        .await;
+        let (_, mut snap_rx) = run_incoming("2/0/2", &encode_bool(true), &test_state()).await;
         assert!(matches!(
             snap_rx.recv().await,
             Some(SnapcastCmd::Client {
@@ -794,21 +721,7 @@ mod tests {
 
     #[tokio::test]
     async fn client_mute_toggle_from_knx() {
-        let (tx, _rx) = mpsc::channel(16);
-        let mut cmds = HashMap::new();
-        cmds.insert(1, tx);
-        let (snap_tx, mut snap_rx) = mpsc::channel(16);
-        let state = test_state();
-        let cemi = make_cemi("2/0/3", None);
-        handle_incoming(
-            &cemi,
-            &zone_ga_map(),
-            &client_ga_map(),
-            &cmds,
-            &snap_tx,
-            &state,
-        )
-        .await;
+        let (_, mut snap_rx) = run_incoming("2/0/3", &[], &test_state()).await;
         assert!(matches!(
             snap_rx.recv().await,
             Some(SnapcastCmd::Client {
@@ -820,21 +733,7 @@ mod tests {
 
     #[tokio::test]
     async fn unknown_ga_ignored() {
-        let (tx, mut rx) = mpsc::channel(16);
-        let mut cmds = HashMap::new();
-        cmds.insert(1, tx);
-        let (snap_tx, mut snap_rx) = mpsc::channel(16);
-        let state = test_state();
-        let cemi = make_cemi("3/0/1", Some(&encode_bool(true)));
-        handle_incoming(
-            &cemi,
-            &zone_ga_map(),
-            &client_ga_map(),
-            &cmds,
-            &snap_tx,
-            &state,
-        )
-        .await;
+        let (mut rx, mut snap_rx) = run_incoming("3/0/1", &encode_bool(true), &test_state()).await;
         assert!(rx.try_recv().is_err());
         assert!(snap_rx.try_recv().is_err());
     }
@@ -869,23 +768,8 @@ mod tests {
 
     #[tokio::test]
     async fn zone_volume_dim_from_knx() {
-        let (tx, mut rx) = mpsc::channel(16);
-        let mut cmds = HashMap::new();
-        cmds.insert(1, tx);
-        let (snap_tx, _snap_rx) = mpsc::channel(16);
-        let state = test_state();
-        // increase, stepcode=2 (32%) → 0b1_010 = 0x0A
         let encoded = dpt::encode(DPT_CONTROL_DIMMING, &DptValue::UInt(0x0A)).unwrap();
-        let cemi = make_cemi("1/0/11", Some(&encoded));
-        handle_incoming(
-            &cemi,
-            &zone_ga_map(),
-            &client_ga_map(),
-            &cmds,
-            &snap_tx,
-            &state,
-        )
-        .await;
+        let (mut rx, _) = run_incoming("1/0/11", &encoded, &test_state()).await;
         assert!(matches!(
             rx.recv().await,
             Some(ZoneCommand::AdjustVolume(32))
