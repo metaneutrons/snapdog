@@ -12,6 +12,8 @@
 //! via the [`KnxTransport`] trait.
 
 mod client;
+#[allow(dead_code)] // Used by DeviceTransport (Task 5) and xtask (Task 7)
+pub(crate) mod group_objects;
 mod transport;
 
 use std::collections::HashMap;
