@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<KNX xmlns="http://knx.org/xml/project/20" xmlns:op="http://github.com/OpenKNX/OpenKNXproducer">
+  <ManufacturerData>
+    <Manufacturer RefId="M-00FA">
+      <ApplicationPrograms>
+        <ApplicationProgram>
+          <Static>
+            <ComObjectTable>
+              <ComObject Id="%AID%_O-%TT%%CCC%000" Name="Client %C% Volume"           Number="%K0%"  Text="Volume"           FunctionText="Volume"           ObjectSize="1 Byte" DatapointType="DPST-5-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%001" Name="Client %C% Volume Status"    Number="%K1%"  Text="Volume Status"    FunctionText="Volume Status"    ObjectSize="1 Byte" DatapointType="DPST-5-1"  Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%002" Name="Client %C% Volume Dim"       Number="%K2%"  Text="Volume Dim"       FunctionText="Volume Dim"       ObjectSize="4 Bit"  DatapointType="DPST-3-7"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%003" Name="Client %C% Mute"             Number="%K3%"  Text="Mute"             FunctionText="Mute"             ObjectSize="1 Bit"  DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%004" Name="Client %C% Mute Status"      Number="%K4%"  Text="Mute Status"      FunctionText="Mute Status"      ObjectSize="1 Bit"  DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%005" Name="Client %C% Mute Toggle"      Number="%K5%"  Text="Mute Toggle"      FunctionText="Mute Toggle"      ObjectSize="1 Bit"  DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%006" Name="Client %C% Latency"          Number="%K6%"  Text="Latency"          FunctionText="Latency"          ObjectSize="1 Byte" DatapointType="DPST-5-10" Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%007" Name="Client %C% Latency Status"   Number="%K7%"  Text="Latency Status"   FunctionText="Latency Status"   ObjectSize="1 Byte" DatapointType="DPST-5-10" Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%008" Name="Client %C% Zone"             Number="%K8%"  Text="Zone"             FunctionText="Zone"             ObjectSize="1 Byte" DatapointType="DPST-5-10" Priority="Low" ReadFlag="Enabled"  WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Enabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%009" Name="Client %C% Zone Status"      Number="%K9%"  Text="Zone Status"      FunctionText="Zone Status"      ObjectSize="1 Byte" DatapointType="DPST-5-10" Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%010" Name="Client %C% Connected"        Number="%K10%" Text="Connected"        FunctionText="Connected"        ObjectSize="1 Bit"  DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
+            </ComObjectTable>
+          </Static>
+          <Dynamic>
+            <Channel Name="Client %C%" Number="%PREFIX%">
+              <ParameterBlock Id="%AID%_PB-%TT%%CCC%" Name="Client %C%" Text="Client %C%">
+                <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%000_R-%K0%" />
+              </ParameterBlock>
+            </Channel>
+          </Dynamic>
+        </ApplicationProgram>
+      </ApplicationPrograms>
+    </Manufacturer>
+  </ManufacturerData>
+</KNX>

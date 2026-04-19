@@ -1,61 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  SnapDog KNX/IP Device — OpenKNXproducer XML
-  
-  Generates a .knxprod for ETS with 410 communication objects:
-  - 10 zones × 30 COs = 300
-  - 10 clients × 11 COs = 110
-  
-  Build: OpenKNXproducer create knx/SnapDog
--->
-<KNX xmlns="http://knx.org/xml/project/20" xmlns:op="http://openknx.de/xml/project">
+<KNX xmlns="http://knx.org/xml/project/20" xmlns:op="http://github.com/OpenKNX/OpenKNXproducer">
 
   <op:ETS
     OpenKnxId="0xFF"
     ApplicationNumber="1"
     ApplicationVersion="1"
-    ReplaceVersions=""
+    ReplacesVersions="0.0"
     ApplicationRevision="0"
     ProductName="SnapDog"
     IsIPEnabled="true"
     BusCurrent="0"
   />
 
-  <!-- Zone module: 30 COs per zone, 10 zones -->
+  <!-- No firmware parameters — minimal memory size -->
+  <op:config name="%MemorySize%" value="1" />
+  <op:config name="%MID%" value="M-00FA_A-FF01-01-0000_RS-04-00000" />
+
+  <!-- Zone module: 30 KOs per zone, 10 zones, KO 1-300 -->
   <op:define prefix="ZONE" header="include/knxprod.h"
     share=""
-    template="knx/SnapDog-Zone.xml"
+    template="SnapDog-Zone.templ.xml"
     NumChannels="10"
     KoOffset="1"
     ModuleType="1"
   />
 
-  <!-- Client module: 11 COs per client, 10 clients -->
+  <!-- Client module: 11 KOs per client, 10 clients, KO 301-410 -->
   <op:define prefix="CLI" header="include/knxprod.h"
     share=""
-    template="knx/SnapDog-Client.xml"
+    template="SnapDog-Client.templ.xml"
     NumChannels="10"
     KoOffset="301"
     ModuleType="2"
   />
 
-  <generate>
-    <ApplicationProgram>
-      <Static>
-        <ComObjectTable>
-          <op:include prefix="ZONE" href="knx/SnapDog-Zone.xml" xpath="//ComObject" type="template" />
-          <op:include prefix="CLI" href="knx/SnapDog-Client.xml" xpath="//ComObject" type="template" />
-        </ComObjectTable>
-      </Static>
-      <Dynamic>
-        <Channel Name="Zone %C%" Number="%PREFIX%">
-          <op:include prefix="ZONE" href="knx/SnapDog-Zone.xml" xpath="//Dynamic/*" type="template" />
-        </Channel>
-        <Channel Name="Client %C%" Number="%PREFIX%">
-          <op:include prefix="CLI" href="knx/SnapDog-Client.xml" xpath="//Dynamic/*" type="template" />
-        </Channel>
-      </Dynamic>
-    </ApplicationProgram>
-  </generate>
+  <generate />
 
 </KNX>
