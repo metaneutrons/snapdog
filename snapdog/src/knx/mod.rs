@@ -12,7 +12,9 @@
 //! via the [`KnxTransport`] trait.
 
 mod client;
-#[allow(dead_code)] // Used by DeviceTransport (Task 5) and xtask (Task 7)
+#[allow(dead_code)] // Wired up in Task 6
+mod device;
+#[allow(dead_code)]
 pub(crate) mod group_objects;
 mod transport;
 
