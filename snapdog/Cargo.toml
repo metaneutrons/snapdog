@@ -29,8 +29,8 @@ symphonia = { workspace = true }
 rubato = { workspace = true }
 biquad = { workspace = true }
 rumqttc = { workspace = true }
-knxkit = { workspace = true }
-knxkit_dpt = { workspace = true }
+knx-core = { workspace = true }
+knx-ip = { workspace = true }
 reqwest = { workspace = true }
 url = { workspace = true }
 futures-util = { workspace = true }
