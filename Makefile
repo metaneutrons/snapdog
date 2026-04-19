@@ -18,16 +18,17 @@ PRODUCER_BIN := tools/OpenKNXproducer
 
 $(PRODUCER_BIN):
 	@echo "Building OpenKNXproducer $(PRODUCER_VERSION) for $(DOTNET_RID)..."
-	@rm -rf /tmp/OpenKNXproducer-build
+	@rm -rf /tmp/OpenKNXproducer-build /tmp/OpenKNX.Toolbox.Sign
 	git clone --depth 1 --branch $(PRODUCER_VERSION) $(PRODUCER_REPO) /tmp/OpenKNXproducer-build
+	git clone --depth 1 https://github.com/OpenKNX/OpenKNX.Toolbox.Sign /tmp/OpenKNX.Toolbox.Sign
 	dotnet publish /tmp/OpenKNXproducer-build/OpenKNXproducer.csproj \
 		-c Release -r $(DOTNET_RID) --self-contained true /p:PublishSingleFile=true -o tools/
-	@rm -rf /tmp/OpenKNXproducer-build
+	@rm -rf /tmp/OpenKNXproducer-build /tmp/OpenKNX.Toolbox.Sign
 	@echo "✅ OpenKNXproducer built: $(PRODUCER_BIN)"
 
 ## Generate SnapDog.knxprod from OpenKNXproducer XML
 knxprod: $(PRODUCER_BIN)
-	cd knx && ../$(PRODUCER_BIN) knxprod SnapDog.xml
+	cd knx && ../$(PRODUCER_BIN) create --NoXsd -d SnapDog
 	@echo "✅ knx/SnapDog.knxprod generated"
 
 ## First-time setup: configure git hooks
