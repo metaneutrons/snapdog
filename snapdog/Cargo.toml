@@ -31,6 +31,7 @@ biquad = { workspace = true }
 rumqttc = { workspace = true }
 knx-core = { workspace = true }
 knx-ip = { workspace = true }
+knx-device = { workspace = true }
 reqwest = { workspace = true }
 url = { workspace = true }
 futures-util = { workspace = true }

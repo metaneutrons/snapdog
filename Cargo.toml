@@ -48,6 +48,7 @@ rumqttc = "0.25"
 # KNX
 knx-core = { git = "https://github.com/metaneutrons/knx-rs", branch = "main" }
 knx-ip = { git = "https://github.com/metaneutrons/knx-rs", branch = "main" }
+knx-device = { git = "https://github.com/metaneutrons/knx-rs", branch = "main" }
 
 # HTTP client (Subsonic API, radio streams)
 reqwest = { version = "0.12", features = ["json", "stream"] }
