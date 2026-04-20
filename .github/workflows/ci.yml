@@ -116,25 +116,16 @@ jobs:
     name: KNX Product Database
     runs-on: ubuntu-latest
     env:
-      PRODUCER_VERSION: v4.3.5
+      PRODUCER_VERSION: "4.3.5"
     steps:
       - uses: actions/checkout@v6
       - uses: actions/cache@v4
         id: producer-cache
         with:
           path: tools/OpenKNXproducer
-          key: openknxproducer-${{ env.PRODUCER_VERSION }}-linux-x64
-      - uses: actions/setup-dotnet@v4
-        if: steps.producer-cache.outputs.cache-hit != 'true'
-        with:
-          dotnet-version: '9.0'
-      - name: Build OpenKNXproducer
+          key: openknxproducer-${{ env.PRODUCER_VERSION }}-linux
+      - name: Download OpenKNXproducer
         if: steps.producer-cache.outputs.cache-hit != 'true'
         run: make tools/OpenKNXproducer
-      - name: Generate knxprod
-        run: make knxprod
-      - uses: actions/upload-artifact@v4
-        with:
-          name: snapdog-knxprod
-          path: knx/SnapDog.knxprod
-          if-no-files-found: error
+      - name: Validate KNX product XML
+        run: make knxprod-check

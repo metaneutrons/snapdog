@@ -1,35 +1,36 @@
 .PHONY: setup check fmt clippy test dev build-webui build-all knxprod
 
 # ── OpenKNXproducer ────────────────────────────────────────────
-PRODUCER_VERSION := v4.3.5
-PRODUCER_REPO    := https://github.com/OpenKNX/OpenKNXproducer
+PRODUCER_VERSION := 4.3.5
+PRODUCER_URL     := https://github.com/OpenKNX/OpenKNXproducer/releases/download/v$(PRODUCER_VERSION)/OpenKNXproducer-$(PRODUCER_VERSION).zip
 UNAME_S          := $(shell uname -s)
-UNAME_M          := $(shell uname -m)
 ifeq ($(UNAME_S),Darwin)
-  ifeq ($(UNAME_M),arm64)
-    DOTNET_RID := osx-arm64
-  else
-    DOTNET_RID := osx-x64
-  endif
+  PRODUCER_PLATFORM := MacOS
+else ifeq ($(UNAME_S),Linux)
+  PRODUCER_PLATFORM := Linux
 else
-  DOTNET_RID := linux-x64
+  PRODUCER_PLATFORM := Windows
 endif
 PRODUCER_BIN := tools/OpenKNXproducer
 
 $(PRODUCER_BIN):
-	@echo "Building OpenKNXproducer $(PRODUCER_VERSION) for $(DOTNET_RID)..."
-	@rm -rf /tmp/OpenKNXproducer-build /tmp/OpenKNX.Toolbox.Sign
-	git clone --depth 1 --branch $(PRODUCER_VERSION) $(PRODUCER_REPO) /tmp/OpenKNXproducer-build
-	git clone --depth 1 https://github.com/OpenKNX/OpenKNX.Toolbox.Sign /tmp/OpenKNX.Toolbox.Sign
-	dotnet publish /tmp/OpenKNXproducer-build/OpenKNXproducer.csproj \
-		-c Release -r $(DOTNET_RID) --self-contained true /p:PublishSingleFile=true -o tools/
-	@rm -rf /tmp/OpenKNXproducer-build /tmp/OpenKNX.Toolbox.Sign
-	@echo "✅ OpenKNXproducer built: $(PRODUCER_BIN)"
+	@echo "Downloading OpenKNXproducer $(PRODUCER_VERSION) for $(PRODUCER_PLATFORM)..."
+	@mkdir -p tools
+	curl -sL "$(PRODUCER_URL)" -o /tmp/openknxproducer.zip
+	unzip -jo /tmp/openknxproducer.zip "tools/$(PRODUCER_PLATFORM)/OpenKNXproducer*" -d tools/
+	chmod +x tools/OpenKNXproducer*
+	@rm -f /tmp/openknxproducer.zip
+	@echo "✅ OpenKNXproducer $(PRODUCER_VERSION): $(PRODUCER_BIN)"
 
-## Generate SnapDog.knxprod from OpenKNXproducer XML
+## Validate KNX product XML (runs on all platforms)
+knxprod-check: $(PRODUCER_BIN)
+	$(PRODUCER_BIN) create --NoXsd -d knx/SnapDog
+	@echo "✅ KNX product XML validated"
+
+## Generate SnapDog.knxprod (requires Windows + ETS DLLs)
 knxprod: $(PRODUCER_BIN)
-	cd knx && ../$(PRODUCER_BIN) create --NoXsd -d SnapDog
-	@echo "✅ knx/SnapDog.knxprod generated"
+	$(PRODUCER_BIN) create --NoXsd knx/SnapDog
+	@test -f knx/SnapDog.knxprod && echo "✅ knx/SnapDog.knxprod generated" || echo "⚠️  knxprod skipped (requires Windows + ETS)"
 
 ## First-time setup: configure git hooks
 setup:
