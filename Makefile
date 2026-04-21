@@ -27,10 +27,12 @@ knxprod-check: $(PRODUCER_BIN)
 	$(PRODUCER_BIN) create --NoXsd -d knx/SnapDog
 	@echo "✅ KNX product XML validated"
 
-## Generate SnapDog.knxprod (requires Windows + ETS DLLs)
+## Generate SnapDog.knxprod (cross-platform via knx-prod)
 knxprod: $(PRODUCER_BIN)
-	$(PRODUCER_BIN) create --NoXsd knx/SnapDog
-	@test -f knx/SnapDog.knxprod && echo "✅ knx/SnapDog.knxprod generated" || echo "⚠️  knxprod skipped (requires Windows + ETS)"
+	$(PRODUCER_BIN) create --NoXsd -d knx/SnapDog
+	cargo install --git https://github.com/metaneutrons/knx-rs knx-prod --locked 2>/dev/null || true
+	knx-prod knx/SnapDog.debug.xml -o knx/SnapDog.knxprod
+	@echo "✅ knx/SnapDog.knxprod generated"
 
 ## First-time setup: configure git hooks
 setup:
