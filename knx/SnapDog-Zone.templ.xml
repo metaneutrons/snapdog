@@ -5,45 +5,109 @@
       <ApplicationPrograms>
         <ApplicationProgram>
           <Static>
+            <ParameterTypes>
+              <ParameterType Id="%AID%_PT-YesNo" Name="YesNo">
+                <TypeRestriction Base="Value" SizeInBit="8">
+                  <Enumeration Text="Nein" Value="0" Id="%AID%_PT-YesNo_EN-0" />
+                  <Enumeration Text="Ja" Value="1" Id="%AID%_PT-YesNo_EN-1" />
+                </TypeRestriction>
+              </ParameterType>
+              <ParameterType Id="%AID%_PT-ZoneName" Name="ZoneName">
+                <TypeText SizeInBit="160" />
+              </ParameterType>
+            </ParameterTypes>
+
+            <Parameters>
+              <!-- Zone name (shown as channel title in ETS) -->
+              <Parameter Id="%AID%_P-%TT%%CC%000" Name="z%C%Name" ParameterType="%AID%_PT-ZoneName" Text="Zonenname" Value="Zone %C%" />
+
+              <Union SizeInBit="8">
+                <Memory CodeSegment="%AID%_RS-04-00000" Offset="0" BitOffset="0" />
+                <!-- Enable/disable this zone -->
+                <Parameter Id="%AID%_UP-%TT%%CC%001" Name="z%C%Active" Offset="0" BitOffset="0" ParameterType="%AID%_PT-YesNo" Text="Zone aktiv" Value="1" />
+              </Union>
+            </Parameters>
+
             <ComObjectTable>
-              <ComObject Id="%AID%_O-%TT%%CCC%000" Name="Zone %C% Play"                Number="%K0%"  Text="Play"                FunctionText="Play"                ObjectSize="1 Bit"  DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
-              <ComObject Id="%AID%_O-%TT%%CCC%001" Name="Zone %C% Pause"               Number="%K1%"  Text="Pause"               FunctionText="Pause"               ObjectSize="1 Bit"  DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
-              <ComObject Id="%AID%_O-%TT%%CCC%002" Name="Zone %C% Stop"                Number="%K2%"  Text="Stop"                FunctionText="Stop"                ObjectSize="1 Bit"  DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
-              <ComObject Id="%AID%_O-%TT%%CCC%003" Name="Zone %C% Track Next"          Number="%K3%"  Text="Track Next"          FunctionText="Track Next"          ObjectSize="1 Bit"  DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
-              <ComObject Id="%AID%_O-%TT%%CCC%004" Name="Zone %C% Track Previous"      Number="%K4%"  Text="Track Previous"      FunctionText="Track Previous"      ObjectSize="1 Bit"  DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
-              <ComObject Id="%AID%_O-%TT%%CCC%005" Name="Zone %C% Volume"              Number="%K5%"  Text="Volume"              FunctionText="Volume"              ObjectSize="1 Byte" DatapointType="DPST-5-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
-              <ComObject Id="%AID%_O-%TT%%CCC%006" Name="Zone %C% Volume Status"       Number="%K6%"  Text="Volume Status"       FunctionText="Volume Status"       ObjectSize="1 Byte" DatapointType="DPST-5-1"  Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
-              <ComObject Id="%AID%_O-%TT%%CCC%007" Name="Zone %C% Volume Dim"          Number="%K7%"  Text="Volume Dim"          FunctionText="Volume Dim"          ObjectSize="4 Bit"  DatapointType="DPST-3-7"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
-              <ComObject Id="%AID%_O-%TT%%CCC%008" Name="Zone %C% Mute"                Number="%K8%"  Text="Mute"                FunctionText="Mute"                ObjectSize="1 Bit"  DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
-              <ComObject Id="%AID%_O-%TT%%CCC%009" Name="Zone %C% Mute Status"         Number="%K9%"  Text="Mute Status"         FunctionText="Mute Status"         ObjectSize="1 Bit"  DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
-              <ComObject Id="%AID%_O-%TT%%CCC%010" Name="Zone %C% Mute Toggle"         Number="%K10%" Text="Mute Toggle"         FunctionText="Mute Toggle"         ObjectSize="1 Bit"  DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
-              <ComObject Id="%AID%_O-%TT%%CCC%011" Name="Zone %C% Control Status"      Number="%K11%" Text="Control Status"      FunctionText="Control Status"      ObjectSize="1 Bit"  DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
-              <ComObject Id="%AID%_O-%TT%%CCC%012" Name="Zone %C% Track Playing"       Number="%K12%" Text="Track Playing"       FunctionText="Track Playing"       ObjectSize="1 Bit"  DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
-              <ComObject Id="%AID%_O-%TT%%CCC%013" Name="Zone %C% Shuffle"             Number="%K13%" Text="Shuffle"             FunctionText="Shuffle"             ObjectSize="1 Bit"  DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
-              <ComObject Id="%AID%_O-%TT%%CCC%014" Name="Zone %C% Shuffle Status"      Number="%K14%" Text="Shuffle Status"      FunctionText="Shuffle Status"      ObjectSize="1 Bit"  DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
-              <ComObject Id="%AID%_O-%TT%%CCC%015" Name="Zone %C% Shuffle Toggle"      Number="%K15%" Text="Shuffle Toggle"      FunctionText="Shuffle Toggle"      ObjectSize="1 Bit"  DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
-              <ComObject Id="%AID%_O-%TT%%CCC%016" Name="Zone %C% Repeat"              Number="%K16%" Text="Repeat"              FunctionText="Repeat"              ObjectSize="1 Bit"  DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
-              <ComObject Id="%AID%_O-%TT%%CCC%017" Name="Zone %C% Repeat Status"       Number="%K17%" Text="Repeat Status"       FunctionText="Repeat Status"       ObjectSize="1 Bit"  DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
-              <ComObject Id="%AID%_O-%TT%%CCC%018" Name="Zone %C% Repeat Toggle"       Number="%K18%" Text="Repeat Toggle"       FunctionText="Repeat Toggle"       ObjectSize="1 Bit"  DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
-              <ComObject Id="%AID%_O-%TT%%CCC%019" Name="Zone %C% Track Repeat"        Number="%K19%" Text="Track Repeat"        FunctionText="Track Repeat"        ObjectSize="1 Bit"  DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
-              <ComObject Id="%AID%_O-%TT%%CCC%020" Name="Zone %C% Track Repeat Status" Number="%K20%" Text="Track Repeat Status" FunctionText="Track Repeat Status" ObjectSize="1 Bit"  DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
-              <ComObject Id="%AID%_O-%TT%%CCC%021" Name="Zone %C% Track Repeat Toggle" Number="%K21%" Text="Track Repeat Toggle" FunctionText="Track Repeat Toggle" ObjectSize="1 Bit"  DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
-              <ComObject Id="%AID%_O-%TT%%CCC%022" Name="Zone %C% Playlist"            Number="%K22%" Text="Playlist"            FunctionText="Playlist"            ObjectSize="1 Byte" DatapointType="DPST-5-10" Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
-              <ComObject Id="%AID%_O-%TT%%CCC%023" Name="Zone %C% Playlist Status"     Number="%K23%" Text="Playlist Status"     FunctionText="Playlist Status"     ObjectSize="1 Byte" DatapointType="DPST-5-10" Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
-              <ComObject Id="%AID%_O-%TT%%CCC%024" Name="Zone %C% Playlist Next"       Number="%K24%" Text="Playlist Next"       FunctionText="Playlist Next"       ObjectSize="1 Bit"  DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
-              <ComObject Id="%AID%_O-%TT%%CCC%025" Name="Zone %C% Playlist Previous"   Number="%K25%" Text="Playlist Previous"   FunctionText="Playlist Previous"   ObjectSize="1 Bit"  DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
-              <ComObject Id="%AID%_O-%TT%%CCC%026" Name="Zone %C% Track Title"         Number="%K26%" Text="Track Title"         FunctionText="Track Title"         ObjectSize="14 Bytes" DatapointType="DPST-16-1" Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
-              <ComObject Id="%AID%_O-%TT%%CCC%027" Name="Zone %C% Track Artist"        Number="%K27%" Text="Track Artist"        FunctionText="Track Artist"        ObjectSize="14 Bytes" DatapointType="DPST-16-1" Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
-              <ComObject Id="%AID%_O-%TT%%CCC%028" Name="Zone %C% Track Album"         Number="%K28%" Text="Track Album"         FunctionText="Track Album"         ObjectSize="14 Bytes" DatapointType="DPST-16-1" Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
-              <ComObject Id="%AID%_O-%TT%%CCC%029" Name="Zone %C% Track Progress"      Number="%K29%" Text="Track Progress"      FunctionText="Track Progress"      ObjectSize="1 Byte" DatapointType="DPST-5-1"  Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%000" Name="Zone %C% Play"                Number="%K0%"  Text="Play"                FunctionText="Play"                ObjectSize="1 Bit"    DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%001" Name="Zone %C% Pause"               Number="%K1%"  Text="Pause"               FunctionText="Pause"               ObjectSize="1 Bit"    DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%002" Name="Zone %C% Stop"                Number="%K2%"  Text="Stop"                FunctionText="Stop"                ObjectSize="1 Bit"    DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%003" Name="Zone %C% Track Next"          Number="%K3%"  Text="Nächster Titel"      FunctionText="Track Next"          ObjectSize="1 Bit"    DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%004" Name="Zone %C% Track Previous"      Number="%K4%"  Text="Vorheriger Titel"    FunctionText="Track Previous"      ObjectSize="1 Bit"    DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%005" Name="Zone %C% Volume"              Number="%K5%"  Text="Lautstärke"          FunctionText="Volume"              ObjectSize="1 Byte"   DatapointType="DPST-5-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%006" Name="Zone %C% Volume Status"       Number="%K6%"  Text="Lautstärke Status"   FunctionText="Volume Status"       ObjectSize="1 Byte"   DatapointType="DPST-5-1"  Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%007" Name="Zone %C% Volume Dim"          Number="%K7%"  Text="Lautstärke Dimmen"   FunctionText="Volume Dim"          ObjectSize="4 Bit"    DatapointType="DPST-3-7"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%008" Name="Zone %C% Mute"                Number="%K8%"  Text="Stumm"               FunctionText="Mute"                ObjectSize="1 Bit"    DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%009" Name="Zone %C% Mute Status"         Number="%K9%"  Text="Stumm Status"        FunctionText="Mute Status"         ObjectSize="1 Bit"    DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%010" Name="Zone %C% Mute Toggle"         Number="%K10%" Text="Stumm Umschalten"    FunctionText="Mute Toggle"         ObjectSize="1 Bit"    DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%011" Name="Zone %C% Control Status"      Number="%K11%" Text="Wiedergabe Status"    FunctionText="Control Status"      ObjectSize="1 Bit"    DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%012" Name="Zone %C% Track Playing"       Number="%K12%" Text="Titel spielt"         FunctionText="Track Playing"       ObjectSize="1 Bit"    DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%013" Name="Zone %C% Shuffle"             Number="%K13%" Text="Zufallswiedergabe"    FunctionText="Shuffle"             ObjectSize="1 Bit"    DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%014" Name="Zone %C% Shuffle Status"      Number="%K14%" Text="Zufall Status"        FunctionText="Shuffle Status"      ObjectSize="1 Bit"    DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%015" Name="Zone %C% Shuffle Toggle"      Number="%K15%" Text="Zufall Umschalten"    FunctionText="Shuffle Toggle"      ObjectSize="1 Bit"    DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%016" Name="Zone %C% Repeat"              Number="%K16%" Text="Wiederholung"         FunctionText="Repeat"              ObjectSize="1 Bit"    DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%017" Name="Zone %C% Repeat Status"       Number="%K17%" Text="Wiederholung Status"  FunctionText="Repeat Status"       ObjectSize="1 Bit"    DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%018" Name="Zone %C% Repeat Toggle"       Number="%K18%" Text="Wiederholung Umsch."  FunctionText="Repeat Toggle"       ObjectSize="1 Bit"    DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%019" Name="Zone %C% Track Repeat"        Number="%K19%" Text="Titel Wiederholung"   FunctionText="Track Repeat"        ObjectSize="1 Bit"    DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%020" Name="Zone %C% Track Repeat Status" Number="%K20%" Text="Titel Wdh. Status"    FunctionText="Track Repeat Status" ObjectSize="1 Bit"    DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%021" Name="Zone %C% Track Repeat Toggle" Number="%K21%" Text="Titel Wdh. Umsch."    FunctionText="Track Repeat Toggle" ObjectSize="1 Bit"    DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%022" Name="Zone %C% Playlist"            Number="%K22%" Text="Playlist"             FunctionText="Playlist"            ObjectSize="1 Byte"   DatapointType="DPST-5-10" Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%023" Name="Zone %C% Playlist Status"     Number="%K23%" Text="Playlist Status"      FunctionText="Playlist Status"     ObjectSize="1 Byte"   DatapointType="DPST-5-10" Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%024" Name="Zone %C% Playlist Next"       Number="%K24%" Text="Nächste Playlist"     FunctionText="Playlist Next"       ObjectSize="1 Bit"    DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%025" Name="Zone %C% Playlist Previous"   Number="%K25%" Text="Vorherige Playlist"   FunctionText="Playlist Previous"   ObjectSize="1 Bit"    DatapointType="DPST-1-1"  Priority="Low" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%026" Name="Zone %C% Track Title"         Number="%K26%" Text="Titel"                FunctionText="Track Title"         ObjectSize="14 Bytes" DatapointType="DPST-16-1" Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%027" Name="Zone %C% Track Artist"        Number="%K27%" Text="Interpret"             FunctionText="Track Artist"        ObjectSize="14 Bytes" DatapointType="DPST-16-1" Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%028" Name="Zone %C% Track Album"         Number="%K28%" Text="Album"                FunctionText="Track Album"         ObjectSize="14 Bytes" DatapointType="DPST-16-1" Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
+              <ComObject Id="%AID%_O-%TT%%CCC%029" Name="Zone %C% Track Progress"      Number="%K29%" Text="Fortschritt"           FunctionText="Track Progress"      ObjectSize="1 Byte"   DatapointType="DPST-5-1"  Priority="Low" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" />
             </ComObjectTable>
           </Static>
           <Dynamic>
-            <Channel Name="Zone %C%" Number="%PREFIX%">
-              <ParameterBlock Id="%AID%_PB-%TT%%CCC%" Name="Zone %C%" Text="Zone %C%">
-                <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%000_R-%K0%" />
-              </ParameterBlock>
-            </Channel>
+            <ChannelIndependentBlock>
+              <!-- Only show zone if active -->
+              <choose ParamRefId="%AID%_UP-%TT%%CC%001_R-%TT%%CC%00101">
+                <when test="1">
+                  <ParameterBlock Id="%AID%_PB-%TT%%CCC%" Name="z%C%Page" Text="Zone %C%: {{0: ...}}" TextParameterRefId="%AID%_P-%TT%%CC%000_R-%TT%%CC%00001" ShowInComObjectTree="true">
+                    <ParameterSeparator Id="%AID%_PS-nnn" Text="Zonenkonfiguration" UIHint="Headline" />
+                    <ParameterRefRef RefId="%AID%_P-%TT%%CC%000_R-%TT%%CC%00001" />
+                    <ParameterSeparator Id="%AID%_PS-nnn" Text="Wiedergabe" UIHint="Headline" />
+                    <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%000_R-%K0%" />
+                    <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%001_R-%K1%" />
+                    <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%002_R-%K2%" />
+                    <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%003_R-%K3%" />
+                    <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%004_R-%K4%" />
+                    <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%011_R-%K11%" />
+                    <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%012_R-%K12%" />
+                    <ParameterSeparator Id="%AID%_PS-nnn" Text="Lautstärke" UIHint="Headline" />
+                    <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%005_R-%K5%" />
+                    <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%006_R-%K6%" />
+                    <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%007_R-%K7%" />
+                    <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%008_R-%K8%" />
+                    <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%009_R-%K9%" />
+                    <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%010_R-%K10%" />
+                    <ParameterSeparator Id="%AID%_PS-nnn" Text="Zufallswiedergabe / Wiederholung" UIHint="Headline" />
+                    <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%013_R-%K13%" />
+                    <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%014_R-%K14%" />
+                    <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%015_R-%K15%" />
+                    <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%016_R-%K16%" />
+                    <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%017_R-%K17%" />
+                    <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%018_R-%K18%" />
+                    <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%019_R-%K19%" />
+                    <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%020_R-%K20%" />
+                    <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%021_R-%K21%" />
+                    <ParameterSeparator Id="%AID%_PS-nnn" Text="Playlist" UIHint="Headline" />
+                    <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%022_R-%K22%" />
+                    <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%023_R-%K23%" />
+                    <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%024_R-%K24%" />
+                    <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%025_R-%K25%" />
+                    <ParameterSeparator Id="%AID%_PS-nnn" Text="Titelinformationen" UIHint="Headline" />
+                    <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%026_R-%K26%" />
+                    <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%027_R-%K27%" />
+                    <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%028_R-%K28%" />
+                    <ComObjectRefRef RefId="%AID%_O-%TT%%CCC%029_R-%K29%" />
+                  </ParameterBlock>
+                </when>
+              </choose>
+            </ChannelIndependentBlock>
           </Dynamic>
         </ApplicationProgram>
       </ApplicationPrograms>
