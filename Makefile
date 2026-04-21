@@ -1,38 +1,15 @@
 .PHONY: setup check fmt clippy test dev build-webui build-all knxprod
 
-# ── OpenKNXproducer ────────────────────────────────────────────
-PRODUCER_VERSION := 4.3.5
-PRODUCER_URL     := https://github.com/OpenKNX/OpenKNXproducer/releases/download/v$(PRODUCER_VERSION)/OpenKNXproducer-$(PRODUCER_VERSION).zip
-UNAME_S          := $(shell uname -s)
-ifeq ($(UNAME_S),Darwin)
-  PRODUCER_PLATFORM := MacOS
-else ifeq ($(UNAME_S),Linux)
-  PRODUCER_PLATFORM := Linux
-else
-  PRODUCER_PLATFORM := Windows
-endif
-PRODUCER_BIN := tools/OpenKNXproducer
+# ── KNX Product Database ───────────────────────────────────────
 
-$(PRODUCER_BIN):
-	@echo "Downloading OpenKNXproducer $(PRODUCER_VERSION) for $(PRODUCER_PLATFORM)..."
-	@mkdir -p tools
-	curl -sL "$(PRODUCER_URL)" -o /tmp/openknxproducer.zip
-	unzip -jo /tmp/openknxproducer.zip "tools/$(PRODUCER_PLATFORM)/OpenKNXproducer*" -d tools/
-	chmod +x tools/OpenKNXproducer*
-	@rm -f /tmp/openknxproducer.zip
-	@echo "✅ OpenKNXproducer $(PRODUCER_VERSION): $(PRODUCER_BIN)"
+## Generate KNX ETS XML from group object definitions
+knx-xml:
+	cargo run -p xtask -- knx/SnapDog.xml
 
-## Validate KNX product XML (runs on all platforms)
-knxprod-check: $(PRODUCER_BIN)
-	$(PRODUCER_BIN) create --NoXsd -d knx/SnapDog
-	@echo "✅ KNX product XML validated"
-
-## Generate SnapDog.knxprod (cross-platform via knx-prod)
-knxprod: $(PRODUCER_BIN)
-	$(PRODUCER_BIN) create --NoXsd -d knx/SnapDog
+## Generate SnapDog.knxprod (cross-platform, no external tools)
+knxprod: knx-xml
 	cargo install --git https://github.com/metaneutrons/knx-rs knx-prod --locked 2>/dev/null || true
-	knx-prod knx/SnapDog.debug.xml -o knx/SnapDog.knxprod
-	@echo "✅ knx/SnapDog.knxprod generated"
+	knx-prod knx/SnapDog.xml -o knx/SnapDog.knxprod
 
 ## First-time setup: configure git hooks
 setup:

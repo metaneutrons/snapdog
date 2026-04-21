@@ -115,26 +115,15 @@ jobs:
   knxprod:
     name: KNX Product Database
     runs-on: ubuntu-latest
-    env:
-      PRODUCER_VERSION: "4.3.5"
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - uses: actions/cache@v4
-        id: producer-cache
-        with:
-          path: tools/OpenKNXproducer
-          key: openknxproducer-${{ env.PRODUCER_VERSION }}-linux
-      - name: Download OpenKNXproducer
-        if: steps.producer-cache.outputs.cache-hit != 'true'
-        run: make tools/OpenKNXproducer
-      - name: Validate and expand XML
-        run: make knxprod-check
-      - name: Install knx-prod
-        run: cargo install --git https://github.com/metaneutrons/knx-rs knx-prod --locked
+      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+      - name: Generate ETS XML
+        run: cargo run -p xtask -- knx/SnapDog.xml
       - name: Generate knxprod
-        run: knx-prod knx/SnapDog.debug.xml -o knx/SnapDog.knxprod
+        run: cargo install --git https://github.com/metaneutrons/knx-rs knx-prod --locked && knx-prod knx/SnapDog.xml -o knx/SnapDog.knxprod
       - uses: actions/upload-artifact@v4
         with:
           name: snapdog-knxprod

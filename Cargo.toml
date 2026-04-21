@@ -3,6 +3,7 @@ resolver = "2"
 members = [
   "snapdog",
   "snapdog-client",
+  "xtask",
 ]
 
 [workspace.package]
