@@ -10,7 +10,7 @@ const AID: &str = "M-00FA_A-FF01-01-0000";
 const MFR: &str = "M-00FA";
 const MAX_ZONES: usize = 10;
 const MAX_CLIENTS: usize = 10;
-const MEMORY_SIZE: usize = MAX_ZONES + MAX_CLIENTS; // 1 byte active flag each
+const MEMORY_SIZE: usize = 256; // Rounded up from actual usage (~173 bytes)
 
 fn main() {
     let output = std::env::args()
@@ -19,10 +19,12 @@ fn main() {
     let xml = generate_xml();
     std::fs::write(&output, xml).expect("failed to write XML");
     eprintln!(
-        "✅ Generated {output} ({} zones × 30 COs + {} clients × 11 COs = {} COs)",
+        "✅ Generated {output} ({} zones × {} COs + {} clients × {} COs = {} COs)",
         MAX_ZONES,
+        ZONE_GOS.len(),
         MAX_CLIENTS,
-        MAX_ZONES * 30 + MAX_CLIENTS * 11
+        CLIENT_GOS.len(),
+        MAX_ZONES * ZONE_GOS.len() + MAX_CLIENTS * CLIENT_GOS.len()
     );
 }
 
@@ -268,6 +270,36 @@ const ZONE_GOS: &[Go] = &[
         "DPST-5-1",
         "1 Byte",
     ),
+    // Presence
+    recv("Präsenz", "Presence", "Presence", "DPST-1-18", "1 Bit"),
+    bidir(
+        "Präsenz Aktiviert",
+        "Presence Enable",
+        "Presence Enable",
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    bidir(
+        "Präsenz Timeout",
+        "Presence Timeout",
+        "Presence Timeout",
+        "DPST-7-5",
+        "2 Bytes",
+    ),
+    send(
+        "Präsenz Timer",
+        "Presence Timer",
+        "Presence Timer Active",
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    recv(
+        "Präsenz Quelle",
+        "Presence Source",
+        "Presence Source Override",
+        "DPST-5-10",
+        "1 Byte",
+    ),
 ];
 
 const CLIENT_GOS: &[Go] = &[
@@ -359,6 +391,11 @@ const ZONE_GROUPS: &[CoGroup] = &[
         title_de: "Titelinformationen",
         title_en: "Track Info",
         indices: &[26, 27, 28, 29],
+    },
+    CoGroup {
+        title_de: "Präsenz",
+        title_en: "Presence",
+        indices: &[30, 31, 32, 33, 34],
     },
 ];
 
@@ -459,93 +496,454 @@ fn write_code_segment(x: &mut String) {
 
 fn write_parameter_types(x: &mut String) {
     w(x, "            <ParameterTypes>");
+    // Bool
+    pt_enum(x, "YesNo", 8, &[("Nein", 0), ("Ja", 1)]);
+    // Text types
+    pt_text(x, "Name", 160);
+    pt_text(x, "Text20", 160);
+    pt_text(x, "Text40", 320);
+    pt_text(x, "Text60", 480);
+    pt_text(x, "Text80", 640);
+    pt_text(x, "MAC", 136); // 17 chars
+    // Numeric
+    pt_num(x, "Percent", 8, "unsignedInt", 0, 100);
+    pt_num(x, "UInt8", 8, "unsignedInt", 0, 255);
+    pt_num(x, "UInt16", 16, "unsignedInt", 0, 65535);
+    // Enums
+    pt_enum(
+        x,
+        "LogLevel",
+        8,
+        &[
+            ("Error", 0),
+            ("Warn", 1),
+            ("Info", 2),
+            ("Debug", 3),
+            ("Trace", 4),
+        ],
+    );
+    pt_enum(
+        x,
+        "SampleRate",
+        8,
+        &[("44100 Hz", 0), ("48000 Hz", 1), ("96000 Hz", 2)],
+    );
+    pt_enum(
+        x,
+        "BitDepth",
+        8,
+        &[("16 Bit", 0), ("24 Bit", 1), ("32 Bit", 2)],
+    );
+    pt_enum(
+        x,
+        "ZoneSelect",
+        8,
+        &[
+            ("Zone 1", 1),
+            ("Zone 2", 2),
+            ("Zone 3", 3),
+            ("Zone 4", 4),
+            ("Zone 5", 5),
+            ("Zone 6", 6),
+            ("Zone 7", 7),
+            ("Zone 8", 8),
+            ("Zone 9", 9),
+            ("Zone 10", 10),
+        ],
+    );
+    w(x, "            </ParameterTypes>");
+}
+
+fn pt_enum(x: &mut String, name: &str, bits: u16, values: &[(&str, u16)]) {
     w(
         x,
-        &format!(r#"              <ParameterType Id="{AID}_PT-YesNo" Name="YesNo">"#),
+        &format!(r#"              <ParameterType Id="{AID}_PT-{name}" Name="{name}">"#),
     );
     w(
         x,
-        r#"                <TypeRestriction Base="Value" SizeInBit="8">"#,
+        &format!(r#"                <TypeRestriction Base="Value" SizeInBit="{bits}">"#),
     );
-    w(
-        x,
-        &format!(
-            r#"                  <Enumeration Text="Nein" Value="0" Id="{AID}_PT-YesNo_EN-0" />"#
-        ),
-    );
-    w(
-        x,
-        &format!(
-            r#"                  <Enumeration Text="Ja" Value="1" Id="{AID}_PT-YesNo_EN-1" />"#
-        ),
-    );
+    for (i, (text, val)) in values.iter().enumerate() {
+        w(
+            x,
+            &format!(
+                r#"                  <Enumeration Text="{text}" Value="{val}" Id="{AID}_PT-{name}_EN-{i}" />"#
+            ),
+        );
+    }
     w(x, "                </TypeRestriction>");
     w(x, "              </ParameterType>");
+}
+
+fn pt_text(x: &mut String, name: &str, bits: u16) {
     w(
         x,
-        &format!(r#"              <ParameterType Id="{AID}_PT-Name" Name="Name">"#),
+        &format!(r#"              <ParameterType Id="{AID}_PT-{name}" Name="{name}">"#),
     );
-    w(x, r#"                <TypeText SizeInBit="160" />"#);
+    w(
+        x,
+        &format!(r#"                <TypeText SizeInBit="{bits}" />"#),
+    );
     w(x, "              </ParameterType>");
-    w(x, "            </ParameterTypes>");
+}
+
+fn pt_num(x: &mut String, name: &str, bits: u16, typ: &str, min: u32, max: u32) {
+    w(
+        x,
+        &format!(r#"              <ParameterType Id="{AID}_PT-{name}" Name="{name}">"#),
+    );
+    w(
+        x,
+        &format!(
+            r#"                <TypeNumber SizeInBit="{bits}" Type="{typ}" minInclusive="{min}" maxInclusive="{max}" />"#
+        ),
+    );
+    w(x, "              </ParameterType>");
 }
 
 fn write_parameters(x: &mut String) {
     w(x, "            <Parameters>");
+    let mut off = 0usize;
+
+    // ── Zone parameters ───────────────────────────────────────
     for z in 1..=MAX_ZONES {
-        let offset = z - 1;
-        w(
+        let p = format!("Z{z:02}");
+        // Active flag (offset 0-9)
+        param_mem(
             x,
-            &format!(
-                r#"              <Parameter Id="{AID}_P-Z{z:02}000" Name="z{z}Name" ParameterType="{AID}_PT-Name" Text="Zonenname" Value="Zone {z}" />"#
-            ),
+            &p,
+            "001",
+            "Active",
+            "YesNo",
+            "Zone aktiv",
+            "1",
+            &mut off,
+            8,
         );
-        w(x, &format!(r#"              <Union SizeInBit="8">"#));
-        w(
+    }
+    for z in 1..=MAX_ZONES {
+        let p = format!("Z{z:02}");
+        param_mem(
             x,
-            &format!(
-                r#"                <Memory CodeSegment="{AID}_RS-04-00000" Offset="{offset}" BitOffset="0" />"#
-            ),
+            &p,
+            "002",
+            "DefVol",
+            "Percent",
+            "Standard-Lautstärke",
+            "50",
+            &mut off,
+            8,
         );
-        w(
+    }
+    for z in 1..=MAX_ZONES {
+        let p = format!("Z{z:02}");
+        param_mem(
             x,
-            &format!(
-                r#"                <Parameter Id="{AID}_UP-Z{z:02}001" Name="z{z}Active" Offset="0" BitOffset="0" ParameterType="{AID}_PT-YesNo" Text="Zone aktiv" Value="1" />"#
-            ),
+            &p,
+            "003",
+            "MaxVol",
+            "Percent",
+            "Max. Lautstärke",
+            "100",
+            &mut off,
+            8,
         );
-        w(x, "              </Union>");
+    }
+    for z in 1..=MAX_ZONES {
+        let p = format!("Z{z:02}");
+        param_mem(
+            x,
+            &p,
+            "004",
+            "AirPlay",
+            "YesNo",
+            "AirPlay aktiviert",
+            "1",
+            &mut off,
+            8,
+        );
+    }
+    for z in 1..=MAX_ZONES {
+        let p = format!("Z{z:02}");
+        param_mem(
+            x,
+            &p,
+            "005",
+            "Spotify",
+            "YesNo",
+            "Spotify aktiviert",
+            "1",
+            &mut off,
+            8,
+        );
+    }
+    for z in 1..=MAX_ZONES {
+        let p = format!("Z{z:02}");
+        param_mem(
+            x,
+            &p,
+            "006",
+            "PresEn",
+            "YesNo",
+            "Präsenz aktiviert",
+            "0",
+            &mut off,
+            8,
+        );
+    }
+    for z in 1..=MAX_ZONES {
+        let p = format!("Z{z:02}");
+        param_mem(
+            x,
+            &p,
+            "007",
+            "PresTO",
+            "UInt16",
+            "Präsenz Auto-Off (s)",
+            "900",
+            &mut off,
+            16,
+        );
+    }
+    for z in 1..=MAX_ZONES {
+        let p = format!("Z{z:02}");
+        param_mem(
+            x,
+            &p,
+            "008",
+            "SRate",
+            "SampleRate",
+            "Sample Rate",
+            "1",
+            &mut off,
+            8,
+        );
+    }
+    for z in 1..=MAX_ZONES {
+        let p = format!("Z{z:02}");
+        param_mem(
+            x,
+            &p,
+            "009",
+            "BitD",
+            "BitDepth",
+            "Bit Depth",
+            "0",
+            &mut off,
+            8,
+        );
+    }
+
+    // ── Client parameters ─────────────────────────────────────
+    for c in 1..=MAX_CLIENTS {
+        let p = format!("C{c:02}");
+        param_mem(
+            x,
+            &p,
+            "001",
+            "Active",
+            "YesNo",
+            "Client aktiv",
+            "1",
+            &mut off,
+            8,
+        );
     }
     for c in 1..=MAX_CLIENTS {
-        let offset = MAX_ZONES + c - 1;
-        w(
+        let p = format!("C{c:02}");
+        param_mem(
             x,
-            &format!(
-                r#"              <Parameter Id="{AID}_P-C{c:02}000" Name="c{c}Name" ParameterType="{AID}_PT-Name" Text="Clientname" Value="Client {c}" />"#
-            ),
+            &p,
+            "002",
+            "DefZone",
+            "ZoneSelect",
+            "Standard-Zone",
+            "1",
+            &mut off,
+            8,
         );
-        w(x, &format!(r#"              <Union SizeInBit="8">"#));
-        w(
-            x,
-            &format!(
-                r#"                <Memory CodeSegment="{AID}_RS-04-00000" Offset="{offset}" BitOffset="0" />"#
-            ),
-        );
-        w(
-            x,
-            &format!(
-                r#"                <Parameter Id="{AID}_UP-C{c:02}001" Name="c{c}Active" Offset="0" BitOffset="0" ParameterType="{AID}_PT-YesNo" Text="Client aktiv" Value="1" />"#
-            ),
-        );
-        w(x, "              </Union>");
     }
+    for c in 1..=MAX_CLIENTS {
+        let p = format!("C{c:02}");
+        param_mem(
+            x,
+            &p,
+            "003",
+            "DefVol",
+            "Percent",
+            "Standard-Lautstärke",
+            "100",
+            &mut off,
+            8,
+        );
+    }
+    for c in 1..=MAX_CLIENTS {
+        let p = format!("C{c:02}");
+        param_mem(
+            x,
+            &p,
+            "004",
+            "MaxVol",
+            "Percent",
+            "Max. Lautstärke",
+            "100",
+            &mut off,
+            8,
+        );
+    }
+    for c in 1..=MAX_CLIENTS {
+        let p = format!("C{c:02}");
+        param_mem(
+            x,
+            &p,
+            "005",
+            "DefLat",
+            "UInt8",
+            "Standard-Latenz (ms)",
+            "0",
+            &mut off,
+            8,
+        );
+    }
+
+    // ── Text parameters (not memory-backed, ETS-only) ─────────
+    for z in 1..=MAX_ZONES {
+        param_text(
+            x,
+            &format!("Z{z:02}"),
+            "000",
+            "Name",
+            "Name",
+            "Zonenname",
+            &format!("Zone {z}"),
+        );
+    }
+    for c in 1..=MAX_CLIENTS {
+        param_text(
+            x,
+            &format!("C{c:02}"),
+            "000",
+            "Name",
+            "Name",
+            "Clientname",
+            &format!("Client {c}"),
+        );
+    }
+    for c in 1..=MAX_CLIENTS {
+        param_text(
+            x,
+            &format!("C{c:02}"),
+            "010",
+            "MAC",
+            "MAC",
+            "MAC-Adresse",
+            "",
+        );
+    }
+
+    // ── Global parameters ─────────────────────────────────────
+    param_mem(
+        x,
+        "G",
+        "001",
+        "HttpPort",
+        "UInt16",
+        "HTTP Port",
+        "5555",
+        &mut off,
+        16,
+    );
+    param_mem(
+        x,
+        "G",
+        "002",
+        "LogLvl",
+        "LogLevel",
+        "Log Level",
+        "2",
+        &mut off,
+        8,
+    );
+    param_text(x, "G", "010", "SubURL", "Text60", "Subsonic URL", "");
+    param_text(x, "G", "011", "SubUser", "Text20", "Subsonic Benutzer", "");
+    param_text(x, "G", "012", "SubPass", "Text20", "Subsonic Passwort", "");
+    param_text(x, "G", "013", "MqttBrk", "Text40", "MQTT Broker", "");
+    param_text(
+        x,
+        "G",
+        "014",
+        "MqttTop",
+        "Text20",
+        "MQTT Base Topic",
+        "snapdog",
+    );
+
+    // ── Radio stations ────────────────────────────────────────
+    for r in 1..=20usize {
+        let p = format!("R{r:02}");
+        param_text(x, &p, "000", "Name", "Text20", "Stationsname", "");
+        param_text(x, &p, "001", "URL", "Text80", "Stream URL", "");
+        param_mem(x, &p, "002", "Active", "YesNo", "Aktiv", "0", &mut off, 8);
+    }
+
     w(x, "            </Parameters>");
+    eprintln!("  Memory layout: {off} bytes used");
+}
+
+/// Emit a memory-backed parameter inside a Union.
+fn param_mem(
+    x: &mut String,
+    prefix: &str,
+    num: &str,
+    name: &str,
+    pt: &str,
+    text: &str,
+    default: &str,
+    offset: &mut usize,
+    bits: u16,
+) {
+    let bytes = (bits / 8) as usize;
+    w(x, &format!(r#"              <Union SizeInBit="{bits}">"#));
+    w(
+        x,
+        &format!(
+            r#"                <Memory CodeSegment="{AID}_RS-04-00000" Offset="{}" BitOffset="0" />"#,
+            *offset
+        ),
+    );
+    w(
+        x,
+        &format!(
+            r#"                <Parameter Id="{AID}_UP-{prefix}{num}" Name="{prefix}_{name}" Offset="0" BitOffset="0" ParameterType="{AID}_PT-{pt}" Text="{text}" Value="{default}" />"#
+        ),
+    );
+    w(x, "              </Union>");
+    *offset += bytes;
+}
+
+/// Emit a text parameter (not memory-backed).
+fn param_text(
+    x: &mut String,
+    prefix: &str,
+    num: &str,
+    name: &str,
+    pt: &str,
+    text: &str,
+    default: &str,
+) {
+    w(
+        x,
+        &format!(
+            r#"              <Parameter Id="{AID}_P-{prefix}{num}" Name="{prefix}_{name}" ParameterType="{AID}_PT-{pt}" Text="{text}" Value="{default}" />"#
+        ),
+    );
 }
 
 fn write_com_objects(x: &mut String) {
     w(x, "            <ComObjectTable>");
     for z in 1..=MAX_ZONES {
         for (i, go) in ZONE_GOS.iter().enumerate() {
-            let num = (z - 1) * 30 + i + 1;
+            let num = (z - 1) * ZONE_GOS.len() + i + 1;
             write_com_object(
                 x,
                 &format!("Z{z:02}{i:03}"),
@@ -557,7 +955,7 @@ fn write_com_objects(x: &mut String) {
     }
     for c in 1..=MAX_CLIENTS {
         for (i, go) in CLIENT_GOS.iter().enumerate() {
-            let num = MAX_ZONES * 30 + (c - 1) * 11 + i + 1;
+            let num = MAX_ZONES * ZONE_GOS.len() + (c - 1) * CLIENT_GOS.len() + i + 1;
             write_com_object(
                 x,
                 &format!("C{c:02}{i:03}"),
@@ -725,9 +1123,9 @@ fn write_channel_block(
         for &i in group.indices {
             let co_id = format!("{AID}_O-{id_prefix}{i:03}");
             let num = if prefix == "Zone" {
-                (idx - 1) * 30 + i + 1
+                (idx - 1) * 35 + i + 1
             } else {
-                MAX_ZONES * 30 + (idx - 1) * 11 + i + 1
+                MAX_ZONES * 35 + (idx - 1) * 11 + i + 1
             };
             w(
                 x,
