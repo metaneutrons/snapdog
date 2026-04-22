@@ -112,6 +112,19 @@ pub fn router(state: SharedState) -> Router {
         .route("/{zone_index}/playlist/info", get(get_playlist_info))
         .route("/{zone_index}/playlist/count", get(get_playlist_count))
         .route("/{zone_index}/clients", get(get_clients))
+        .route(
+            "/{zone_index}/presence",
+            get(get_presence).put(set_presence),
+        )
+        .route(
+            "/{zone_index}/presence/enabled",
+            get(get_presence_enabled).put(set_presence_enabled),
+        )
+        .route(
+            "/{zone_index}/presence/timeout",
+            get(get_presence_timeout).put(set_presence_timeout),
+        )
+        .route("/{zone_index}/presence/timer", get(get_presence_timer))
         .with_state(state)
 }
 
@@ -598,4 +611,70 @@ async fn get_clients(State(state): State<SharedState>, Path(idx): Path<usize>) -
             })
             .collect(),
     )
+}
+
+// ── Presence ──────────────────────────────────────────────────
+
+async fn get_presence(
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
+) -> impl IntoResponse {
+    read_zone(&state, idx)
+        .await
+        .map(|z| Json(z.presence))
+        .ok_or(zone_not_found())
+}
+
+async fn set_presence(
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
+    Json(v): Json<bool>,
+) -> impl IntoResponse {
+    send_cmd(&state, idx, ZoneCommand::SetPresence(v)).await
+}
+
+async fn get_presence_enabled(
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
+) -> impl IntoResponse {
+    read_zone(&state, idx)
+        .await
+        .map(|z| Json(z.presence_enabled))
+        .ok_or(zone_not_found())
+}
+
+async fn set_presence_enabled(
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
+    Json(v): Json<bool>,
+) -> impl IntoResponse {
+    send_cmd(&state, idx, ZoneCommand::SetPresenceEnabled(v)).await
+}
+
+async fn get_presence_timeout(
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
+) -> impl IntoResponse {
+    read_zone(&state, idx)
+        .await
+        .map(|z| Json(z.auto_off_delay))
+        .ok_or(zone_not_found())
+}
+
+async fn set_presence_timeout(
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
+    Json(v): Json<u16>,
+) -> impl IntoResponse {
+    send_cmd(&state, idx, ZoneCommand::SetAutoOffDelay(v)).await
+}
+
+async fn get_presence_timer(
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
+) -> impl IntoResponse {
+    read_zone(&state, idx)
+        .await
+        .map(|z| Json(z.auto_off_active))
+        .ok_or(zone_not_found())
 }
