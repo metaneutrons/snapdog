@@ -168,13 +168,20 @@ function ZoneHeader({ zone }: { zone: ZoneState }) {
   return (
     <div className="flex items-center justify-between gap-2">
       <h2 className="text-sm font-semibold truncate">{zone.name}</h2>
-      {sourceKey ? (
-        <span className="shrink-0 text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
+      <div className="flex items-center gap-1.5 shrink-0">
+        {zone.presence && (
+          <span className="text-[10px] px-1 py-0.5 rounded-full bg-green-500/15 text-green-600" title="Presence detected">
+            {zone.presenceTimerActive ? "⏱️" : "🟢"}
+          </span>
+        )}
+        {sourceKey ? (
+        <span className="text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
           {t(`source.${sourceKey}`)}
         </span>
       ) : (
-        <span className="shrink-0 text-[10px] text-muted-foreground">{t("zone.idle")}</span>
+        <span className="text-[10px] text-muted-foreground">{t("zone.idle")}</span>
       )}
+      </div>
     </div>
   );
 }
@@ -276,6 +283,7 @@ export default function Home() {
     updateZone,
     updateZoneTrack,
     updateZoneProgress,
+    updateZonePresence,
     updateClient,
   } = useAppStore();
 
@@ -307,9 +315,12 @@ export default function Home() {
             zone_index: n.zone,
           });
           break;
+        case "zone_presence_changed":
+          updateZonePresence(n.zone, n.presence, n.enabled, n.timer_active);
+          break;
       }
     },
-    [updateZone, updateZoneTrack, updateZoneProgress, updateClient],
+    [updateZone, updateZoneTrack, updateZoneProgress, updateZonePresence, updateClient],
   );
 
   const { isConnected: wsConnected } = useWebSocket(handleNotification);

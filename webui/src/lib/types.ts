@@ -150,11 +150,20 @@ export interface WsClientStateChanged {
   zone: number;
 }
 
+export interface WsZonePresenceChanged {
+  type: "zone_presence_changed";
+  zone: number;
+  presence: boolean;
+  enabled: boolean;
+  timer_active: boolean;
+}
+
 export type WsNotification =
   | WsZoneStateChanged
   | WsZoneTrackChanged
   | WsZoneProgress
-  | WsClientStateChanged;
+  | WsClientStateChanged
+  | WsZonePresenceChanged;
 
 export interface WsCommand {
   zone: number;

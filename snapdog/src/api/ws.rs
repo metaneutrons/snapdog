@@ -85,6 +85,17 @@ pub enum Notification {
         #[serde(flatten)]
         config: crate::audio::eq::EqConfig,
     },
+    /// Zone presence state changed.
+    ZonePresenceChanged {
+        /// Zone index (1-based).
+        zone: usize,
+        /// Whether presence is detected.
+        presence: bool,
+        /// Whether presence-triggered playback is enabled.
+        enabled: bool,
+        /// Whether the auto-off timer is running.
+        timer_active: bool,
+    },
 }
 
 /// Create a broadcast channel for notifications.

@@ -556,6 +556,7 @@ async fn run(
                                 tracing::debug!(zone = zone_index, delay, "Presence auto-off timer started");
                             }
                         }
+                        notify_presence(store, zone_index, notify).await;
                     }
                     ZoneCommand::SetPresenceEnabled(v) => {
                         if !v {
@@ -567,6 +568,7 @@ async fn run(
                         } else {
                             update_and_notify(store, zone_index, notify, |z| z.presence_enabled = v).await;
                         }
+                        notify_presence(store, zone_index, notify).await;
                     }
                     ZoneCommand::SetAutoOffDelay(delay) => {
                         update_and_notify(store, zone_index, notify, |z| z.auto_off_delay = delay).await;
@@ -743,9 +745,27 @@ async fn run(
                         z.presence_source = false;
                         z.auto_off_active = false;
                     }).await;
+                    notify_presence(store, zone_index, notify).await;
                 }
             }
         }
+    }
+}
+
+/// Emit a presence notification to WebSocket clients.
+async fn notify_presence(
+    store: &crate::state::SharedState,
+    zone_index: usize,
+    notify: &crate::api::ws::NotifySender,
+) {
+    let s = store.read().await;
+    if let Some(z) = s.zones.get(&zone_index) {
+        let _ = notify.send(crate::api::ws::Notification::ZonePresenceChanged {
+            zone: zone_index,
+            presence: z.presence,
+            enabled: z.presence_enabled,
+            timer_active: z.auto_off_active,
+        });
     }
 }
 
