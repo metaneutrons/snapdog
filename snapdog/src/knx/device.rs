@@ -21,6 +21,63 @@ use tokio::sync::{mpsc, oneshot};
 use super::group_objects::{self, CLIENT_GOS, MAX_CLIENTS, MAX_ZONES, TOTAL_GO_COUNT, ZONE_GOS};
 use super::transport::KnxTransport;
 
+// ── ETS Memory Layout (must match xtask/src/main.rs) ──────────
+
+/// Byte offsets for ETS parameters in BAU memory.
+/// Layout: zone active(10) + zone defvol(10) + zone maxvol(10) + zone airplay(10) +
+///         zone spotify(10) + zone presence_en(10) + zone presence_to(20) +
+///         zone srate(10) + zone bitd(10) + client active(10) + client defzone(10) +
+///         client defvol(10) + client maxvol(10) + client deflat(10) +
+///         global httpport(2) + global loglvl(1) + radio active(20)
+mod mem {
+    pub const ZONE_ACTIVE: usize = 0; // 10 × 1 byte
+    pub const ZONE_DEF_VOL: usize = 10; // 10 × 1 byte
+    pub const ZONE_MAX_VOL: usize = 20; // 10 × 1 byte
+    pub const ZONE_AIRPLAY: usize = 30; // 10 × 1 byte
+    pub const ZONE_SPOTIFY: usize = 40; // 10 × 1 byte
+    pub const ZONE_PRESENCE_EN: usize = 50; // 10 × 1 byte
+    pub const ZONE_PRESENCE_TO: usize = 60; // 10 × 2 bytes
+    pub const ZONE_SRATE: usize = 80; // 10 × 1 byte
+    pub const ZONE_BITD: usize = 90; // 10 × 1 byte
+    pub const CLIENT_ACTIVE: usize = 100; // 10 × 1 byte
+    pub const CLIENT_DEF_ZONE: usize = 110; // 10 × 1 byte
+    pub const CLIENT_DEF_VOL: usize = 120; // 10 × 1 byte
+    pub const CLIENT_MAX_VOL: usize = 130; // 10 × 1 byte
+    pub const CLIENT_DEF_LAT: usize = 140; // 10 × 1 byte
+    pub const GLOBAL_HTTP_PORT: usize = 150; // 2 bytes
+    pub const GLOBAL_LOG_LVL: usize = 152; // 1 byte
+    pub const RADIO_ACTIVE: usize = 153; // 20 × 1 byte
+    pub const TOTAL: usize = 173;
+}
+
+/// Parsed ETS parameters from BAU memory.
+#[derive(Debug, Default)]
+pub(crate) struct EtsParams {
+    pub zone_active: [bool; 10],
+    pub zone_max_volume: [u8; 10],
+    pub client_active: [bool; 10],
+    pub client_max_volume: [u8; 10],
+    pub client_default_zone: [u8; 10],
+    pub client_default_latency: [u8; 10],
+}
+
+/// Parse ETS parameters from BAU memory area.
+pub(crate) fn parse_ets_memory(data: &[u8]) -> EtsParams {
+    let mut p = EtsParams::default();
+    if data.len() < mem::TOTAL {
+        return p;
+    }
+    for i in 0..10 {
+        p.zone_active[i] = data[mem::ZONE_ACTIVE + i] != 0;
+        p.zone_max_volume[i] = data[mem::ZONE_MAX_VOL + i];
+        p.client_active[i] = data[mem::CLIENT_ACTIVE + i] != 0;
+        p.client_max_volume[i] = data[mem::CLIENT_MAX_VOL + i];
+        p.client_default_zone[i] = data[mem::CLIENT_DEF_ZONE + i];
+        p.client_default_latency[i] = data[mem::CLIENT_DEF_LAT + i];
+    }
+    p
+}
+
 /// Command sent to the BAU task.
 enum BauCmd {
     /// Write a DPT-encoded value to a group object by GA string.
@@ -142,6 +199,16 @@ async fn bau_task(
 
                 while let Some(out) = bau.next_outgoing_frame() {
                     let _ = server.send_frame(out).await;
+                }
+
+                // Persist memory after ETS programming
+                if let Some(ref path) = persist_path {
+                    let mem = bau.memory_area();
+                    if !mem.is_empty() {
+                        if let Err(e) = std::fs::write(path, mem) {
+                            tracing::warn!(error = %e, "Failed to persist ETS memory");
+                        }
+                    }
                 }
 
                 dispatch_updated_gos(&mut bau, &update_tx).await;
