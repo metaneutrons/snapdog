@@ -130,7 +130,15 @@ pub(crate) async fn start_device_transport(
     let (cmd_tx, cmd_rx) = mpsc::channel(64);
     let (update_tx, update_rx) = mpsc::channel(64);
 
-    tokio::spawn(bau_task(ia, server, cmd_rx, update_tx, persist_path));
+    let config_arc = std::sync::Arc::new(config.clone());
+    tokio::spawn(bau_task(
+        ia,
+        config_arc,
+        server,
+        cmd_rx,
+        update_tx,
+        persist_path,
+    ));
 
     tracing::info!(%individual_address, persist, "KNX device mode started");
 
@@ -169,12 +177,13 @@ impl KnxTransport for DeviceListener {
 
 async fn bau_task(
     ia: IndividualAddress,
+    config: std::sync::Arc<crate::config::AppConfig>,
     mut server: DeviceServer,
     mut cmd_rx: mpsc::Receiver<BauCmd>,
     update_tx: mpsc::Sender<(GroupAddress, Vec<u8>)>,
     persist_path: Option<PathBuf>,
 ) {
-    let mut bau = build_bau(ia);
+    let mut bau = build_bau(ia, &config);
 
     // Load persisted ETS memory if available
     if let Some(ref path) = persist_path {
@@ -241,8 +250,9 @@ async fn bau_task(
     tracing::info!("KNX BAU task ended");
 }
 
-/// Build a BAU with 410 group objects configured with correct DPTs.
-fn build_bau(ia: IndividualAddress) -> Bau {
+/// Build a BAU with 460 group objects configured with correct DPTs,
+/// and address/association tables from TOML config.
+fn build_bau(ia: IndividualAddress, config: &crate::config::AppConfig) -> Bau {
     let device = device_object::new_device_object(
         [0x00, 0xFA, 0x01, 0x02, 0x03, 0x04], // serial (OpenKNX 0xFA)
         [0x00; 6],                            // hardware type
@@ -270,7 +280,136 @@ fn build_bau(ia: IndividualAddress) -> Bau {
         }
     }
 
+    // Build address table and association table from TOML KNX config
+    build_tables_from_config(&mut bau, config);
+
     bau
+}
+
+/// Build address and association tables from TOML zone/client KNX addresses.
+fn build_tables_from_config(bau: &mut Bau, config: &crate::config::AppConfig) {
+    // Collect all (GA string, ASAP) pairs
+    let mut ga_asap_pairs: Vec<(u16, u16)> = Vec::new();
+
+    for zone_cfg in &config.zones {
+        let idx = zone_cfg.index;
+        let knx = &zone_cfg.knx;
+        // Map each configured GA to its zone GO ASAP
+        let zone_gas: &[(&Option<String>, usize)] = &[
+            (&knx.play, 0),
+            (&knx.pause, 1),
+            (&knx.stop, 2),
+            (&knx.track_next, 3),
+            (&knx.track_previous, 4),
+            (&knx.volume, 5),
+            (&knx.volume_status, 6),
+            (&knx.volume_dim, 7),
+            (&knx.mute, 8),
+            (&knx.mute_status, 9),
+            (&knx.mute_toggle, 10),
+            (&knx.control_status, 11),
+            (&knx.track_playing_status, 12),
+            (&knx.shuffle, 13),
+            (&knx.shuffle_status, 14),
+            (&knx.shuffle_toggle, 15),
+            (&knx.repeat, 16),
+            (&knx.repeat_status, 17),
+            (&knx.repeat_toggle, 18),
+            (&knx.track_repeat, 19),
+            (&knx.track_repeat_status, 20),
+            (&knx.track_repeat_toggle, 21),
+            (&knx.playlist, 22),
+            (&knx.playlist_status, 23),
+            (&knx.playlist_next, 24),
+            (&knx.playlist_previous, 25),
+            (&knx.track_title_status, 26),
+            (&knx.track_artist_status, 27),
+            (&knx.track_album_status, 28),
+            (&knx.track_progress_status, 29),
+            (&knx.presence, 30),
+            (&knx.presence_enable, 31),
+            (&knx.presence_timeout, 32),
+            (&knx.presence_timer_status, 33),
+            (&knx.presence_source_override, 34),
+        ];
+        for (ga_opt, go_idx) in zone_gas {
+            if let Some(ga_str) = ga_opt {
+                if let Ok(ga) = GroupAddress::from_str(ga_str) {
+                    let asap = group_objects::zone_asap(idx, *go_idx);
+                    ga_asap_pairs.push((ga.raw(), asap));
+                }
+            }
+        }
+    }
+
+    for client_cfg in &config.clients {
+        let idx = client_cfg.index;
+        let knx = &client_cfg.knx;
+        let client_gas: &[(&Option<String>, usize)] = &[
+            (&knx.volume, 0),
+            (&knx.volume_status, 1),
+            (&knx.volume_dim, 2),
+            (&knx.mute, 3),
+            (&knx.mute_status, 4),
+            (&knx.mute_toggle, 5),
+            (&knx.latency, 6),
+            (&knx.latency_status, 7),
+            (&knx.zone, 8),
+            (&knx.zone_status, 9),
+            (&knx.connected_status, 10),
+        ];
+        for (ga_opt, go_idx) in client_gas {
+            if let Some(ga_str) = ga_opt {
+                if let Ok(ga) = GroupAddress::from_str(ga_str) {
+                    let asap = group_objects::client_asap(idx, *go_idx);
+                    ga_asap_pairs.push((ga.raw(), asap));
+                }
+            }
+        }
+    }
+
+    if ga_asap_pairs.is_empty() {
+        return;
+    }
+
+    // Build address table: unique GAs → TSAPs (1-based)
+    let mut unique_gas: Vec<u16> = ga_asap_pairs.iter().map(|(ga, _)| *ga).collect();
+    unique_gas.sort_unstable();
+    unique_gas.dedup();
+
+    let mut addr_data = Vec::new();
+    let count = unique_gas.len() as u16;
+    addr_data.extend_from_slice(&count.to_be_bytes());
+    for ga in &unique_gas {
+        addr_data.extend_from_slice(&ga.to_be_bytes());
+    }
+    bau.address_table.load(&addr_data);
+
+    // Build association table: (TSAP, ASAP) pairs
+    let mut assoc_data = Vec::new();
+    let mut assoc_entries: Vec<(u16, u16)> = Vec::new();
+    for (ga, asap) in &ga_asap_pairs {
+        let tsap = unique_gas
+            .iter()
+            .position(|g| g == ga)
+            .map(|i| (i + 1) as u16);
+        if let Some(tsap) = tsap {
+            assoc_entries.push((tsap, *asap));
+        }
+    }
+    let assoc_count = assoc_entries.len() as u16;
+    assoc_data.extend_from_slice(&assoc_count.to_be_bytes());
+    for (tsap, asap) in &assoc_entries {
+        assoc_data.extend_from_slice(&tsap.to_be_bytes());
+        assoc_data.extend_from_slice(&asap.to_be_bytes());
+    }
+    bau.association_table.load(&assoc_data);
+
+    tracing::info!(
+        gas = unique_gas.len(),
+        associations = assoc_entries.len(),
+        "KNX address/association tables loaded from TOML"
+    );
 }
 
 /// Handle a write from the publisher: encode value, write to GO, poll BAU, send frames.
