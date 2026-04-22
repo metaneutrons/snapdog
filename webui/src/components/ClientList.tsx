@@ -95,6 +95,7 @@ function ClientCard({ client }: { client: ClientInfo }) {
               onVolumeChange={(v) => api.clients.setVolume(client.index, v).catch(() => {})}
               onMuteToggle={() => api.clients.toggleMute(client.index).catch(() => {})}
               onUnmute={() => api.clients.setMute(client.index, false).catch(() => {})}
+              max={client.max_volume}
               compact
             />
           </div>

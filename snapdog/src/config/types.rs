@@ -83,15 +83,18 @@ pub enum GroupVolumeMode {
 }
 
 impl GroupVolumeMode {
-    /// Compute effective client volume given the client's base volume and zone volume.
-    pub fn effective(self, base_volume: i32, zone_volume: i32) -> i32 {
+    /// Compute effective client volume given the client's base volume, zone volume,
+    /// and maximum volume limit.
+    pub fn effective(self, base_volume: i32, zone_volume: i32, max_volume: i32) -> i32 {
+        let max = max_volume.clamp(0, 100);
+        let base = base_volume.clamp(0, max);
         let z = zone_volume.clamp(0, 100);
         match self {
-            Self::Absolute => z,
-            Self::Relative => (base_volume.clamp(0, 100) * z / 100).clamp(0, 100),
+            Self::Absolute => z.min(max),
+            Self::Relative => (base * z / 100).clamp(0, max),
             Self::Compressed => {
                 let factor = (z as f64 / 100.0).sqrt();
-                (base_volume.clamp(0, 100) as f64 * factor).round() as i32
+                (base as f64 * factor).round().min(max as f64) as i32
             }
         }
     }
@@ -404,6 +407,9 @@ pub struct RawClientConfig {
     /// Emoji icon for the client.
     #[serde(default = "default_client_icon")]
     pub icon: String,
+    /// Maximum volume (0–100). Limits how loud this client can go.
+    #[serde(default = "default_max_volume")]
+    pub max_volume: i32,
     /// KNX group addresses for this client.
     #[serde(default)]
     pub knx: RawClientKnxConfig,
@@ -623,6 +629,8 @@ pub struct ClientConfig {
     pub zone_index: usize,
     /// Emoji icon.
     pub icon: String,
+    /// Maximum volume (0–100). Limits how loud this client can go.
+    pub max_volume: i32,
     /// KNX group addresses.
     pub knx: ClientKnxAddresses,
 }
@@ -720,6 +728,9 @@ fn default_zone_icon() -> String {
 }
 fn default_client_icon() -> String {
     "🎵".into()
+}
+fn default_max_volume() -> i32 {
+    100
 }
 fn default_true() -> bool {
     true

@@ -63,6 +63,7 @@ export interface ClientInfo {
   zone_index: number;
   icon: string;
   volume: number;
+  max_volume: number;
   muted: boolean;
   connected: boolean;
   is_snapdog: boolean;

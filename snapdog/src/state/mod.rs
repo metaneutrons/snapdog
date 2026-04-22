@@ -105,6 +105,9 @@ pub struct ClientState {
     /// In absolute mode, this equals `volume`.
     #[serde(default = "default_volume")]
     pub base_volume: i32,
+    /// Maximum volume (0–100). Limits how loud this client can go.
+    #[serde(default = "default_max_volume")]
+    pub max_volume: i32,
     /// Whether the client is muted.
     pub muted: bool,
     /// Audio output latency in milliseconds.
@@ -119,6 +122,9 @@ pub struct ClientState {
 }
 
 fn default_volume() -> i32 {
+    100
+}
+fn default_max_volume() -> i32 {
     100
 }
 
@@ -261,6 +267,7 @@ impl Store {
                         zone_index: c.zone_index,
                         volume: 50,
                         base_volume: 50,
+                        max_volume: c.max_volume,
                         muted: false,
                         latency_ms: 0,
                         connected: false,

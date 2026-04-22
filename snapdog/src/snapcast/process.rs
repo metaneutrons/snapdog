@@ -122,11 +122,18 @@ impl SnapcastBackend for ProcessBackend {
                                 zone_index.is_some_and(|zi| c.zone_index == zi)
                                     && c.snapcast_id.is_some()
                             })
-                            .map(|c| (c.snapcast_id.clone().unwrap(), c.base_volume, c.muted))
+                            .map(|c| {
+                                (
+                                    c.snapcast_id.clone().unwrap(),
+                                    c.base_volume,
+                                    c.muted,
+                                    c.max_volume,
+                                )
+                            })
                             .collect();
                         drop(s);
-                        for (cid, base, _muted) in clients {
-                            let vol = mode.effective(base, percent) as u8;
+                        for (cid, base, _muted, max_vol) in clients {
+                            let vol = mode.effective(base, percent, max_vol) as u8;
                             self.snap.client_set_volume(&cid, vol).await?;
                         }
                         Ok(())
@@ -140,14 +147,14 @@ impl SnapcastBackend for ProcessBackend {
                             .clients
                             .values()
                             .find(|c| c.snapcast_id.as_deref() == Some(&client_id))
-                            .map(|c| c.zone_index);
-                        let (zone_vol, mode) = info
-                            .map(|zi| {
+                            .map(|c| (c.zone_index, c.max_volume));
+                        let (zone_vol, mode, max_vol) = info
+                            .map(|(zi, mv)| {
                                 let zv = s.zones.get(&zi).map(|z| z.volume).unwrap_or(100);
                                 let m = self.volume_modes.get(&zi).copied().unwrap_or_default();
-                                (zv, m)
+                                (zv, m, mv)
                             })
-                            .unwrap_or((100, Default::default()));
+                            .unwrap_or((100, Default::default(), 100));
                         let base = v.clamp(0, 100);
                         if let Some(c) = s
                             .clients
@@ -158,7 +165,10 @@ impl SnapcastBackend for ProcessBackend {
                         }
                         drop(s);
                         self.snap
-                            .client_set_volume(&client_id, mode.effective(base, zone_vol) as u8)
+                            .client_set_volume(
+                                &client_id,
+                                mode.effective(base, zone_vol, max_vol) as u8,
+                            )
                             .await
                     }
                     ClientAction::Mute(muted) => self.snap.client_set_mute(&client_id, muted).await,

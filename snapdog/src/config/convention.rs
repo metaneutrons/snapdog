@@ -52,6 +52,7 @@ pub fn resolve_client(
         mac: raw.mac,
         zone_index,
         icon: raw.icon,
+        max_volume: raw.max_volume.clamp(0, 100),
         knx: resolve_client_knx(index, raw.knx),
     })
 }
