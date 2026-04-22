@@ -67,6 +67,9 @@ impl MqttBridge {
             "zones/+/track/set",
             "zones/+/track/position/set",
             "zones/+/playlist/set",
+            "zones/+/presence/set",
+            "zones/+/presence/enable/set",
+            "zones/+/presence/timeout/set",
             "clients/+/volume/set",
             "clients/+/mute/set",
             "clients/+/latency/set",
@@ -131,6 +134,23 @@ impl MqttBridge {
             )
             .await?;
         }
+        self.publish(&format!("{base}/presence"), &zone.presence.to_string())
+            .await?;
+        self.publish(
+            &format!("{base}/presence/enable"),
+            &zone.presence_enabled.to_string(),
+        )
+        .await?;
+        self.publish(
+            &format!("{base}/presence/timeout"),
+            &zone.auto_off_delay.to_string(),
+        )
+        .await?;
+        self.publish(
+            &format!("{base}/presence/timer"),
+            &zone.auto_off_active.to_string(),
+        )
+        .await?;
         Ok(())
     }
 
@@ -248,6 +268,26 @@ impl MqttBridge {
                 let index: usize = idx.parse()?;
                 let pos: i64 = payload.parse()?;
                 send_zone_cmd(zone_commands, index, ZoneCommand::Seek(pos)).await;
+            }
+            ["zones", idx, "presence", "set"] => {
+                let index: usize = idx.parse()?;
+                let present: bool = payload.parse()?;
+                send_zone_cmd(zone_commands, index, ZoneCommand::SetPresence(present)).await;
+            }
+            ["zones", idx, "presence", "enable", "set"] => {
+                let index: usize = idx.parse()?;
+                let enabled: bool = payload.parse()?;
+                send_zone_cmd(
+                    zone_commands,
+                    index,
+                    ZoneCommand::SetPresenceEnabled(enabled),
+                )
+                .await;
+            }
+            ["zones", idx, "presence", "timeout", "set"] => {
+                let index: usize = idx.parse()?;
+                let delay: u16 = payload.parse()?;
+                send_zone_cmd(zone_commands, index, ZoneCommand::SetAutoOffDelay(delay)).await;
             }
 
             // Client commands → direct state mutation (no ZonePlayer involvement)
