@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Fabian Schmieder
 
-//! Group object definitions — single source of truth for all 410 KNX communication objects.
+//! Group object definitions — single source of truth for all KNX communication objects.
 //!
 //! Used by:
 //! - Device mode runtime (BAU `GroupObjectStore` construction)
@@ -63,6 +63,12 @@ const BIDIR: GoFlags = GoFlags {
 
 /// DPT 3.007 — Controlled dimming.
 const DPT_CONTROL_DIMMING: Dpt = Dpt::new(3, 7);
+
+/// DPT 1.018 — Occupancy (presence sensor).
+const DPT_OCCUPANCY: Dpt = Dpt::new(1, 18);
+
+/// DPT 7.005 — Time period in seconds (UInt16).
+const DPT_TIME_PERIOD_SEC: Dpt = Dpt::new(7, 5);
 
 /// Definition of a single group object.
 pub struct GoDefinition {
@@ -259,6 +265,32 @@ pub const ZONE_GOS: &[GoDefinition] = &[
         dpt: DPT_SCALING,
         flags: SEND,
     },
+    // Presence
+    GoDefinition {
+        name: "Presence",
+        dpt: DPT_OCCUPANCY,
+        flags: RECV,
+    },
+    GoDefinition {
+        name: "Presence Enable",
+        dpt: DPT_SWITCH,
+        flags: BIDIR,
+    },
+    GoDefinition {
+        name: "Presence Timeout",
+        dpt: DPT_TIME_PERIOD_SEC,
+        flags: BIDIR,
+    },
+    GoDefinition {
+        name: "Presence Timer Active",
+        dpt: DPT_SWITCH,
+        flags: SEND,
+    },
+    GoDefinition {
+        name: "Presence Source Override",
+        dpt: DPT_VALUE_1_UCOUNT,
+        flags: RECV,
+    },
 ];
 
 // ── Client group objects (11 per client) ──────────────────────
@@ -341,7 +373,7 @@ mod tests {
 
     #[test]
     fn zone_go_count() {
-        assert_eq!(ZONE_GOS.len(), 30);
+        assert_eq!(ZONE_GOS.len(), 35);
     }
 
     #[test]
@@ -351,7 +383,7 @@ mod tests {
 
     #[test]
     fn total_go_count() {
-        assert_eq!(TOTAL_GO_COUNT, 410);
+        assert_eq!(TOTAL_GO_COUNT, 460);
     }
 
     #[test]
@@ -359,21 +391,21 @@ mod tests {
         // Zone 1, first GO → ASAP 1
         assert_eq!(zone_asap(1, 0), 1);
         // Zone 1, last GO → ASAP 30
-        assert_eq!(zone_asap(1, 29), 30);
+        assert_eq!(zone_asap(1, 34), 35);
         // Zone 2, first GO → ASAP 31
-        assert_eq!(zone_asap(2, 0), 31);
+        assert_eq!(zone_asap(2, 0), 36);
         // Zone 10, last GO → ASAP 300
-        assert_eq!(zone_asap(10, 29), 300);
+        assert_eq!(zone_asap(10, 34), 350);
     }
 
     #[test]
     fn client_asap_layout() {
         // Client 1, first GO → ASAP 301
-        assert_eq!(client_asap(1, 0), 301);
+        assert_eq!(client_asap(1, 0), 351);
         // Client 1, last GO → ASAP 311
-        assert_eq!(client_asap(1, 10), 311);
+        assert_eq!(client_asap(1, 10), 361);
         // Client 10, last GO → ASAP 410
-        assert_eq!(client_asap(10, 10), 410);
+        assert_eq!(client_asap(10, 10), 460);
     }
 
     #[test]

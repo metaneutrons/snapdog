@@ -24,7 +24,8 @@ use std::str::FromStr;
 use anyhow::{Context, Result};
 use knx_core::address::GroupAddress;
 use knx_core::dpt::{
-    self, DPT_SCALING, DPT_STRING_8859_1, DPT_SWITCH, DPT_VALUE_1_UCOUNT, Dpt, DptValue,
+    self, DPT_SCALING, DPT_STRING_8859_1, DPT_SWITCH, DPT_VALUE_1_UCOUNT, DPT_VALUE_2_UCOUNT, Dpt,
+    DptValue,
 };
 
 use crate::config::AppConfig;
@@ -224,6 +225,21 @@ async fn publish_zone_state(
         )
         .await;
     }
+    if let Some(ref ga) = knx.presence_enable_status {
+        write(transport, ga, DPT_SWITCH, &zone.presence_enabled.into()).await;
+    }
+    if let Some(ref ga) = knx.presence_timeout_status {
+        write(
+            transport,
+            ga,
+            DPT_VALUE_2_UCOUNT,
+            &DptValue::from(u32::from(zone.auto_off_delay)),
+        )
+        .await;
+    }
+    if let Some(ref ga) = knx.presence_timer_status {
+        write(transport, ga, DPT_SWITCH, &zone.auto_off_active.into()).await;
+    }
 }
 
 async fn publish_zone_track(
@@ -415,6 +431,10 @@ pub(crate) fn build_zone_ga_map(config: &AppConfig) -> HashMap<String, (usize, &
             (&knx.playlist, "playlist"),
             (&knx.playlist_next, "playlist_next"),
             (&knx.playlist_previous, "playlist_previous"),
+            (&knx.presence, "presence"),
+            (&knx.presence_enable, "presence_enable"),
+            (&knx.presence_timeout, "presence_timeout"),
+            (&knx.presence_source_override, "presence_source_override"),
         ];
         for (ga_opt, action) in pairs {
             if let Some(ga) = ga_opt {
@@ -479,6 +499,13 @@ pub(crate) async fn handle_incoming(
                 "playlist" => decode_u8(data).map(|v| ZoneCommand::SetPlaylist(v as usize, 0)),
                 "playlist_next" => Some(ZoneCommand::NextPlaylist),
                 "playlist_previous" => Some(ZoneCommand::PreviousPlaylist),
+                "presence" => Some(ZoneCommand::SetPresence(decode_bool(data))),
+                "presence_enable" => Some(ZoneCommand::SetPresenceEnabled(decode_bool(data))),
+                "presence_timeout" => decode_u16(data).map(ZoneCommand::SetAutoOffDelay),
+                "presence_source_override" => {
+                    // TODO: implement source override via GO index
+                    None
+                }
                 _ => None,
             };
             if let Some(cmd) = cmd {
@@ -551,6 +578,13 @@ fn decode_u8(payload: &[u8]) -> Option<u8> {
         .ok()
         .and_then(|v| v.as_u32())
         .map(|v| v.min(255) as u8)
+}
+
+fn decode_u16(payload: &[u8]) -> Option<u16> {
+    dpt::decode(DPT_VALUE_2_UCOUNT, payload)
+        .ok()
+        .and_then(|v| v.as_u32())
+        .map(|v| v.min(65535) as u16)
 }
 
 /// Decode DPT 3.007 into a relative volume delta.
