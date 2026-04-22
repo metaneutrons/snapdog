@@ -19,6 +19,7 @@ use crate::audio;
 use crate::receiver::ReceiverProvider;
 use crate::state::{PlaybackState, SourceType, TrackInfo};
 use crate::subsonic::SubsonicClient;
+use chrono::Timelike;
 
 /// Spawn a ZonePlayer task for each configured zone. Returns command senders.
 pub async fn spawn_zone_players(
@@ -29,13 +30,13 @@ pub async fn spawn_zone_players(
 
     for zone in &ctx.config.zones {
         let (cmd_tx, cmd_rx) = mpsc::channel(32); // zone command backlog
-        senders.insert(zone.index, cmd_tx);
+        senders.insert(zone.index, cmd_tx.clone());
 
         let ctx = ctx.clone();
         let zone_index = zone.index;
 
         tokio::spawn(async move {
-            if let Err(e) = run(zone_index, cmd_rx, ctx).await {
+            if let Err(e) = run(zone_index, cmd_rx, cmd_tx, ctx).await {
                 tracing::error!(zone = zone_index, error = %e, "ZonePlayer crashed");
             }
         });
@@ -50,6 +51,7 @@ pub async fn spawn_zone_players(
 async fn run(
     zone_index: usize,
     mut commands: mpsc::Receiver<ZoneCommand>,
+    self_tx: mpsc::Sender<ZoneCommand>,
     ctx: Arc<ZonePlayerContext>,
 ) -> Result<()> {
     let config = &ctx.config;
@@ -148,6 +150,11 @@ async fn run(
         let eq_config = ctx.eq_store.lock().unwrap().get(zone_index);
         zone_eq.set_config(&eq_config);
     }
+
+    // Presence auto-off timer
+    let auto_off_timer = tokio::time::sleep(std::time::Duration::from_secs(86400));
+    tokio::pin!(auto_off_timer);
+    let mut auto_off_armed = false;
 
     loop {
         tokio::select! {
@@ -510,6 +517,60 @@ async fn run(
                         });
                         tracing::debug!(zone = zone_index, "EQ updated");
                     }
+                    ZoneCommand::SetPresence(present) => {
+                        let enabled = store.read().await.zones.get(&zone_index).is_some_and(|z| z.presence_enabled);
+                        if !enabled {
+                            update_and_notify(store, zone_index, notify, |z| z.presence = present).await;
+                        } else if present {
+                            auto_off_armed = false;
+                            let is_idle = store.read().await.zones.get(&zone_index).is_some_and(|z| z.playback == crate::state::PlaybackState::Stopped);
+                            update_and_notify(store, zone_index, notify, |z| {
+                                z.presence = true;
+                                z.auto_off_active = false;
+                            }).await;
+                            if is_idle {
+                                // Resolve source: schedule → default → resume
+                                let resolved = resolve_presence_source(config, zone_index);
+                                update_and_notify(store, zone_index, notify, |z| z.presence_source = true).await;
+                                match resolved {
+                                    Some(crate::config::PresenceSource::Radio(idx)) => {
+                                        let _ = self_tx.send(ZoneCommand::SetPlaylist(idx, 0)).await;
+                                    }
+                                    Some(crate::config::PresenceSource::Playlist(ref id)) => {
+                                        let _ = self_tx.send(ZoneCommand::PlaySubsonicPlaylist(id.clone(), 0)).await;
+                                    }
+                                    Some(crate::config::PresenceSource::None) => {}
+                                    None => {
+                                        let _ = self_tx.send(ZoneCommand::Play).await;
+                                    }
+                                }
+                                tracing::info!(zone = zone_index, "Presence: playback started");
+                            }
+                        } else {
+                            let should_timer = store.read().await.zones.get(&zone_index).is_some_and(|z| z.presence_source && z.playback == crate::state::PlaybackState::Playing);
+                            update_and_notify(store, zone_index, notify, |z| z.presence = false).await;
+                            if should_timer {
+                                let delay = store.read().await.zones.get(&zone_index).map_or(900, |z| z.auto_off_delay);
+                                auto_off_timer.as_mut().reset(tokio::time::Instant::now() + std::time::Duration::from_secs(delay as u64)); auto_off_armed = true;
+                                update_and_notify(store, zone_index, notify, |z| z.auto_off_active = true).await;
+                                tracing::debug!(zone = zone_index, delay, "Presence auto-off timer started");
+                            }
+                        }
+                    }
+                    ZoneCommand::SetPresenceEnabled(v) => {
+                        if !v {
+                            auto_off_armed = false;
+                            update_and_notify(store, zone_index, notify, |z| {
+                                z.presence_enabled = false;
+                                z.auto_off_active = false;
+                            }).await;
+                        } else {
+                            update_and_notify(store, zone_index, notify, |z| z.presence_enabled = v).await;
+                        }
+                    }
+                    ZoneCommand::SetAutoOffDelay(delay) => {
+                        update_and_notify(store, zone_index, notify, |z| z.auto_off_delay = delay).await;
+                    }
                 }
             }
             pcm = async { match &mut decode_rx { Some(rx) => rx.recv().await, None => std::future::pending().await } } => {
@@ -666,6 +727,49 @@ async fn run(
                     }
                 }
             }
+            // Auto-off timer expired
+            _ = &mut auto_off_timer, if auto_off_armed => {
+                auto_off_armed = false;
+                let should_stop = store.read().await.zones.get(&zone_index).is_some_and(|z| z.presence_source && !z.presence);
+                if should_stop {
+                    tracing::info!(zone = zone_index, "Presence auto-off: stopping playback");
+                    stop_decode(&mut current_decode, &mut decode_rx).await;
+                    source = ActiveSource::Idle;
+                    update_and_notify(store, zone_index, notify, |z| {
+                        z.playback = PlaybackState::Stopped;
+                        z.source = SourceType::Idle;
+                        z.track = None;
+                        z.cover_url = None;
+                        z.presence_source = false;
+                        z.auto_off_active = false;
+                    }).await;
+                }
+            }
         }
     }
+}
+
+/// Resolve which source to play for presence-triggered playback.
+/// Checks schedule (by current time) → default_source → None (resume).
+fn resolve_presence_source(
+    config: &crate::config::AppConfig,
+    zone_index: usize,
+) -> Option<crate::config::PresenceSource> {
+    let zone_cfg = config.zones.get(zone_index - 1)?;
+    let presence = zone_cfg.presence.as_ref()?;
+
+    // Check schedule
+    let now = chrono::Local::now();
+    let now_minutes = (now.hour() * 60 + now.minute()) as u16;
+
+    for entry in &presence.schedule {
+        let from = crate::config::parse_time(&entry.from).unwrap_or(0);
+        let to = crate::config::parse_time(&entry.to).unwrap_or(0);
+        if now_minutes >= from && now_minutes < to {
+            return Some(entry.source.clone());
+        }
+    }
+
+    // Fallback to default_source
+    presence.default_source.clone()
 }

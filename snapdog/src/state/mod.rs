@@ -86,6 +86,21 @@ pub struct ZoneState {
     pub cover_url: Option<String>,
     /// Snapcast group ID for this zone (set after Snapcast sync).
     pub snapcast_group_id: Option<String>,
+    /// Whether presence is currently detected.
+    #[serde(default)]
+    pub presence: bool,
+    /// Whether presence-triggered playback is enabled.
+    #[serde(default = "default_true")]
+    pub presence_enabled: bool,
+    /// Whether the current playback was started by presence (not manually).
+    #[serde(default)]
+    pub presence_source: bool,
+    /// Auto-off delay in seconds (runtime, may differ from config if changed via KNX/MQTT).
+    #[serde(default = "default_auto_off_delay")]
+    pub auto_off_delay: u16,
+    /// Whether the auto-off timer is currently running.
+    #[serde(default)]
+    pub auto_off_active: bool,
 }
 
 /// Runtime state of a single Snapcast client (speaker/output device).
@@ -126,6 +141,12 @@ fn default_volume() -> i32 {
 }
 fn default_max_volume() -> i32 {
     100
+}
+fn default_true() -> bool {
+    true
+}
+fn default_auto_off_delay() -> u16 {
+    900
 }
 
 /// Zone playback state.
@@ -249,6 +270,11 @@ impl Store {
                         source: SourceType::Idle,
                         cover_url: None,
                         snapcast_group_id: None,
+                        presence: false,
+                        presence_enabled: true,
+                        presence_source: false,
+                        auto_off_delay: z.presence.as_ref().map_or(900, |p| p.auto_off_delay),
+                        auto_off_active: false,
                     },
                 )
             })
@@ -447,6 +473,11 @@ mod tests {
                 source: SourceType::Idle,
                 cover_url: None,
                 snapcast_group_id: None,
+                presence: false,
+                presence_enabled: true,
+                presence_source: false,
+                auto_off_delay: 900,
+                auto_off_active: false,
             },
         );
         store.persist().unwrap();

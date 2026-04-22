@@ -64,6 +64,14 @@ pub enum ZoneCommand {
     /// Toggle single-track repeat.
     ToggleTrackRepeat,
 
+    // ── Presence ──────────────────────────────────────────────
+    /// Set presence state (from KNX occupancy sensor, MQTT, or API).
+    SetPresence(bool),
+    /// Enable or disable presence-triggered playback.
+    SetPresenceEnabled(bool),
+    /// Set auto-off delay in seconds.
+    SetAutoOffDelay(u16),
+
     // ── DSP ───────────────────────────────────────────────────
     /// Apply a new parametric EQ configuration to the zone.
     SetEq(crate::audio::eq::EqConfig),
