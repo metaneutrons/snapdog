@@ -275,21 +275,34 @@ async fn bau_task(
 ) {
     let mut bau = build_bau(ia, &config);
 
-    // Load persisted ETS memory if available
+    // Restore persisted ETS device state if available
     if let Some(ref path) = persist_path {
         match load_memory(path) {
             Ok(data) => {
-                bau.set_memory_area(data);
-                // Address/association tables are always built from TOML config
-                // (build_tables_from_config), not from persisted memory. The memory
-                // area only stores ETS parameter values (defaults, timeouts, etc.).
-                tracing::info!(path = %path.display(), "Loaded persisted ETS memory");
+                if bau.restore(&data) {
+                    tracing::info!(
+                        path = %path.display(),
+                        addr_table = ?bau.addr_table_object.load_state(),
+                        assoc_table = ?bau.assoc_table_object.load_state(),
+                        "Restored ETS device state"
+                    );
+                } else {
+                    tracing::warn!(path = %path.display(), "ETS state restore failed — ETS will need to reprogram");
+                }
             }
             Err(e) if path.exists() => {
                 tracing::warn!(path = %path.display(), error = %e, "Discarding corrupted ETS memory file — ETS will need to reprogram");
             }
             Err(_) => {} // file doesn't exist — first run
         }
+    }
+
+    // On first run (no ETS state), build tables from TOML config as fallback
+    if !matches!(
+        bau.addr_table_object.load_state(),
+        knx_device::table_object::LoadState::Loaded
+    ) {
+        build_tables_from_config(&mut bau, &config);
     }
 
     let mut memory_dirty = false;
@@ -348,13 +361,13 @@ async fn bau_task(
                 persist_armed = false;
                 memory_dirty = false;
                 if let Some(ref path) = persist_path {
-                    let mem = bau.memory_area().to_vec();
+                    let state = bau.save();
                     let path = path.clone();
                     tokio::task::spawn_blocking(move || {
-                        if let Err(e) = persist_memory(&path, &mem) {
-                            tracing::warn!(error = %e, "Failed to persist ETS memory");
+                        if let Err(e) = persist_memory(&path, &state) {
+                            tracing::warn!(error = %e, "Failed to persist ETS state");
                         } else {
-                            tracing::debug!(path = %path.display(), bytes = mem.len(), "ETS memory persisted");
+                            tracing::debug!(path = %path.display(), bytes = state.len(), "ETS state persisted");
                         }
                     });
                 }
@@ -365,13 +378,11 @@ async fn bau_task(
     // Persist on shutdown if dirty
     if memory_dirty {
         if let Some(ref path) = persist_path {
-            let mem = bau.memory_area();
-            if !mem.is_empty() {
-                if let Err(e) = persist_memory(path, mem) {
-                    tracing::warn!(error = %e, "Failed to persist ETS memory on shutdown");
-                } else {
-                    tracing::info!(path = %path.display(), "ETS memory persisted on shutdown");
-                }
+            let state = bau.save();
+            if let Err(e) = persist_memory(path, &state) {
+                tracing::warn!(error = %e, "Failed to persist ETS state on shutdown");
+            } else {
+                tracing::info!(path = %path.display(), "ETS state persisted on shutdown");
             }
         }
     }
