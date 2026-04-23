@@ -357,7 +357,9 @@ fn build_tables_from_config(bau: &mut Bau, config: &crate::config::AppConfig) {
             (&knx.track_progress_status, ZGO_TRACK_PROGRESS),
             (&knx.presence, ZGO_PRESENCE),
             (&knx.presence_enable, ZGO_PRESENCE_ENABLE),
+            (&knx.presence_enable_status, ZGO_PRESENCE_ENABLE),
             (&knx.presence_timeout, ZGO_PRESENCE_TIMEOUT),
+            (&knx.presence_timeout_status, ZGO_PRESENCE_TIMEOUT),
             (&knx.presence_timer_status, ZGO_PRESENCE_TIMER_ACTIVE),
             (&knx.presence_source_override, ZGO_PRESENCE_SOURCE_OVERRIDE),
         ];
