@@ -11,7 +11,7 @@
         <ApplicationProgram Id="M-00FA_A-FF01-01-0000" ProgramType="ApplicationProgram" MaskVersion="MV-07B0" Name="SnapDog" LoadProcedureStyle="MergedProcedure" PeiType="0" DefaultLanguage="de-DE" DynamicTableManagement="false" Linkable="true" MinEtsVersion="5.0" IPConfig="Custom" ApplicationNumber="65281" ApplicationVersion="1" ReplacesVersions="0">
           <Static>
             <Code>
-              <RelativeSegment Id="M-00FA_A-FF01-01-0000_RS-04-00000" Name="Parameters" Offset="0" Size="256" LoadStateMachine="4" />
+              <RelativeSegment Id="M-00FA_A-FF01-01-0000_RS-04-00000" Name="Parameters" Offset="0" Size="173" LoadStateMachine="4" />
             </Code>
             <ParameterTypes>
               <ParameterType Id="M-00FA_A-FF01-01-0000_PT-YesNo" Name="YesNo">
@@ -1281,11 +1281,11 @@
                 </LdCtrlCompareProp>
               </LoadProcedure>
               <LoadProcedure MergeId="2">
-                <LdCtrlRelSegment LsmIdx="4" Size="256" Mode="1" Fill="0" AppliesTo="full" />
-                <LdCtrlRelSegment LsmIdx="4" Size="256" Mode="0" Fill="0" AppliesTo="par" />
+                <LdCtrlRelSegment LsmIdx="4" Size="173" Mode="1" Fill="0" AppliesTo="full" />
+                <LdCtrlRelSegment LsmIdx="4" Size="173" Mode="0" Fill="0" AppliesTo="par" />
               </LoadProcedure>
               <LoadProcedure MergeId="4">
-                <LdCtrlWriteRelMem ObjIdx="4" Offset="0" Size="256" Verify="true" AppliesTo="full,par" />
+                <LdCtrlWriteRelMem ObjIdx="4" Offset="0" Size="173" Verify="true" AppliesTo="full,par" />
               </LoadProcedure>
               <LoadProcedure MergeId="7">
                 <LdCtrlLoadImageProp ObjIdx="4" PropId="27" />

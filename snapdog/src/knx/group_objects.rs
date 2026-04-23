@@ -620,6 +620,50 @@ pub const CGO_ZONE_STATUS: usize = 9;
 /// Client GO index.
 pub const CGO_CONNECTED: usize = 10;
 
+// ── ETS Memory Layout (SSOT — used by xtask and device.rs) ───
+
+/// Byte offsets for ETS parameters in BAU memory.
+pub mod mem {
+    use super::{MAX_CLIENTS, MAX_ZONES};
+
+    /// Zone active flags (10 × 1 byte).
+    pub const ZONE_ACTIVE: usize = 0;
+    /// Zone default volume (10 × 1 byte).
+    pub const ZONE_DEF_VOL: usize = ZONE_ACTIVE + MAX_ZONES;
+    /// Zone max volume (10 × 1 byte).
+    pub const ZONE_MAX_VOL: usize = ZONE_DEF_VOL + MAX_ZONES;
+    /// Zone AirPlay enabled (10 × 1 byte).
+    pub const ZONE_AIRPLAY: usize = ZONE_MAX_VOL + MAX_ZONES;
+    /// Zone Spotify enabled (10 × 1 byte).
+    pub const ZONE_SPOTIFY: usize = ZONE_AIRPLAY + MAX_ZONES;
+    /// Zone presence enabled (10 × 1 byte).
+    pub const ZONE_PRESENCE_EN: usize = ZONE_SPOTIFY + MAX_ZONES;
+    /// Zone presence timeout (10 × 2 bytes).
+    pub const ZONE_PRESENCE_TO: usize = ZONE_PRESENCE_EN + MAX_ZONES;
+    /// Zone sample rate enum (10 × 1 byte).
+    pub const ZONE_SRATE: usize = ZONE_PRESENCE_TO + MAX_ZONES * 2;
+    /// Zone bit depth enum (10 × 1 byte).
+    pub const ZONE_BITD: usize = ZONE_SRATE + MAX_ZONES;
+    /// Client active flags (10 × 1 byte).
+    pub const CLIENT_ACTIVE: usize = ZONE_BITD + MAX_ZONES;
+    /// Client default zone (10 × 1 byte).
+    pub const CLIENT_DEF_ZONE: usize = CLIENT_ACTIVE + MAX_CLIENTS;
+    /// Client default volume (10 × 1 byte).
+    pub const CLIENT_DEF_VOL: usize = CLIENT_DEF_ZONE + MAX_CLIENTS;
+    /// Client max volume (10 × 1 byte).
+    pub const CLIENT_MAX_VOL: usize = CLIENT_DEF_VOL + MAX_CLIENTS;
+    /// Client default latency (10 × 1 byte).
+    pub const CLIENT_DEF_LAT: usize = CLIENT_MAX_VOL + MAX_CLIENTS;
+    /// Global HTTP port (2 bytes).
+    pub const GLOBAL_HTTP_PORT: usize = CLIENT_DEF_LAT + MAX_CLIENTS;
+    /// Global log level enum (1 byte).
+    pub const GLOBAL_LOG_LVL: usize = GLOBAL_HTTP_PORT + 2;
+    /// Radio station active flags (20 × 1 byte).
+    pub const RADIO_ACTIVE: usize = GLOBAL_LOG_LVL + 1;
+    /// Total memory size in bytes.
+    pub const TOTAL: usize = RADIO_ACTIVE + 20;
+}
+
 /// Compute the 1-based ASAP for a client group object.
 ///
 /// Client `client_index` (1-based), GO `go_index` (0-based within `CLIENT_GOS`).

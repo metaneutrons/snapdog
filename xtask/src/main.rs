@@ -7,12 +7,11 @@
 //! a complete ETS-compatible XML that `knx-prod` can convert to .knxprod.
 
 use snapdog::knx::group_objects::{
-    CLIENT_GO_COUNT, CLIENT_GOS, GoDefinition, MAX_CLIENTS, MAX_ZONES, ZONE_GO_COUNT, ZONE_GOS,
+    CLIENT_GO_COUNT, CLIENT_GOS, GoDefinition, MAX_CLIENTS, MAX_ZONES, ZONE_GO_COUNT, ZONE_GOS, mem,
 };
 
 const AID: &str = "M-00FA_A-FF01-01-0000";
 const MFR: &str = "M-00FA";
-const MEMORY_SIZE: usize = 256; // Rounded up from actual usage (~173 bytes)
 
 fn main() {
     let output = std::env::args()
@@ -154,11 +153,12 @@ fn write_application_program(x: &mut String) {
 }
 
 fn write_code_segment(x: &mut String) {
+    let memory_size = mem::TOTAL;
     w(x, "            <Code>");
     w(
         x,
         &format!(
-            r#"              <RelativeSegment Id="{AID}_RS-04-00000" Name="Parameters" Offset="0" Size="{MEMORY_SIZE}" LoadStateMachine="4" />"#
+            r#"              <RelativeSegment Id="{AID}_RS-04-00000" Name="Parameters" Offset="0" Size="{memory_size}" LoadStateMachine="4" />"#
         ),
     );
     w(x, "            </Code>");
@@ -558,6 +558,12 @@ fn write_parameters(x: &mut String) {
 
     w(x, "            </Parameters>");
     eprintln!("  Memory layout: {off} bytes used");
+    assert_eq!(
+        off,
+        mem::TOTAL,
+        "Memory layout mismatch: xtask generated {off} bytes but mem::TOTAL is {}",
+        mem::TOTAL
+    );
 }
 
 /// Emit a memory-backed parameter inside a Union.
@@ -670,6 +676,7 @@ fn write_tables(x: &mut String) {
 }
 
 fn write_load_procedures(x: &mut String) {
+    let memory_size = mem::TOTAL;
     w(x, "            <LoadProcedures>");
     w(x, r#"              <LoadProcedure MergeId="1">"#);
     w(
@@ -688,13 +695,13 @@ fn write_load_procedures(x: &mut String) {
     w(
         x,
         &format!(
-            r#"                <LdCtrlRelSegment LsmIdx="4" Size="{MEMORY_SIZE}" Mode="1" Fill="0" AppliesTo="full" />"#
+            r#"                <LdCtrlRelSegment LsmIdx="4" Size="{memory_size}" Mode="1" Fill="0" AppliesTo="full" />"#
         ),
     );
     w(
         x,
         &format!(
-            r#"                <LdCtrlRelSegment LsmIdx="4" Size="{MEMORY_SIZE}" Mode="0" Fill="0" AppliesTo="par" />"#
+            r#"                <LdCtrlRelSegment LsmIdx="4" Size="{memory_size}" Mode="0" Fill="0" AppliesTo="par" />"#
         ),
     );
     w(x, "              </LoadProcedure>");
@@ -702,7 +709,7 @@ fn write_load_procedures(x: &mut String) {
     w(
         x,
         &format!(
-            r#"                <LdCtrlWriteRelMem ObjIdx="4" Offset="0" Size="{MEMORY_SIZE}" Verify="true" AppliesTo="full,par" />"#
+            r#"                <LdCtrlWriteRelMem ObjIdx="4" Offset="0" Size="{memory_size}" Verify="true" AppliesTo="full,par" />"#
         ),
     );
     w(x, "              </LoadProcedure>");

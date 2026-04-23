@@ -18,6 +18,7 @@ use knx_device::device_object;
 use knx_ip::tunnel_server::{DeviceServer, ServerEvent};
 use tokio::sync::{mpsc, oneshot};
 
+use super::group_objects::mem;
 use super::group_objects::{
     self, CGO_CONNECTED, CGO_LATENCY, CGO_LATENCY_STATUS, CGO_MUTE, CGO_MUTE_STATUS,
     CGO_MUTE_TOGGLE, CGO_VOLUME, CGO_VOLUME_DIM, CGO_VOLUME_STATUS, CGO_ZONE, CGO_ZONE_STATUS,
@@ -32,35 +33,6 @@ use super::group_objects::{
     ZONE_GOS,
 };
 use super::transport::KnxTransport;
-
-// ── ETS Memory Layout (must match xtask/src/main.rs) ──────────
-
-/// Byte offsets for ETS parameters in BAU memory.
-/// Layout: zone active(10) + zone defvol(10) + zone maxvol(10) + zone airplay(10) +
-///         zone spotify(10) + zone presence_en(10) + zone presence_to(20) +
-///         zone srate(10) + zone bitd(10) + client active(10) + client defzone(10) +
-///         client defvol(10) + client maxvol(10) + client deflat(10) +
-///         global httpport(2) + global loglvl(1) + radio active(20)
-mod mem {
-    pub const ZONE_ACTIVE: usize = 0; // 10 × 1 byte
-    pub const ZONE_DEF_VOL: usize = 10; // 10 × 1 byte
-    pub const ZONE_MAX_VOL: usize = 20; // 10 × 1 byte
-    pub const ZONE_AIRPLAY: usize = 30; // 10 × 1 byte
-    pub const ZONE_SPOTIFY: usize = 40; // 10 × 1 byte
-    pub const ZONE_PRESENCE_EN: usize = 50; // 10 × 1 byte
-    pub const ZONE_PRESENCE_TO: usize = 60; // 10 × 2 bytes
-    pub const ZONE_SRATE: usize = 80; // 10 × 1 byte
-    pub const ZONE_BITD: usize = 90; // 10 × 1 byte
-    pub const CLIENT_ACTIVE: usize = 100; // 10 × 1 byte
-    pub const CLIENT_DEF_ZONE: usize = 110; // 10 × 1 byte
-    pub const CLIENT_DEF_VOL: usize = 120; // 10 × 1 byte
-    pub const CLIENT_MAX_VOL: usize = 130; // 10 × 1 byte
-    pub const CLIENT_DEF_LAT: usize = 140; // 10 × 1 byte
-    pub const GLOBAL_HTTP_PORT: usize = 150; // 2 bytes
-    pub const GLOBAL_LOG_LVL: usize = 152; // 1 byte
-    pub const RADIO_ACTIVE: usize = 153; // 20 × 1 byte
-    pub const TOTAL: usize = 173;
-}
 
 /// Parsed ETS parameters from BAU memory.
 #[derive(Debug, Default)]

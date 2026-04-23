@@ -503,7 +503,13 @@ pub(crate) async fn handle_incoming(
                 "presence_enable" => Some(ZoneCommand::SetPresenceEnabled(decode_bool(data))),
                 "presence_timeout" => decode_u16(data).map(ZoneCommand::SetAutoOffDelay),
                 "presence_source_override" => {
-                    // TODO: implement source override via GO index
+                    if let Some(v) = decode_u8(data) {
+                        tracing::debug!(
+                            zone = zone_idx,
+                            source_override = v,
+                            "KNX presence source override (not yet routed to player)"
+                        );
+                    }
                     None
                 }
                 _ => None,
