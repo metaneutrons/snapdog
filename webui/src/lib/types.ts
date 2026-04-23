@@ -8,7 +8,8 @@ export type SourceType =
   | "subsonic_playlist"
   | "subsonic_track"
   | "url"
-  | "airplay";
+  | "airplay"
+  | "spotify";
 
 // ── Zone ──────────────────────────────────────────────────────
 

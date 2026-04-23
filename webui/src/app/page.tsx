@@ -133,6 +133,7 @@ const SOURCE_KEYS: Record<string, string> = {
   subsonic_playlist: "subsonic_playlist",
   subsonic_track: "subsonic_track",
   airplay: "airplay",
+  spotify: "spotify",
   url: "url",
 };
 
