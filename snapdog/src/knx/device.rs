@@ -473,3 +473,87 @@ fn resolve_go_update(bau: &Bau, asap: u16) -> Option<(GroupAddress, Vec<u8>)> {
     let ga_raw = bau.address_table.get_group_address(tsap)?;
     Some((GroupAddress::from_raw(ga_raw), data))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_ets_memory_defaults() {
+        let data = vec![0u8; mem::TOTAL];
+        let p = parse_ets_memory(&data);
+        assert!(!p.zone_active[0]);
+        assert_eq!(p.zone_max_volume[0], 0);
+        assert!(!p.client_active[0]);
+    }
+
+    #[test]
+    fn parse_ets_memory_values() {
+        let mut data = vec![0u8; mem::TOTAL];
+        data[mem::ZONE_ACTIVE] = 1;
+        data[mem::ZONE_ACTIVE + 2] = 1;
+        data[mem::ZONE_MAX_VOL + 0] = 80;
+        data[mem::CLIENT_ACTIVE + 0] = 1;
+        data[mem::CLIENT_MAX_VOL + 0] = 60;
+        data[mem::CLIENT_DEF_ZONE + 0] = 3;
+        data[mem::CLIENT_DEF_LAT + 0] = 50;
+        let p = parse_ets_memory(&data);
+        assert!(p.zone_active[0]);
+        assert!(!p.zone_active[1]);
+        assert!(p.zone_active[2]);
+        assert_eq!(p.zone_max_volume[0], 80);
+        assert!(p.client_active[0]);
+        assert_eq!(p.client_max_volume[0], 60);
+        assert_eq!(p.client_default_zone[0], 3);
+        assert_eq!(p.client_default_latency[0], 50);
+    }
+
+    #[test]
+    fn parse_ets_memory_too_short() {
+        let data = vec![0u8; 10]; // too short
+        let p = parse_ets_memory(&data);
+        // Should return defaults without panic
+        assert!(!p.zone_active[0]);
+    }
+
+    #[test]
+    fn build_tables_from_minimal_config() {
+        let raw: crate::config::RawConfig = toml::from_str(
+            r#"
+            [[zone]]
+            name = "Test"
+            [zone.knx]
+            play = "1/0/1"
+            volume = "1/0/2"
+            volume_status = "1/0/3"
+
+            [[client]]
+            name = "Speaker"
+            mac = "00:00:00:00:00:00"
+            zone = "Test"
+            [client.knx]
+            volume = "2/0/1"
+            mute = "2/0/2"
+        "#,
+        )
+        .unwrap();
+        let config = crate::config::load_raw(raw).unwrap();
+        let ia = IndividualAddress::from_raw(0x1101);
+        let bau = build_bau(ia, &config);
+
+        // Should have 5 unique GAs
+        assert_eq!(bau.address_table.entry_count(), 5);
+
+        // Zone 1 Play (ASAP 1) should be mapped to GA 1/0/1
+        let tsap = bau
+            .address_table
+            .get_tsap(GroupAddress::from_str("1/0/1").unwrap().raw());
+        assert!(tsap.is_some());
+
+        // Client 1 Volume (ASAP 351) should be mapped to GA 2/0/1
+        let tsap = bau
+            .address_table
+            .get_tsap(GroupAddress::from_str("2/0/1").unwrap().raw());
+        assert!(tsap.is_some());
+    }
+}

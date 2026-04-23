@@ -29,7 +29,7 @@ SnapDog turns a Linux box (or Mac) into a synchronized multi-room audio system w
 | 📚 **Subsonic/Navidrome** | Personal music library with playlist navigation and seek |
 | 📻 **Internet Radio** | Station list with live ICY metadata |
 | 🏠 **MQTT** | Bidirectional smart home integration |
-| 🏢 **KNX** | Building automation — client mode (tunnel/router) or device mode (ETS-programmable, 410 group objects) |
+| 🏢 **KNX** | Building automation — client mode (tunnel/router) or device mode (ETS-programmable, 460 group objects, presence detection) |
 | 🎛️ **Parametric EQ** | Per-zone and per-client, real-time via custom protocol |
 | 🌐 **REST API** | ~90 endpoints, full zone/client/media control |
 | 📡 **WebSocket** | Real-time state push notifications |
