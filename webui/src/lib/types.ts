@@ -44,6 +44,7 @@ export interface TrackMetadata {
   content_type: string | null;
   sample_rate: number | null;
   source: string;
+  /** Injected from zone state by the API, not from the track source. */
   cover_url: string | null;
   playlist_index: number | null;
   playlist_track_index: number | null;
@@ -161,12 +162,21 @@ export interface WsZonePresenceChanged {
   timer_active: boolean;
 }
 
+export interface WsZoneEqChanged {
+  type: "zone_eq_changed";
+  zone: number;
+  enabled: boolean;
+  bands: Array<{ filter_type: string; frequency: number; gain: number; q: number }>;
+  preset?: string;
+}
+
 export type WsNotification =
   | WsZoneStateChanged
   | WsZoneTrackChanged
   | WsZoneProgress
   | WsClientStateChanged
-  | WsZonePresenceChanged;
+  | WsZonePresenceChanged
+  | WsZoneEqChanged;
 
 export interface WsCommand {
   zone: number;

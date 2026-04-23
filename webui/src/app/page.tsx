@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useCallback, useState, Component, type ReactNode, type DragEvent } from "react";
+import { useEffect, useCallback, useState, Component, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { useAppStore, type ZoneState } from "@/stores/useAppStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { useClientDrop } from "@/hooks/useClientDrop";
 import { api } from "@/lib/api";
 import type { WsNotification } from "@/lib/types";
 import { ApiKeyPrompt } from "@/components/ApiKeyPrompt";
@@ -55,28 +56,15 @@ function ZoneRailItem({ zone, selected, onSelect }: {
   onSelect: () => void;
 }) {
   const [imgError, setImgError] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
+  const { dragOver, dragHandlers } = useClientDrop(zone.index);
   const t = useTranslations();
   const isPlaying = zone.playback === "playing";
   const hasCover = zone.track?.cover_url && zone.source !== "idle" && !imgError;
   return (
     <button
       onClick={onSelect}
-      onDragOver={(e) => {
-        if (e.dataTransfer.types.includes("application/x-snapdog-client")) {
-          e.preventDefault();
-          setDragOver(true);
-        }
-      }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setDragOver(false);
-        const clientIndex = Number(e.dataTransfer.getData("application/x-snapdog-client"));
-        if (!isNaN(clientIndex)) {
-          api.clients.setZone(clientIndex, zone.index).catch(() => {});
-        }
-      }}
+      {...dragHandlers}
+      aria-current={selected ? "true" : undefined}
       className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left transition-colors ${
         dragOver
           ? "bg-primary/20 ring-2 ring-primary"
@@ -118,25 +106,11 @@ function ZoneRailItem({ zone, selected, onSelect }: {
 }
 
 function MobileZoneTab({ zone, selected, onSelect }: { zone: ZoneState; selected: boolean; onSelect: () => void }) {
-  const [dragOver, setDragOver] = useState(false);
+  const { dragOver, dragHandlers } = useClientDrop(zone.index);
   return (
     <button
       onClick={onSelect}
-      onDragOver={(e) => {
-        if (e.dataTransfer.types.includes("application/x-snapdog-client")) {
-          e.preventDefault();
-          setDragOver(true);
-        }
-      }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setDragOver(false);
-        const clientIndex = Number(e.dataTransfer.getData("application/x-snapdog-client"));
-        if (!isNaN(clientIndex)) {
-          api.clients.setZone(clientIndex, zone.index).catch(() => {});
-        }
-      }}
+      {...dragHandlers}
       className={`shrink-0 px-3 py-2 text-sm rounded-t-md transition-colors ${
         dragOver
           ? "bg-primary/20 ring-2 ring-primary"
@@ -191,31 +165,12 @@ function ZoneHeader({ zone }: { zone: ZoneState }) {
 }
 
 function ZoneDropTarget({ zoneIndex, children }: { zoneIndex: number; children: ReactNode }) {
-  const [dragOver, setDragOver] = useState(false);
-
-  const handleDragOver = (e: DragEvent) => {
-    if (e.dataTransfer.types.includes("application/x-snapdog-client")) {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-      setDragOver(true);
-    }
-  };
-
-  const handleDrop = (e: DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    const clientIndex = Number(e.dataTransfer.getData("application/x-snapdog-client"));
-    if (!isNaN(clientIndex)) {
-      api.clients.setZone(clientIndex, zoneIndex).catch(() => {});
-    }
-  };
+  const { dragOver, dragHandlers } = useClientDrop(zoneIndex);
 
   return (
     <div
       className={`border rounded-xl bg-card overflow-hidden transition-colors ${dragOver ? "border-primary border-2" : "border-border"}`}
-      onDragOver={handleDragOver}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={handleDrop}
+      {...dragHandlers}
     >
       {children}
     </div>
@@ -238,6 +193,7 @@ function TrackInfo({ zone }: { zone: ZoneState }) {
 
 function ZoneDetail({ zone }: { zone: ZoneState }) {
   const [showEq, setShowEq] = useState(false);
+  const t = useTranslations();
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       <div className="w-full max-w-[calc(100%-2rem)] mx-auto sm:max-w-[600px] space-y-3 px-4 py-4 sm:px-5 sm:py-4">
@@ -252,15 +208,15 @@ function ZoneDetail({ zone }: { zone: ZoneState }) {
             <SeekBar zone={zone} />
             <div className="flex items-center gap-2">
               <div className="flex-1"><TransportControls zone={zone} /></div>
-              <Button variant="ghost" size="sm" onClick={() => setShowEq(true)} className="text-xs px-2">EQ</Button>
+              <Button variant="ghost" size="sm" onClick={() => setShowEq(true)} className="text-xs px-2" aria-label={t("eq.title", { zone: zone.name })}>EQ</Button>
             </div>
             <ShuffleRepeat zone={zone} />
             <VolumeSlider
               volume={zone.volume}
               muted={zone.muted}
-              onVolumeChange={(v) => api.zones.setVolume(zone.index, v).catch(() => {})}
-              onMuteToggle={() => api.zones.toggleMute(zone.index).catch(() => {})}
-              onUnmute={() => api.zones.setMute(zone.index, false).catch(() => {})}
+              onVolumeChange={(v) => api.zones.setVolume(zone.index, v).catch((e: unknown) => console.error("API error", e))}
+              onMuteToggle={() => api.zones.toggleMute(zone.index).catch((e: unknown) => console.error("API error", e))}
+              onUnmute={() => api.zones.setMute(zone.index, false).catch((e: unknown) => console.error("API error", e))}
             />
           </div>
         </div>
@@ -321,6 +277,9 @@ export default function Home() {
           break;
         case "zone_presence_changed":
           updateZonePresence(n.zone, n.presence, n.enabled, n.timer_active);
+          break;
+        case "zone_eq_changed":
+          // EqOverlay manages its own state; this ensures exhaustive switch coverage
           break;
       }
     },

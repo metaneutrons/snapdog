@@ -37,6 +37,9 @@ export function VolumeSlider({
   const [dragging, setDragging] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
+  // Clean up debounce timer on unmount
+  useEffect(() => () => clearTimeout(timerRef.current), []);
+
   useEffect(() => {
     if (!dragging) setLocalVolume(volume);
   }, [volume, dragging]);
