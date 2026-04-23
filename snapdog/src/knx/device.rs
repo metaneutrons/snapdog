@@ -280,9 +280,9 @@ async fn bau_task(
         match load_memory(path) {
             Ok(data) => {
                 bau.set_memory_area(data);
-                // TODO: load_tables_from_memory requires known offsets —
-                // these are determined by the ETS application program layout.
-                // For now, the memory area is restored so ETS MemoryRead works.
+                // Address/association tables are always built from TOML config
+                // (build_tables_from_config), not from persisted memory. The memory
+                // area only stores ETS parameter values (defaults, timeouts, etc.).
                 tracing::info!(path = %path.display(), "Loaded persisted ETS memory");
             }
             Err(e) if path.exists() => {
