@@ -180,10 +180,16 @@ async fn bau_task(
         }
     }
 
+    let mut memory_dirty = false;
+    let persist_timer = tokio::time::sleep(std::time::Duration::from_secs(5));
+    tokio::pin!(persist_timer);
+    let mut persist_armed = false;
+
     loop {
         tokio::select! {
             event = server.recv() => {
                 let Some(event) = event else { break };
+                let is_tunnel = matches!(event, ServerEvent::TunnelFrame(_));
                 let frame = match event {
                     ServerEvent::TunnelFrame(f) | ServerEvent::RoutingFrame(f) => f,
                 };
@@ -194,14 +200,11 @@ async fn bau_task(
                     let _ = server.send_frame(out).await;
                 }
 
-                // Persist memory after ETS programming
-                if let Some(ref path) = persist_path {
-                    let mem = bau.memory_area();
-                    if !mem.is_empty() {
-                        if let Err(e) = std::fs::write(path, mem) {
-                            tracing::warn!(error = %e, "Failed to persist ETS memory");
-                        }
-                    }
+                // ETS programs via tunnel — mark dirty for persistence
+                if is_tunnel && persist_path.is_some() && !bau.memory_area().is_empty() {
+                    memory_dirty = true;
+                    persist_timer.as_mut().reset(tokio::time::Instant::now() + std::time::Duration::from_secs(2));
+                    persist_armed = true;
                 }
 
                 dispatch_updated_gos(&mut bau, &update_tx).await;
@@ -227,6 +230,33 @@ async fn bau_task(
                         let _ = reply.send(result);
                     }
                 }
+            }
+            // Debounced persist timer
+            _ = &mut persist_timer, if persist_armed => {
+                persist_armed = false;
+                memory_dirty = false;
+                if let Some(ref path) = persist_path {
+                    let mem = bau.memory_area().to_vec();
+                    let path = path.clone();
+                    tokio::task::spawn_blocking(move || {
+                        if let Err(e) = std::fs::write(&path, &mem) {
+                            tracing::warn!(error = %e, "Failed to persist ETS memory");
+                        } else {
+                            tracing::debug!(path = %path.display(), bytes = mem.len(), "ETS memory persisted");
+                        }
+                    });
+                }
+            }
+        }
+    }
+
+    // Persist on shutdown if dirty
+    if memory_dirty {
+        if let Some(ref path) = persist_path {
+            let mem = bau.memory_area();
+            if !mem.is_empty() {
+                let _ = std::fs::write(path, mem);
+                tracing::info!(path = %path.display(), "ETS memory persisted on shutdown");
             }
         }
     }
