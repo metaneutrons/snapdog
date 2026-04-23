@@ -37,12 +37,12 @@ use super::transport::KnxTransport;
 /// Parsed ETS parameters from BAU memory.
 #[derive(Debug, Default)]
 pub(crate) struct EtsParams {
-    pub zone_active: [bool; 10],
-    pub zone_max_volume: [u8; 10],
-    pub client_active: [bool; 10],
-    pub client_max_volume: [u8; 10],
-    pub client_default_zone: [u8; 10],
-    pub client_default_latency: [u8; 10],
+    pub zone_active: [bool; MAX_ZONES],
+    pub zone_max_volume: [u8; MAX_ZONES],
+    pub client_active: [bool; MAX_CLIENTS],
+    pub client_max_volume: [u8; MAX_CLIENTS],
+    pub client_default_zone: [u8; MAX_CLIENTS],
+    pub client_default_latency: [u8; MAX_CLIENTS],
 }
 
 /// Parse ETS parameters from BAU memory area.
@@ -51,7 +51,7 @@ pub(crate) fn parse_ets_memory(data: &[u8]) -> EtsParams {
     if data.len() < mem::TOTAL {
         return p;
     }
-    for i in 0..10 {
+    for i in 0..MAX_ZONES {
         p.zone_active[i] = data[mem::ZONE_ACTIVE + i] != 0;
         p.zone_max_volume[i] = data[mem::ZONE_MAX_VOL + i];
         p.client_active[i] = data[mem::CLIENT_ACTIVE + i] != 0;

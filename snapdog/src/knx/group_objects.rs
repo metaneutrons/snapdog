@@ -62,7 +62,7 @@ const BIDIR: GoFlags = GoFlags {
 };
 
 /// DPT 3.007 — Controlled dimming.
-const DPT_CONTROL_DIMMING: Dpt = Dpt::new(3, 7);
+pub const DPT_CONTROL_DIMMING: Dpt = Dpt::new(3, 7);
 
 /// DPT 1.018 — Occupancy (presence sensor).
 const DPT_OCCUPANCY: Dpt = Dpt::new(1, 18);

@@ -12,9 +12,8 @@
 //! via the [`KnxTransport`] trait.
 
 mod client;
-#[allow(dead_code)] // Wired up in Task 6
+#[allow(dead_code)] // Used at runtime in device mode (config.knx.mode = "device")
 mod device;
-#[allow(dead_code)]
 pub mod group_objects;
 mod transport;
 
@@ -32,6 +31,7 @@ use crate::config::AppConfig;
 use crate::player::{ClientAction, SnapcastCmd, ZoneCommand, ZoneCommandSender};
 use crate::state;
 
+use group_objects::DPT_CONTROL_DIMMING;
 use transport::KnxTransport;
 
 // ── Start ─────────────────────────────────────────────────────
@@ -561,9 +561,6 @@ pub(crate) async fn handle_incoming(
 }
 
 // ── DPT decode helpers ────────────────────────────────────────
-
-/// DPT 3.007 — Controlled dimming.
-const DPT_CONTROL_DIMMING: Dpt = Dpt::new(3, 7);
 
 fn decode_bool(payload: &[u8]) -> bool {
     dpt::decode(DPT_SWITCH, payload)

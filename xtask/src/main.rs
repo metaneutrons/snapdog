@@ -7,7 +7,17 @@
 //! a complete ETS-compatible XML that `knx-prod` can convert to .knxprod.
 
 use snapdog::knx::group_objects::{
-    CLIENT_GO_COUNT, CLIENT_GOS, GoDefinition, MAX_CLIENTS, MAX_ZONES, ZONE_GO_COUNT, ZONE_GOS, mem,
+    CGO_CONNECTED, CGO_LATENCY, CGO_LATENCY_STATUS, CGO_MUTE, CGO_MUTE_STATUS, CGO_MUTE_TOGGLE,
+    CGO_VOLUME, CGO_VOLUME_DIM, CGO_VOLUME_STATUS, CGO_ZONE, CGO_ZONE_STATUS, CLIENT_GO_COUNT,
+    CLIENT_GOS, GoDefinition, MAX_CLIENTS, MAX_ZONES, ZGO_CONTROL_STATUS, ZGO_MUTE,
+    ZGO_MUTE_STATUS, ZGO_MUTE_TOGGLE, ZGO_PAUSE, ZGO_PLAY, ZGO_PLAYLIST, ZGO_PLAYLIST_NEXT,
+    ZGO_PLAYLIST_PREVIOUS, ZGO_PLAYLIST_STATUS, ZGO_PRESENCE, ZGO_PRESENCE_ENABLE,
+    ZGO_PRESENCE_SOURCE_OVERRIDE, ZGO_PRESENCE_TIMEOUT, ZGO_PRESENCE_TIMER_ACTIVE, ZGO_REPEAT,
+    ZGO_REPEAT_STATUS, ZGO_REPEAT_TOGGLE, ZGO_SHUFFLE, ZGO_SHUFFLE_STATUS, ZGO_SHUFFLE_TOGGLE,
+    ZGO_STOP, ZGO_TRACK_ALBUM, ZGO_TRACK_ARTIST, ZGO_TRACK_NEXT, ZGO_TRACK_PLAYING,
+    ZGO_TRACK_PREVIOUS, ZGO_TRACK_PROGRESS, ZGO_TRACK_REPEAT, ZGO_TRACK_REPEAT_STATUS,
+    ZGO_TRACK_REPEAT_TOGGLE, ZGO_TRACK_TITLE, ZGO_VOLUME, ZGO_VOLUME_DIM, ZGO_VOLUME_STATUS,
+    ZONE_GO_COUNT, ZONE_GOS, mem,
 };
 
 const AID: &str = "M-00FA_A-FF01-01-0000";
@@ -39,32 +49,73 @@ const ZONE_GROUPS: &[CoGroup] = &[
     CoGroup {
         title_de: "Wiedergabe",
         title_en: "Playback",
-        indices: &[0, 1, 2, 3, 4, 11, 12],
+        indices: &[
+            ZGO_PLAY,
+            ZGO_PAUSE,
+            ZGO_STOP,
+            ZGO_TRACK_NEXT,
+            ZGO_TRACK_PREVIOUS,
+            ZGO_CONTROL_STATUS,
+            ZGO_TRACK_PLAYING,
+        ],
     },
     CoGroup {
         title_de: "Lautstärke",
         title_en: "Volume",
-        indices: &[5, 6, 7, 8, 9, 10],
+        indices: &[
+            ZGO_VOLUME,
+            ZGO_VOLUME_STATUS,
+            ZGO_VOLUME_DIM,
+            ZGO_MUTE,
+            ZGO_MUTE_STATUS,
+            ZGO_MUTE_TOGGLE,
+        ],
     },
     CoGroup {
         title_de: "Zufallswiedergabe / Wiederholung",
         title_en: "Shuffle / Repeat",
-        indices: &[13, 14, 15, 16, 17, 18, 19, 20, 21],
+        indices: &[
+            ZGO_SHUFFLE,
+            ZGO_SHUFFLE_STATUS,
+            ZGO_SHUFFLE_TOGGLE,
+            ZGO_REPEAT,
+            ZGO_REPEAT_STATUS,
+            ZGO_REPEAT_TOGGLE,
+            ZGO_TRACK_REPEAT,
+            ZGO_TRACK_REPEAT_STATUS,
+            ZGO_TRACK_REPEAT_TOGGLE,
+        ],
     },
     CoGroup {
         title_de: "Playlist",
         title_en: "Playlist",
-        indices: &[22, 23, 24, 25],
+        indices: &[
+            ZGO_PLAYLIST,
+            ZGO_PLAYLIST_STATUS,
+            ZGO_PLAYLIST_NEXT,
+            ZGO_PLAYLIST_PREVIOUS,
+        ],
     },
     CoGroup {
         title_de: "Titelinformationen",
         title_en: "Track Info",
-        indices: &[26, 27, 28, 29],
+        indices: &[
+            ZGO_TRACK_TITLE,
+            ZGO_TRACK_ARTIST,
+            ZGO_TRACK_ALBUM,
+            ZGO_TRACK_PROGRESS,
+        ],
     },
     CoGroup {
         title_de: "Präsenz",
         title_en: "Presence",
-        indices: &[30, 31, 32, 33, 34],
+        indices: &[
+            ZGO_PRESENCE,
+            ZGO_PRESENCE_ENABLE,
+            ZGO_PRESENCE_TIMEOUT,
+            ZGO_PRESENCE_TIMER_ACTIVE,
+            ZGO_PRESENCE_SOURCE_OVERRIDE,
+        ],
     },
 ];
 
@@ -72,17 +123,24 @@ const CLIENT_GROUPS: &[CoGroup] = &[
     CoGroup {
         title_de: "Lautstärke",
         title_en: "Volume",
-        indices: &[0, 1, 2, 3, 4, 5],
+        indices: &[
+            CGO_VOLUME,
+            CGO_VOLUME_STATUS,
+            CGO_VOLUME_DIM,
+            CGO_MUTE,
+            CGO_MUTE_STATUS,
+            CGO_MUTE_TOGGLE,
+        ],
     },
     CoGroup {
         title_de: "Latenz und Zone",
         title_en: "Latency and Zone",
-        indices: &[6, 7, 8, 9],
+        indices: &[CGO_LATENCY, CGO_LATENCY_STATUS, CGO_ZONE, CGO_ZONE_STATUS],
     },
     CoGroup {
         title_de: "Status",
         title_en: "Status",
-        indices: &[10],
+        indices: &[CGO_CONNECTED],
     },
 ];
 
@@ -747,10 +805,8 @@ fn write_dynamic(x: &mut String) {
             z,
             &format!("{AID}_UP-Z{z:02}001"),
             &format!("{AID}_P-Z{z:02}000"),
-            ZONE_GOS,
             ZONE_GROUPS,
             &format!("Z{z:02}"),
-            30,
         );
     }
     // Clients
@@ -761,10 +817,8 @@ fn write_dynamic(x: &mut String) {
             c,
             &format!("{AID}_UP-C{c:02}001"),
             &format!("{AID}_P-C{c:02}000"),
-            CLIENT_GOS,
             CLIENT_GROUPS,
             &format!("C{c:02}"),
-            11,
         );
     }
     w(x, "          </Dynamic>");
@@ -776,10 +830,8 @@ fn write_channel_block(
     idx: usize,
     active_param_id: &str,
     name_param_id: &str,
-    _gos: &[GoDefinition],
     groups: &[CoGroup],
     id_prefix: &str,
-    _go_count: usize,
 ) {
     let active_ref = format!("{active_param_id}_R-{active_param_id}");
     let name_ref = format!("{name_param_id}_R-{name_param_id}");
