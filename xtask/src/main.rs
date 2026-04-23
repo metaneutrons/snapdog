@@ -151,9 +151,7 @@ fn generate_xml() -> String {
     w(&mut x, r#"<?xml version="1.0" encoding="utf-8"?>"#);
     w(
         &mut x,
-        &format!(
-            r#"<KNX xmlns="http://knx.org/xml/project/20" CreatedBy="SnapDog xtask" ToolVersion="1.0">"#
-        ),
+        r#"<KNX xmlns="http://knx.org/xml/project/20" CreatedBy="SnapDog xtask" ToolVersion="1.0">"#,
     );
     w(&mut x, "  <ManufacturerData>");
     w(&mut x, &format!(r#"    <Manufacturer RefId="{MFR}">"#));
@@ -625,6 +623,7 @@ fn write_parameters(x: &mut String) {
 }
 
 /// Emit a memory-backed parameter inside a Union.
+#[allow(clippy::too_many_arguments)]
 fn param_mem(
     x: &mut String,
     prefix: &str,
@@ -739,9 +738,7 @@ fn write_load_procedures(x: &mut String) {
     w(x, r#"              <LoadProcedure MergeId="1">"#);
     w(
         x,
-        &format!(
-            r#"                <LdCtrlCompareProp InlineData="0000FF010100" ObjIdx="0" PropId="78">"#
-        ),
+        r#"                <LdCtrlCompareProp InlineData="0000FF010100" ObjIdx="0" PropId="78">"#,
     );
     w(
         x,

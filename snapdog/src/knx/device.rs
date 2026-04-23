@@ -19,6 +19,22 @@ use knx_ip::tunnel_server::{DeviceServer, ServerEvent};
 use tokio::sync::{mpsc, oneshot};
 
 use super::group_objects::mem;
+
+/// KNX device serial number (OpenKNX manufacturer prefix 0xFA).
+const DEVICE_SERIAL: [u8; 6] = [0x00, 0xFA, 0x01, 0x02, 0x03, 0x04];
+
+/// Maximum concurrent KNXnet/IP tunnelling connections.
+const MAX_TUNNEL_CONNECTIONS: usize = 1;
+
+/// Channel buffer size for BAU command/update channels.
+const BAU_CHANNEL_CAPACITY: usize = 64;
+
+/// Debounce delay after ETS memory changes before persisting to disk.
+const ETS_PERSIST_DEBOUNCE: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Path for persisted ETS memory.
+const ETS_MEMORY_PATH: &str = "knx-memory.bin";
+
 use super::group_objects::{
     self, CGO_CONNECTED, CGO_LATENCY, CGO_LATENCY_STATUS, CGO_MUTE, CGO_MUTE_STATUS,
     CGO_MUTE_TOGGLE, CGO_VOLUME, CGO_VOLUME_DIM, CGO_VOLUME_STATUS, CGO_ZONE, CGO_ZONE_STATUS,
@@ -54,6 +70,8 @@ pub(crate) fn parse_ets_memory(data: &[u8]) -> EtsParams {
     for i in 0..MAX_ZONES {
         p.zone_active[i] = data[mem::ZONE_ACTIVE + i] != 0;
         p.zone_max_volume[i] = data[mem::ZONE_MAX_VOL + i];
+    }
+    for i in 0..MAX_CLIENTS {
         p.client_active[i] = data[mem::CLIENT_ACTIVE + i] != 0;
         p.client_max_volume[i] = data[mem::CLIENT_MAX_VOL + i];
         p.client_default_zone[i] = data[mem::CLIENT_DEF_ZONE + i];
@@ -89,9 +107,6 @@ pub(crate) struct DeviceListener {
     update_rx: mpsc::Receiver<(GroupAddress, Vec<u8>)>,
 }
 
-/// Default path for persisted ETS memory.
-const ETS_MEMORY_PATH: &str = "knx-memory.bin";
-
 /// Start the device server and BAU, returning a publisher/listener pair.
 pub(crate) async fn start_device_transport(
     individual_address: &str,
@@ -111,8 +126,8 @@ pub(crate) async fn start_device_transport(
         None
     };
 
-    let (cmd_tx, cmd_rx) = mpsc::channel(64);
-    let (update_tx, update_rx) = mpsc::channel(64);
+    let (cmd_tx, cmd_rx) = mpsc::channel(BAU_CHANNEL_CAPACITY);
+    let (update_tx, update_rx) = mpsc::channel(BAU_CHANNEL_CAPACITY);
 
     let config_arc = std::sync::Arc::new(config.clone());
     tokio::spawn(bau_task(
@@ -181,7 +196,7 @@ async fn bau_task(
     }
 
     let mut memory_dirty = false;
-    let persist_timer = tokio::time::sleep(std::time::Duration::from_secs(5));
+    let persist_timer = tokio::time::sleep(ETS_PERSIST_DEBOUNCE);
     tokio::pin!(persist_timer);
     let mut persist_armed = false;
 
@@ -203,7 +218,7 @@ async fn bau_task(
                 // ETS programs via tunnel — mark dirty for persistence
                 if is_tunnel && persist_path.is_some() && !bau.memory_area().is_empty() {
                     memory_dirty = true;
-                    persist_timer.as_mut().reset(tokio::time::Instant::now() + std::time::Duration::from_secs(2));
+                    persist_timer.as_mut().reset(tokio::time::Instant::now() + ETS_PERSIST_DEBOUNCE);
                     persist_armed = true;
                 }
 
@@ -268,10 +283,10 @@ async fn bau_task(
 /// and address/association tables from TOML config.
 fn build_bau(ia: IndividualAddress, config: &crate::config::AppConfig) -> Bau {
     let device = device_object::new_device_object(
-        [0x00, 0xFA, 0x01, 0x02, 0x03, 0x04], // serial (OpenKNX 0xFA)
-        [0x00; 6],                            // hardware type
+        DEVICE_SERIAL,
+        [0x00; 6], // hardware type
     );
-    let mut bau = Bau::new(device, TOTAL_GO_COUNT as u16, 1);
+    let mut bau = Bau::new(device, TOTAL_GO_COUNT as u16, MAX_TUNNEL_CONNECTIONS);
     device_object::set_individual_address(bau.device_mut(), ia.raw());
 
     // Configure zone GOs with DPTs

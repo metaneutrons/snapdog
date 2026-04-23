@@ -24,7 +24,8 @@
   "volume": {
     "label": "Lautstärke",
     "mute": "Stumm",
-    "unmute": "Ton an"
+    "unmute": "Ton an",
+    "maxVolume": "Maximale Lautstärke: {max}%"
   },
   "seek": {
     "label": "Spulen"

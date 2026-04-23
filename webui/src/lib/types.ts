@@ -23,6 +23,9 @@ export interface ZoneInfo {
   shuffle: boolean;
   repeat: boolean;
   track_repeat: boolean;
+  presence: boolean;
+  presence_enabled: boolean;
+  presence_timer_active: boolean;
 }
 
 export interface TrackMetadata {

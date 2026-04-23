@@ -68,7 +68,8 @@ pub const DPT_CONTROL_DIMMING: Dpt = Dpt::new(3, 7);
 const DPT_OCCUPANCY: Dpt = Dpt::new(1, 18);
 
 /// DPT 7.005 — Time period in seconds (UInt16).
-const DPT_TIME_PERIOD_SEC: Dpt = Dpt::new(7, 5);
+/// DPT 7.005 — Time Period (seconds).
+pub const DPT_TIME_PERIOD_SEC: Dpt = Dpt::new(7, 5);
 
 /// Definition of a single group object.
 pub struct GoDefinition {

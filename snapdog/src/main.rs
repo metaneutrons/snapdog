@@ -265,6 +265,7 @@ async fn main() -> Result<()> {
     // ── Main loop ─────────────────────────────────────────────
     let mqtt_zone_cmds = zone_commands.clone();
     let mqtt_store = store.clone();
+    let mqtt_snap_tx = snap_cmd_tx.clone();
     let cmd_backend = backend.clone();
 
     // Volume coalescing: buffer rapid volume changes per client (50ms window)
@@ -330,7 +331,7 @@ async fn main() -> Result<()> {
             // MQTT events
             _ = async {
                 if let Some(ref mut bridge) = mqtt_bridge {
-                    bridge.poll_once(&mqtt_zone_cmds, &mqtt_store).await;
+                    bridge.poll_once(&mqtt_zone_cmds, &mqtt_store, &mqtt_snap_tx).await;
                 } else {
                     std::future::pending::<()>().await;
                 }

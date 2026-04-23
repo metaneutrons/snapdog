@@ -151,10 +151,126 @@ async fn run(
         zone_eq.set_config(&eq_config);
     }
 
-    // Presence auto-off timer
-    let auto_off_timer = tokio::time::sleep(std::time::Duration::from_secs(86400));
+    // Presence auto-off timer (inactive until armed)
+    const TIMER_INACTIVE: std::time::Duration = std::time::Duration::from_secs(86400);
+    let auto_off_timer = tokio::time::sleep(TIMER_INACTIVE);
     tokio::pin!(auto_off_timer);
     let mut auto_off_armed = false;
+
+    /// Handle audio samples from an external receiver (AirPlay/Spotify).
+    macro_rules! handle_receiver_audio {
+        ($samples:expr, $active:path, $source_type:expr, $label:literal) => {{
+            if !matches!(source, $active) {
+                stop_decode(&mut current_decode, &mut decode_rx).await; position_offset_ms = 0;
+                source = $active;
+                update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Playing; z.source = $source_type; }).await;
+            }
+            let mut samples = match &mut receiver_resampler {
+                Some(r) => match r.process(&$samples) { Some(resampled) => resampled, None => continue },
+                None => $samples,
+            };
+            zone_eq.process(&mut samples);
+            if let Err(e) = backend.send_audio(zone_index, &samples, config.audio.sample_rate, config.audio.channels).await {
+                tracing::error!(zone = zone_index, error = %e, concat!("Audio send failed (", $label, ")"));
+            }
+        }};
+    }
+
+    /// Handle events from an external receiver (AirPlay/Spotify).
+    macro_rules! handle_receiver_event {
+        ($event:expr, $active:path, $source_type:expr) => {{
+            use crate::receiver::ReceiverEvent;
+            match $event {
+                ReceiverEvent::SessionStarted { format } => {
+                    receiver_resampler = Some(audio::resample::F32Resampling::new(
+                        format.sample_rate,
+                        config.audio.sample_rate,
+                        format.channels,
+                    ));
+                }
+                ReceiverEvent::Metadata {
+                    title,
+                    artist,
+                    album,
+                } => {
+                    update_and_notify(store, zone_index, notify, |z| {
+                        z.track = Some(TrackInfo {
+                            title,
+                            artist,
+                            album,
+                            album_artist: None,
+                            genre: None,
+                            year: None,
+                            track_number: None,
+                            disc_number: None,
+                            duration_ms: 0,
+                            position_ms: 0,
+                            seekable: false,
+                            source: $source_type,
+                            bitrate_kbps: None,
+                            content_type: None,
+                            sample_rate: None,
+                        });
+                    })
+                    .await;
+                }
+                ReceiverEvent::CoverArt { bytes } => {
+                    let mut cache = covers.write().await;
+                    cache.set_auto_mime(zone_index, bytes);
+                    let hash = cache.get(zone_index).map(|e| e.hash.clone());
+                    drop(cache);
+                    if let Some(h) = hash {
+                        let url = format!("/api/v1/zones/{zone_index}/cover?h={h}");
+                        update_and_notify(store, zone_index, notify, |z| {
+                            z.cover_url = Some(url.clone());
+                        })
+                        .await;
+                    }
+                }
+                ReceiverEvent::Progress {
+                    position_ms,
+                    duration_ms,
+                } => {
+                    update_and_notify(store, zone_index, notify, |z| {
+                        if let Some(ref mut t) = z.track {
+                            t.position_ms = position_ms as i64;
+                            t.duration_ms = duration_ms as i64;
+                        }
+                    })
+                    .await;
+                }
+                ReceiverEvent::Volume { percent } => {
+                    update_and_notify(store, zone_index, notify, |z| z.volume = percent).await;
+                    if let Some(ref gid) = group_id {
+                        let _ = ctx
+                            .snap_tx
+                            .send(SnapcastCmd::Group {
+                                group_id: gid.clone(),
+                                action: GroupAction::Volume(percent),
+                            })
+                            .await;
+                    }
+                }
+                ReceiverEvent::RemoteAvailable { remote } => {
+                    remote_control = Some(remote);
+                }
+                ReceiverEvent::SessionEnded => {
+                    if matches!(source, $active) {
+                        source = ActiveSource::Idle;
+                        remote_control = None;
+                        covers.write().await.clear(zone_index);
+                        update_and_notify(store, zone_index, notify, |z| {
+                            z.playback = PlaybackState::Stopped;
+                            z.source = SourceType::Idle;
+                            z.track = None;
+                            z.cover_url = None;
+                        })
+                        .await;
+                    }
+                }
+            }
+        }};
+    }
 
     loop {
         tokio::select! {
@@ -443,36 +559,7 @@ async fn run(
                             .and_then(|z| z.track.as_ref().map(|t| t.duration_ms)).unwrap_or(0);
                         if duration > 0 {
                             let pos_ms = (progress.clamp(0.0, 1.0) * duration as f64) as i64;
-                            let _ = commands.try_recv(); // drain
-                            // Re-dispatch as absolute seek — will be handled next iteration
-                            // For simplicity, inline the same logic:
-                            if let Some(sub) = &subsonic {
-                                let track_id = match &source {
-                                    ActiveSource::SubsonicTrack { track_id } => Some(track_id.clone()),
-                                    ActiveSource::SubsonicPlaylist { playlist_id, track_index, .. } => {
-                                        sub.get_playlist(playlist_id).await.ok()
-                                            .and_then(|p| p.entry.get(*track_index).map(|t| t.id.clone()))
-                                    }
-                                    _ => None,
-                                };
-                                if let Some(tid) = track_id {
-                                    stop_decode(&mut current_decode, &mut decode_rx).await;
-                                    let url = sub.stream_url_with_offset(&tid, (pos_ms / 1000).max(0) as u64);
-                                    let (tx, rx) = audio::pcm_channel(64);
-                                    decode_rx = Some(rx);
-                                    let ac = audio_config.clone();
-                                    current_decode = Some(tokio::spawn(async move {
-                                        if let Err(e) = audio::decode_http_stream(url, tx, ac, None).await {
-                                            tracing::error!(error = %e, "Seek decode failed");
-                                        }
-                                    }));
-                                    update_and_notify(store, zone_index, notify, |z| {
-                                        z.playback = PlaybackState::Playing;
-                                        if let Some(ref mut t) = z.track { t.position_ms = pos_ms; }
-                                    }).await;
-                                    position_offset_ms = pos_ms;
-                                }
-                            }
+                            let _ = self_tx.send(ZoneCommand::Seek(pos_ms)).await;
                         }
                     }
                     ZoneCommand::SetVolume(v) => {
@@ -534,7 +621,8 @@ async fn run(
                                 update_and_notify(store, zone_index, notify, |z| z.presence_source = true).await;
                                 match resolved {
                                     Some(crate::config::PresenceSource::Radio(idx)) => {
-                                        let _ = self_tx.send(ZoneCommand::SetPlaylist(idx, 0)).await;
+                                        // Unified index 0 = radio, idx = station within radio
+                                        let _ = self_tx.send(ZoneCommand::SetPlaylist(0, idx)).await;
                                     }
                                     Some(crate::config::PresenceSource::Playlist(ref id)) => {
                                         let _ = self_tx.send(ZoneCommand::PlaySubsonicPlaylist(id.clone(), 0)).await;
@@ -550,7 +638,7 @@ async fn run(
                             let should_timer = store.read().await.zones.get(&zone_index).is_some_and(|z| z.presence_source && z.playback == crate::state::PlaybackState::Playing);
                             update_and_notify(store, zone_index, notify, |z| z.presence = false).await;
                             if should_timer {
-                                let delay = store.read().await.zones.get(&zone_index).map_or(900, |z| z.auto_off_delay);
+                                let delay = store.read().await.zones.get(&zone_index).map_or(crate::config::DEFAULT_AUTO_OFF_DELAY, |z| z.auto_off_delay);
                                 auto_off_timer.as_mut().reset(tokio::time::Instant::now() + std::time::Duration::from_secs(delay as u64)); auto_off_armed = true;
                                 update_and_notify(store, zone_index, notify, |z| z.auto_off_active = true).await;
                                 tracing::debug!(zone = zone_index, delay, "Presence auto-off timer started");
@@ -602,132 +690,18 @@ async fn run(
                 }
             }
             Some(samples) = airplay_audio_rx.recv() => {
-                if !matches!(source, ActiveSource::AirPlay) {
-                    stop_decode(&mut current_decode, &mut decode_rx).await; position_offset_ms = 0;
-                    source = ActiveSource::AirPlay;
-                    update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Playing; z.source = SourceType::AirPlay; }).await;
-                }
-                let mut samples = match &mut receiver_resampler {
-                    Some(r) => match r.process(&samples) {
-                        Some(resampled) => resampled,
-                        None => continue,
-                    },
-                    None => samples,
-                };
-                zone_eq.process(&mut samples);
-                if let Err(e) = backend.send_audio(zone_index, &samples, config.audio.sample_rate, config.audio.channels).await {
-                    tracing::error!(zone = zone_index, error = %e, "Audio send failed (AirPlay)");
-                }
+                handle_receiver_audio!(samples, ActiveSource::AirPlay, SourceType::AirPlay, "AirPlay");
             }
             Some(event) = airplay_event_rx.recv() => {
-                use crate::receiver::ReceiverEvent;
-                match event {
-                    ReceiverEvent::SessionStarted { format } => {
-                        receiver_resampler = Some(audio::resample::F32Resampling::new(format.sample_rate, config.audio.sample_rate, format.channels));
-                    }
-                    ReceiverEvent::Metadata { title, artist, album } => {
-                        update_and_notify(store, zone_index, notify, |z| {
-                            z.track = Some(TrackInfo { title, artist, album, album_artist: None, genre: None, year: None, track_number: None, disc_number: None, duration_ms: 0, position_ms: 0, seekable: false, source: SourceType::AirPlay, bitrate_kbps: None, content_type: None, sample_rate: None });
-                        }).await;
-                    }
-                    ReceiverEvent::CoverArt { bytes } => {
-                        let mut cache = covers.write().await;
-                        cache.set_auto_mime(zone_index, bytes);
-                        let hash = cache.get(zone_index).map(|e| e.hash.clone());
-                        drop(cache);
-                        if let Some(h) = hash {
-                            let url = format!("/api/v1/zones/{zone_index}/cover?h={h}");
-                            update_and_notify(store, zone_index, notify, |z| {
-                                z.cover_url = Some(url.clone());
-                            }).await;
-                        }
-                    }
-                    ReceiverEvent::Progress { position_ms, duration_ms } => {
-                        update_and_notify(store, zone_index, notify, |z| { if let Some(ref mut t) = z.track { t.position_ms = position_ms as i64; t.duration_ms = duration_ms as i64; } }).await;
-                    }
-                    ReceiverEvent::Volume { percent } => {
-                        update_and_notify(store, zone_index, notify, |z| z.volume = percent).await;
-                        if let Some(ref gid) = group_id {
-                            let _ = ctx.snap_tx.send(SnapcastCmd::Group { group_id: gid.clone(), action: GroupAction::Volume(percent) }).await;
-                        }
-                    }
-                    ReceiverEvent::RemoteAvailable { remote } => {
-                        remote_control = Some(remote);
-                    }
-                    ReceiverEvent::SessionEnded => {
-                        if matches!(source, ActiveSource::AirPlay) {
-                            source = ActiveSource::Idle;
-                            remote_control = None;
-                            covers.write().await.clear(zone_index);
-                            update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Stopped; z.source = SourceType::Idle; z.track = None; z.cover_url = None; }).await;
-                        }
-                    }
-                }
+                handle_receiver_event!(event, ActiveSource::AirPlay, SourceType::AirPlay);
             }
             // ── Spotify Connect: audio ────────────────────────────
             Some(samples) = spotify_audio_rx.recv() => {
-                if !matches!(source, ActiveSource::Spotify) {
-                    stop_decode(&mut current_decode, &mut decode_rx).await; position_offset_ms = 0;
-                    source = ActiveSource::Spotify;
-                    update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Playing; z.source = SourceType::Spotify; }).await;
-                }
-                let mut samples = match &mut receiver_resampler {
-                    Some(r) => match r.process(&samples) {
-                        Some(resampled) => resampled,
-                        None => continue,
-                    },
-                    None => samples,
-                };
-                zone_eq.process(&mut samples);
-                if let Err(e) = backend.send_audio(zone_index, &samples, config.audio.sample_rate, config.audio.channels).await {
-                    tracing::error!(zone = zone_index, error = %e, "Audio send failed (Spotify)");
-                }
+                handle_receiver_audio!(samples, ActiveSource::Spotify, SourceType::Spotify, "Spotify");
             }
             // ── Spotify Connect: events ───────────────────────────
             Some(event) = spotify_event_rx.recv() => {
-                use crate::receiver::ReceiverEvent;
-                match event {
-                    ReceiverEvent::SessionStarted { format } => {
-                        receiver_resampler = Some(audio::resample::F32Resampling::new(format.sample_rate, config.audio.sample_rate, format.channels));
-                    }
-                    ReceiverEvent::Metadata { title, artist, album } => {
-                        update_and_notify(store, zone_index, notify, |z| {
-                            z.track = Some(TrackInfo { title, artist, album, album_artist: None, genre: None, year: None, track_number: None, disc_number: None, duration_ms: 0, position_ms: 0, seekable: false, source: SourceType::Spotify, bitrate_kbps: None, content_type: None, sample_rate: None });
-                        }).await;
-                    }
-                    ReceiverEvent::CoverArt { bytes } => {
-                        let mut cache = covers.write().await;
-                        cache.set_auto_mime(zone_index, bytes);
-                        let hash = cache.get(zone_index).map(|e| e.hash.clone());
-                        drop(cache);
-                        if let Some(h) = hash {
-                            let url = format!("/api/v1/zones/{zone_index}/cover?h={h}");
-                            update_and_notify(store, zone_index, notify, |z| {
-                                z.cover_url = Some(url.clone());
-                            }).await;
-                        }
-                    }
-                    ReceiverEvent::Progress { position_ms, duration_ms } => {
-                        update_and_notify(store, zone_index, notify, |z| { if let Some(ref mut t) = z.track { t.position_ms = position_ms as i64; t.duration_ms = duration_ms as i64; } }).await;
-                    }
-                    ReceiverEvent::Volume { percent } => {
-                        update_and_notify(store, zone_index, notify, |z| z.volume = percent).await;
-                        if let Some(ref gid) = group_id {
-                            let _ = ctx.snap_tx.send(SnapcastCmd::Group { group_id: gid.clone(), action: GroupAction::Volume(percent) }).await;
-                        }
-                    }
-                    ReceiverEvent::RemoteAvailable { remote } => {
-                        remote_control = Some(remote);
-                    }
-                    ReceiverEvent::SessionEnded => {
-                        if matches!(source, ActiveSource::Spotify) {
-                            source = ActiveSource::Idle;
-                            remote_control = None;
-                            covers.write().await.clear(zone_index);
-                            update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Stopped; z.source = SourceType::Idle; z.track = None; z.cover_url = None; }).await;
-                        }
-                    }
-                }
+                handle_receiver_event!(event, ActiveSource::Spotify, SourceType::Spotify);
             }
             // Auto-off timer expired
             _ = &mut auto_off_timer, if auto_off_armed => {

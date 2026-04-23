@@ -24,7 +24,8 @@
   "volume": {
     "label": "Volume",
     "mute": "Mute",
-    "unmute": "Unmute"
+    "unmute": "Unmute",
+    "maxVolume": "Maximum volume: {max}%"
   },
   "seek": {
     "label": "Seek"

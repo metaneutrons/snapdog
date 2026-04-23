@@ -170,7 +170,11 @@ function ZoneHeader({ zone }: { zone: ZoneState }) {
       <h2 className="text-sm font-semibold truncate">{zone.name}</h2>
       <div className="flex items-center gap-1.5 shrink-0">
         {zone.presence && (
-          <span className="text-[10px] px-1 py-0.5 rounded-full bg-green-500/15 text-green-600" title="Presence detected">
+          <span
+            className="text-[10px] px-1 py-0.5 rounded-full bg-green-500/15 text-green-600"
+            role="status"
+            aria-label={zone.presenceTimerActive ? "Presence auto-off timer active" : "Presence detected"}
+          >
             {zone.presenceTimerActive ? "⏱️" : "🟢"}
           </span>
         )}

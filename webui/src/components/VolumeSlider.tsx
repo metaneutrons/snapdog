@@ -97,11 +97,15 @@ export function VolumeSlider({
           aria-label={t("label")}
         />
         {max < 100 && (
-          <div
-            className="absolute top-0 h-full w-0.5 bg-red-500/70 rounded-full pointer-events-none"
-            style={{ left: `${max}%` }}
-            title={`Max: ${max}%`}
-          />
+          <>
+            <div
+              className="absolute top-0 h-full w-0.5 bg-red-500/70 rounded-full pointer-events-none"
+              style={{ left: `${max}%` }}
+              role="presentation"
+              aria-hidden="true"
+            />
+            <span className="sr-only">{t("maxVolume", { max })}</span>
+          </>
         )}
       </div>
       <span className={`text-muted-foreground tabular-nums text-right ${compact ? "text-[10px] w-5" : "text-xs w-7"}`}>

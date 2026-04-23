@@ -232,7 +232,7 @@ async fn publish_zone_state(
         write(
             transport,
             ga,
-            DPT_VALUE_2_UCOUNT,
+            group_objects::DPT_TIME_PERIOD_SEC,
             &DptValue::from(u32::from(zone.auto_off_delay)),
         )
         .await;
@@ -286,13 +286,18 @@ async fn publish_zone_track(
             .await;
         }
         if let Some(ref ga) = knx.track_progress_status {
-            let pct = if track.duration_ms > 0 {
-                ((track.position_ms as f64 / track.duration_ms as f64) * 100.0).clamp(0.0, 100.0)
-            } else {
-                0.0
-            };
+            let pct = track_progress_pct(track);
             write(transport, ga, DPT_SCALING, &DptValue::Float(pct)).await;
         }
+    }
+}
+
+/// Calculate track progress as a percentage (0.0–100.0).
+fn track_progress_pct(track: &state::TrackInfo) -> f64 {
+    if track.duration_ms > 0 {
+        ((track.position_ms as f64 / track.duration_ms as f64) * 100.0).clamp(0.0, 100.0)
+    } else {
+        0.0
     }
 }
 
@@ -310,13 +315,7 @@ async fn publish_zone_progress(
         return;
     };
     if let Some(ref ga) = zone_cfg.knx.track_progress_status {
-        let pct = zone.track.as_ref().map_or(0.0, |t| {
-            if t.duration_ms > 0 {
-                ((t.position_ms as f64 / t.duration_ms as f64) * 100.0).clamp(0.0, 100.0)
-            } else {
-                0.0
-            }
-        });
+        let pct = zone.track.as_ref().map_or(0.0, track_progress_pct);
         write(transport, ga, DPT_SCALING, &DptValue::Float(pct)).await;
     }
 }

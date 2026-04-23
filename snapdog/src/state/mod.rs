@@ -139,15 +139,7 @@ pub struct ClientState {
 fn default_volume() -> i32 {
     100
 }
-fn default_max_volume() -> i32 {
-    100
-}
-fn default_true() -> bool {
-    true
-}
-fn default_auto_off_delay() -> u16 {
-    900
-}
+use crate::config::{default_auto_off_delay, default_max_volume, default_true};
 
 /// Zone playback state.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -273,7 +265,10 @@ impl Store {
                         presence: false,
                         presence_enabled: true,
                         presence_source: false,
-                        auto_off_delay: z.presence.as_ref().map_or(900, |p| p.auto_off_delay),
+                        auto_off_delay: z
+                            .presence
+                            .as_ref()
+                            .map_or(crate::config::DEFAULT_AUTO_OFF_DELAY, |p| p.auto_off_delay),
                         auto_off_active: false,
                     },
                 )
@@ -476,7 +471,7 @@ mod tests {
                 presence: false,
                 presence_enabled: true,
                 presence_source: false,
-                auto_off_delay: 900,
+                auto_off_delay: crate::config::DEFAULT_AUTO_OFF_DELAY,
                 auto_off_active: false,
             },
         );

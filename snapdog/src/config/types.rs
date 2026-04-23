@@ -166,8 +166,11 @@ pub struct PresenceConfig {
     pub schedule: Vec<PresenceScheduleEntry>,
 }
 
-fn default_auto_off_delay() -> u16 {
-    900
+/// Default auto-off delay in seconds (15 minutes).
+pub(crate) const DEFAULT_AUTO_OFF_DELAY: u16 = 900;
+
+pub(crate) fn default_auto_off_delay() -> u16 {
+    DEFAULT_AUTO_OFF_DELAY
 }
 
 /// Parse a HH:MM time string into minutes since midnight.
@@ -846,9 +849,9 @@ fn default_zone_icon() -> String {
 fn default_client_icon() -> String {
     "🎵".into()
 }
-fn default_max_volume() -> i32 {
+pub(crate) fn default_max_volume() -> i32 {
     100
 }
-fn default_true() -> bool {
+pub(crate) fn default_true() -> bool {
     true
 }
