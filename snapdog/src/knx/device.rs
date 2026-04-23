@@ -298,10 +298,13 @@ async fn bau_task(
     }
 
     // On first run (no ETS state), build tables from TOML config as fallback
-    if !matches!(
+    if matches!(
         bau.addr_table_object.load_state(),
         knx_device::table_object::LoadState::Loaded
     ) {
+        tracing::info!("Using ETS-programmed group address tables (TOML KNX addresses ignored)");
+    } else {
+        tracing::info!("No ETS programming found — using group addresses from TOML config");
         build_tables_from_config(&mut bau, &config);
     }
 
