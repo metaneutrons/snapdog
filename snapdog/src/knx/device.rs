@@ -20,6 +20,15 @@ use tokio::sync::{mpsc, oneshot};
 
 use super::group_objects::mem;
 
+/// Current monotonic time in milliseconds (for transport layer timeouts).
+fn now_ms() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
+
 /// KNX device serial number (OpenKNX manufacturer prefix 0xFA).
 const DEVICE_SERIAL: [u8; 6] = [0x00, 0xFA, 0x01, 0x02, 0x03, 0x04];
 
@@ -321,8 +330,8 @@ async fn bau_task(
                 let frame = match event {
                     ServerEvent::TunnelFrame(f) | ServerEvent::RoutingFrame(f) => f,
                 };
-                bau.process_frame(&frame);
-                bau.poll();
+                bau.process_frame(&frame, now_ms());
+                bau.poll(now_ms());
 
                 while let Some(out) = bau.next_outgoing_frame() {
                     let _ = server.send_frame(out).await;
@@ -345,8 +354,8 @@ async fn bau_task(
                         handle_write(&mut bau, &server, ga, dpt, &value).await;
                     }
                     BauCmd::ProcessFrame { frame } => {
-                        bau.process_frame(&frame);
-                        bau.poll();
+                        bau.process_frame(&frame, now_ms());
+                        bau.poll(now_ms());
                         while let Some(out) = bau.next_outgoing_frame() {
                             let _ = server.send_frame(out).await;
                         }
@@ -581,7 +590,7 @@ async fn handle_write(
     }
 
     // Poll to send pending writes
-    bau.poll();
+    bau.poll(now_ms());
     while let Some(out) = bau.next_outgoing_frame() {
         let _ = server.send_frame(out).await;
     }
