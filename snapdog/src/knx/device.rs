@@ -35,6 +35,97 @@ const ETS_PERSIST_DEBOUNCE: std::time::Duration = std::time::Duration::from_secs
 /// Path for persisted ETS memory.
 const ETS_MEMORY_PATH: &str = "knx-memory.bin";
 
+// ── Persistence format ────────────────────────────────────────
+//
+// File layout: [magic 4B] [version 1B] [length 2B (LE)] [payload …] [crc32 4B (LE)]
+// Total overhead: 11 bytes. Atomic write via temp file + rename.
+
+/// Magic bytes identifying a SnapDog KNX memory file.
+const PERSIST_MAGIC: &[u8; 4] = b"SDKM";
+
+/// Current persistence format version. Bump when memory layout changes.
+const PERSIST_VERSION: u8 = 1;
+
+/// Header size: magic (4) + version (1) + length (2).
+const PERSIST_HEADER: usize = 7;
+
+/// Write ETS memory to disk with integrity envelope (atomic).
+fn persist_memory(path: &std::path::Path, payload: &[u8]) -> std::io::Result<()> {
+    let len = payload.len() as u16;
+    let crc = crc32(payload);
+
+    let mut buf = Vec::with_capacity(PERSIST_HEADER + payload.len() + 4);
+    buf.extend_from_slice(PERSIST_MAGIC);
+    buf.push(PERSIST_VERSION);
+    buf.extend_from_slice(&len.to_le_bytes());
+    buf.extend_from_slice(payload);
+    buf.extend_from_slice(&crc.to_le_bytes());
+
+    // Atomic write: temp file + rename
+    let tmp = path.with_extension("tmp");
+    std::fs::write(&tmp, &buf)?;
+    std::fs::rename(&tmp, path)?;
+    Ok(())
+}
+
+/// Load ETS memory from disk, verifying magic, version, length, and CRC32.
+fn load_memory(path: &std::path::Path) -> Result<Vec<u8>> {
+    let data = std::fs::read(path).context("reading ETS memory file")?;
+    anyhow::ensure!(
+        data.len() >= PERSIST_HEADER + 4,
+        "file too short ({} bytes)",
+        data.len()
+    );
+    anyhow::ensure!(
+        &data[..4] == PERSIST_MAGIC,
+        "invalid magic (not a SnapDog KNX memory file)"
+    );
+    anyhow::ensure!(
+        data[4] == PERSIST_VERSION,
+        "unsupported version {} (expected {})",
+        data[4],
+        PERSIST_VERSION
+    );
+
+    let len = u16::from_le_bytes([data[5], data[6]]) as usize;
+    anyhow::ensure!(
+        data.len() == PERSIST_HEADER + len + 4,
+        "length mismatch: header says {len} bytes, file has {}",
+        data.len() - PERSIST_HEADER - 4
+    );
+
+    let payload = &data[PERSIST_HEADER..PERSIST_HEADER + len];
+    let stored_crc = u32::from_le_bytes([
+        data[PERSIST_HEADER + len],
+        data[PERSIST_HEADER + len + 1],
+        data[PERSIST_HEADER + len + 2],
+        data[PERSIST_HEADER + len + 3],
+    ]);
+    let actual_crc = crc32(payload);
+    anyhow::ensure!(
+        stored_crc == actual_crc,
+        "CRC32 mismatch (file corrupted): stored {stored_crc:#010x}, computed {actual_crc:#010x}"
+    );
+
+    Ok(payload.to_vec())
+}
+
+/// CRC32 (ISO 3309 / ITU-T V.42 — same as zlib/PNG).
+fn crc32(data: &[u8]) -> u32 {
+    let mut crc: u32 = 0xFFFF_FFFF;
+    for &byte in data {
+        crc ^= byte as u32;
+        for _ in 0..8 {
+            crc = if crc & 1 != 0 {
+                (crc >> 1) ^ 0xEDB8_8320
+            } else {
+                crc >> 1
+            };
+        }
+    }
+    !crc
+}
+
 use super::group_objects::{
     self, CGO_CONNECTED, CGO_LATENCY, CGO_LATENCY_STATUS, CGO_MUTE, CGO_MUTE_STATUS,
     CGO_MUTE_TOGGLE, CGO_VOLUME, CGO_VOLUME_DIM, CGO_VOLUME_STATUS, CGO_ZONE, CGO_ZONE_STATUS,
@@ -186,12 +277,18 @@ async fn bau_task(
 
     // Load persisted ETS memory if available
     if let Some(ref path) = persist_path {
-        if let Ok(data) = std::fs::read(path) {
-            bau.set_memory_area(data);
-            // TODO: load_tables_from_memory requires known offsets —
-            // these are determined by the ETS application program layout.
-            // For now, the memory area is restored so ETS MemoryRead works.
-            tracing::info!(path = %path.display(), "Loaded persisted ETS memory");
+        match load_memory(path) {
+            Ok(data) => {
+                bau.set_memory_area(data);
+                // TODO: load_tables_from_memory requires known offsets —
+                // these are determined by the ETS application program layout.
+                // For now, the memory area is restored so ETS MemoryRead works.
+                tracing::info!(path = %path.display(), "Loaded persisted ETS memory");
+            }
+            Err(e) if path.exists() => {
+                tracing::warn!(path = %path.display(), error = %e, "Discarding corrupted ETS memory file — ETS will need to reprogram");
+            }
+            Err(_) => {} // file doesn't exist — first run
         }
     }
 
@@ -254,7 +351,7 @@ async fn bau_task(
                     let mem = bau.memory_area().to_vec();
                     let path = path.clone();
                     tokio::task::spawn_blocking(move || {
-                        if let Err(e) = std::fs::write(&path, &mem) {
+                        if let Err(e) = persist_memory(&path, &mem) {
                             tracing::warn!(error = %e, "Failed to persist ETS memory");
                         } else {
                             tracing::debug!(path = %path.display(), bytes = mem.len(), "ETS memory persisted");
@@ -270,8 +367,11 @@ async fn bau_task(
         if let Some(ref path) = persist_path {
             let mem = bau.memory_area();
             if !mem.is_empty() {
-                let _ = std::fs::write(path, mem);
-                tracing::info!(path = %path.display(), "ETS memory persisted on shutdown");
+                if let Err(e) = persist_memory(path, mem) {
+                    tracing::warn!(error = %e, "Failed to persist ETS memory on shutdown");
+                } else {
+                    tracing::info!(path = %path.display(), "ETS memory persisted on shutdown");
+                }
             }
         }
     }
@@ -586,5 +686,79 @@ mod tests {
             .address_table
             .get_tsap(GroupAddress::from_str("2/0/1").unwrap().raw());
         assert!(tsap.is_some());
+    }
+
+    #[test]
+    fn persist_roundtrip() {
+        let dir = std::env::temp_dir().join("snapdog_test_persist");
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("test.bin");
+
+        let payload = vec![0xDE, 0xAD, 0xBE, 0xEF, 0x42];
+        super::persist_memory(&path, &payload).unwrap();
+        let loaded = super::load_memory(&path).unwrap();
+        assert_eq!(loaded, payload);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn persist_detects_corruption() {
+        let dir = std::env::temp_dir().join("snapdog_test_corrupt");
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("corrupt.bin");
+
+        let payload = vec![1, 2, 3, 4, 5];
+        super::persist_memory(&path, &payload).unwrap();
+
+        // Flip a byte in the payload area
+        let mut raw = std::fs::read(&path).unwrap();
+        raw[super::PERSIST_HEADER] ^= 0xFF;
+        std::fs::write(&path, &raw).unwrap();
+
+        let err = super::load_memory(&path).unwrap_err();
+        assert!(
+            err.to_string().contains("CRC32 mismatch"),
+            "expected CRC error, got: {err}"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn persist_rejects_wrong_version() {
+        let dir = std::env::temp_dir().join("snapdog_test_version");
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("version.bin");
+
+        super::persist_memory(&path, &[0; 10]).unwrap();
+
+        let mut raw = std::fs::read(&path).unwrap();
+        raw[4] = 99;
+        std::fs::write(&path, &raw).unwrap();
+
+        let err = super::load_memory(&path).unwrap_err();
+        assert!(
+            err.to_string().contains("unsupported version"),
+            "expected version error, got: {err}"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn persist_rejects_truncated_file() {
+        let dir = std::env::temp_dir().join("snapdog_test_truncated");
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("truncated.bin");
+
+        std::fs::write(&path, b"SDKM").unwrap();
+        let err = super::load_memory(&path).unwrap_err();
+        assert!(
+            err.to_string().contains("too short"),
+            "expected too-short error, got: {err}"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
