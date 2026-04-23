@@ -3,13 +3,15 @@
 
 //! Generate monolithic ETS XML for SnapDog KNX product database.
 //!
-//! Reads GO definitions from hardcoded constants (mirroring group_objects.rs)
-//! and outputs a complete ETS-compatible XML that `knx-prod` can convert to .knxprod.
+//! Uses GO definitions from `snapdog::knx::group_objects` (SSOT) and outputs
+//! a complete ETS-compatible XML that `knx-prod` can convert to .knxprod.
+
+use snapdog::knx::group_objects::{
+    CLIENT_GO_COUNT, CLIENT_GOS, GoDefinition, MAX_CLIENTS, MAX_ZONES, ZONE_GO_COUNT, ZONE_GOS,
+};
 
 const AID: &str = "M-00FA_A-FF01-01-0000";
 const MFR: &str = "M-00FA";
-const MAX_ZONES: usize = 10;
-const MAX_CLIENTS: usize = 10;
 const MEMORY_SIZE: usize = 256; // Rounded up from actual usage (~173 bytes)
 
 fn main() {
@@ -27,338 +29,6 @@ fn main() {
         MAX_ZONES * ZONE_GOS.len() + MAX_CLIENTS * CLIENT_GOS.len()
     );
 }
-
-// ── GO definitions (mirrors group_objects.rs) ─────────────────
-
-#[allow(dead_code)] // name_en used when adding TranslationUnit elements
-struct Go {
-    name_de: &'static str,
-    name_en: &'static str,
-    func: &'static str,
-    dpt: &'static str,
-    size: &'static str,
-    read: bool,
-    write: bool,
-    transmit: bool,
-    update: bool,
-}
-
-const fn recv(
-    name_de: &'static str,
-    name_en: &'static str,
-    func: &'static str,
-    dpt: &'static str,
-    size: &'static str,
-) -> Go {
-    Go {
-        name_de,
-        name_en,
-        func,
-        dpt,
-        size,
-        read: false,
-        write: true,
-        transmit: false,
-        update: false,
-    }
-}
-const fn send(
-    name_de: &'static str,
-    name_en: &'static str,
-    func: &'static str,
-    dpt: &'static str,
-    size: &'static str,
-) -> Go {
-    Go {
-        name_de,
-        name_en,
-        func,
-        dpt,
-        size,
-        read: true,
-        write: false,
-        transmit: true,
-        update: false,
-    }
-}
-const fn bidir(
-    name_de: &'static str,
-    name_en: &'static str,
-    func: &'static str,
-    dpt: &'static str,
-    size: &'static str,
-) -> Go {
-    Go {
-        name_de,
-        name_en,
-        func,
-        dpt,
-        size,
-        read: true,
-        write: true,
-        transmit: true,
-        update: true,
-    }
-}
-
-const ZONE_GOS: &[Go] = &[
-    recv("Play", "Play", "Play", "DPST-1-1", "1 Bit"),
-    recv("Pause", "Pause", "Pause", "DPST-1-1", "1 Bit"),
-    recv("Stop", "Stop", "Stop", "DPST-1-1", "1 Bit"),
-    recv(
-        "Nächster Titel",
-        "Next Track",
-        "Track Next",
-        "DPST-1-1",
-        "1 Bit",
-    ),
-    recv(
-        "Vorheriger Titel",
-        "Previous Track",
-        "Track Previous",
-        "DPST-1-1",
-        "1 Bit",
-    ),
-    recv("Lautstärke", "Volume", "Volume", "DPST-5-1", "1 Byte"),
-    send(
-        "Lautstärke Status",
-        "Volume Status",
-        "Volume Status",
-        "DPST-5-1",
-        "1 Byte",
-    ),
-    recv(
-        "Lautstärke Dimmen",
-        "Volume Dim",
-        "Volume Dim",
-        "DPST-3-7",
-        "4 Bit",
-    ),
-    recv("Stumm", "Mute", "Mute", "DPST-1-1", "1 Bit"),
-    send(
-        "Stumm Status",
-        "Mute Status",
-        "Mute Status",
-        "DPST-1-1",
-        "1 Bit",
-    ),
-    recv(
-        "Stumm Umschalten",
-        "Mute Toggle",
-        "Mute Toggle",
-        "DPST-1-1",
-        "1 Bit",
-    ),
-    send(
-        "Wiedergabe Status",
-        "Playback Status",
-        "Control Status",
-        "DPST-1-1",
-        "1 Bit",
-    ),
-    send(
-        "Titel spielt",
-        "Track Playing",
-        "Track Playing",
-        "DPST-1-1",
-        "1 Bit",
-    ),
-    recv(
-        "Zufallswiedergabe",
-        "Shuffle",
-        "Shuffle",
-        "DPST-1-1",
-        "1 Bit",
-    ),
-    send(
-        "Zufall Status",
-        "Shuffle Status",
-        "Shuffle Status",
-        "DPST-1-1",
-        "1 Bit",
-    ),
-    recv(
-        "Zufall Umschalten",
-        "Shuffle Toggle",
-        "Shuffle Toggle",
-        "DPST-1-1",
-        "1 Bit",
-    ),
-    recv("Wiederholung", "Repeat", "Repeat", "DPST-1-1", "1 Bit"),
-    send(
-        "Wiederholung Status",
-        "Repeat Status",
-        "Repeat Status",
-        "DPST-1-1",
-        "1 Bit",
-    ),
-    recv(
-        "Wiederholung Umsch.",
-        "Repeat Toggle",
-        "Repeat Toggle",
-        "DPST-1-1",
-        "1 Bit",
-    ),
-    recv(
-        "Titel Wiederholung",
-        "Track Repeat",
-        "Track Repeat",
-        "DPST-1-1",
-        "1 Bit",
-    ),
-    send(
-        "Titel Wdh. Status",
-        "Track Repeat Status",
-        "Track Repeat Status",
-        "DPST-1-1",
-        "1 Bit",
-    ),
-    recv(
-        "Titel Wdh. Umsch.",
-        "Track Repeat Toggle",
-        "Track Repeat Toggle",
-        "DPST-1-1",
-        "1 Bit",
-    ),
-    recv("Playlist", "Playlist", "Playlist", "DPST-5-10", "1 Byte"),
-    send(
-        "Playlist Status",
-        "Playlist Status",
-        "Playlist Status",
-        "DPST-5-10",
-        "1 Byte",
-    ),
-    recv(
-        "Nächste Playlist",
-        "Next Playlist",
-        "Playlist Next",
-        "DPST-1-1",
-        "1 Bit",
-    ),
-    recv(
-        "Vorherige Playlist",
-        "Previous Playlist",
-        "Playlist Previous",
-        "DPST-1-1",
-        "1 Bit",
-    ),
-    send(
-        "Titel",
-        "Track Title",
-        "Track Title",
-        "DPST-16-1",
-        "14 Bytes",
-    ),
-    send(
-        "Interpret",
-        "Track Artist",
-        "Track Artist",
-        "DPST-16-1",
-        "14 Bytes",
-    ),
-    send(
-        "Album",
-        "Track Album",
-        "Track Album",
-        "DPST-16-1",
-        "14 Bytes",
-    ),
-    send(
-        "Fortschritt",
-        "Track Progress",
-        "Track Progress",
-        "DPST-5-1",
-        "1 Byte",
-    ),
-    // Presence
-    recv("Präsenz", "Presence", "Presence", "DPST-1-18", "1 Bit"),
-    bidir(
-        "Präsenz Aktiviert",
-        "Presence Enable",
-        "Presence Enable",
-        "DPST-1-1",
-        "1 Bit",
-    ),
-    bidir(
-        "Präsenz Timeout",
-        "Presence Timeout",
-        "Presence Timeout",
-        "DPST-7-5",
-        "2 Bytes",
-    ),
-    send(
-        "Präsenz Timer",
-        "Presence Timer",
-        "Presence Timer Active",
-        "DPST-1-1",
-        "1 Bit",
-    ),
-    recv(
-        "Präsenz Quelle",
-        "Presence Source",
-        "Presence Source Override",
-        "DPST-5-10",
-        "1 Byte",
-    ),
-];
-
-const CLIENT_GOS: &[Go] = &[
-    recv("Lautstärke", "Volume", "Volume", "DPST-5-1", "1 Byte"),
-    send(
-        "Lautstärke Status",
-        "Volume Status",
-        "Volume Status",
-        "DPST-5-1",
-        "1 Byte",
-    ),
-    recv(
-        "Lautstärke Dimmen",
-        "Volume Dim",
-        "Volume Dim",
-        "DPST-3-7",
-        "4 Bit",
-    ),
-    recv("Stumm", "Mute", "Mute", "DPST-1-1", "1 Bit"),
-    send(
-        "Stumm Status",
-        "Mute Status",
-        "Mute Status",
-        "DPST-1-1",
-        "1 Bit",
-    ),
-    recv(
-        "Stumm Umschalten",
-        "Mute Toggle",
-        "Mute Toggle",
-        "DPST-1-1",
-        "1 Bit",
-    ),
-    recv("Latenz", "Latency", "Latency", "DPST-5-10", "1 Byte"),
-    send(
-        "Latenz Status",
-        "Latency Status",
-        "Latency Status",
-        "DPST-5-10",
-        "1 Byte",
-    ),
-    bidir(
-        "Zonenzuordnung",
-        "Zone Assignment",
-        "Zone",
-        "DPST-5-10",
-        "1 Byte",
-    ),
-    send(
-        "Zone Status",
-        "Zone Status",
-        "Zone Status",
-        "DPST-5-10",
-        "1 Byte",
-    ),
-    send("Verbunden", "Connected", "Connected", "DPST-1-1", "1 Bit"),
-];
-
-// ── Zone CO grouping for Dynamic section ──────────────────────
 
 struct CoGroup {
     title_de: &'static str,
@@ -947,7 +617,7 @@ fn write_com_objects(x: &mut String) {
             write_com_object(
                 x,
                 &format!("Z{z:02}{i:03}"),
-                &format!("Zone {z} {}", go.func),
+                &format!("Zone {z} {}", go.name),
                 go,
                 num,
             );
@@ -959,7 +629,7 @@ fn write_com_objects(x: &mut String) {
             write_com_object(
                 x,
                 &format!("C{c:02}{i:03}"),
-                &format!("Client {c} {}", go.func),
+                &format!("Client {c} {}", go.name),
                 go,
                 num,
             );
@@ -968,16 +638,28 @@ fn write_com_objects(x: &mut String) {
     w(x, "            </ComObjectTable>");
 }
 
-fn write_com_object(x: &mut String, id_suffix: &str, name: &str, go: &Go, number: usize) {
-    let r = if go.read { "Enabled" } else { "Disabled" };
-    let wr = if go.write { "Enabled" } else { "Disabled" };
-    let t = if go.transmit { "Enabled" } else { "Disabled" };
-    let u = if go.update { "Enabled" } else { "Disabled" };
+fn write_com_object(x: &mut String, id_suffix: &str, name: &str, go: &GoDefinition, number: usize) {
+    let r = if go.flags.read { "Enabled" } else { "Disabled" };
+    let wr = if go.flags.write {
+        "Enabled"
+    } else {
+        "Disabled"
+    };
+    let t = if go.flags.transmit {
+        "Enabled"
+    } else {
+        "Disabled"
+    };
+    let u = if go.flags.update {
+        "Enabled"
+    } else {
+        "Disabled"
+    };
     w(
         x,
         &format!(
             r#"              <ComObject Id="{AID}_O-{id_suffix}" Name="{name}" Number="{number}" Text="{}" FunctionText="{}" ObjectSize="{}" DatapointType="{}" Priority="Low" ReadFlag="{r}" WriteFlag="{wr}" CommunicationFlag="Enabled" TransmitFlag="{t}" UpdateFlag="{u}" />"#,
-            go.name_de, go.func, go.size, go.dpt
+            go.name_de, go.name, go.size_str, go.dpt
         ),
     );
 }
@@ -1087,7 +769,7 @@ fn write_channel_block(
     idx: usize,
     active_param_id: &str,
     name_param_id: &str,
-    _gos: &[Go],
+    _gos: &[GoDefinition],
     groups: &[CoGroup],
     id_prefix: &str,
     _go_count: usize,
@@ -1123,9 +805,9 @@ fn write_channel_block(
         for &i in group.indices {
             let co_id = format!("{AID}_O-{id_prefix}{i:03}");
             let num = if prefix == "Zone" {
-                (idx - 1) * 35 + i + 1
+                (idx - 1) * ZONE_GO_COUNT + i + 1
             } else {
-                MAX_ZONES * 35 + (idx - 1) * 11 + i + 1
+                MAX_ZONES * ZONE_GO_COUNT + (idx - 1) * CLIENT_GO_COUNT + i + 1
             };
             w(
                 x,

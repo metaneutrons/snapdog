@@ -74,8 +74,16 @@ const DPT_TIME_PERIOD_SEC: Dpt = Dpt::new(7, 5);
 pub struct GoDefinition {
     /// Human-readable name (used in ETS and logs).
     pub name: &'static str,
+    /// German display name (ETS Text attribute).
+    pub name_de: &'static str,
+    /// English display name (ETS FunctionText attribute).
+    pub name_en: &'static str,
     /// KNX datapoint type.
     pub dpt: Dpt,
+    /// ETS DPT string (e.g. "DPST-1-1").
+    pub dpt_str: &'static str,
+    /// ETS ObjectSize string (e.g. "1 Bit").
+    pub size_str: &'static str,
     /// Communication flags.
     pub flags: GoFlags,
 }
@@ -103,254 +111,407 @@ impl GoFlags {
     }
 }
 
-// ── Zone group objects (30 per zone) ──────────────────────────
+// ── Zone group objects (35 per zone) ──────────────────────────
 
+/// Create a receive-only GO definition.
+const fn go_recv(
+    name: &'static str,
+    de: &'static str,
+    en: &'static str,
+    dpt: Dpt,
+    dpt_s: &'static str,
+    size: &'static str,
+) -> GoDefinition {
+    GoDefinition {
+        name,
+        name_de: de,
+        name_en: en,
+        dpt,
+        dpt_str: dpt_s,
+        size_str: size,
+        flags: RECV,
+    }
+}
+/// Create a send-only GO definition.
+const fn go_send(
+    name: &'static str,
+    de: &'static str,
+    en: &'static str,
+    dpt: Dpt,
+    dpt_s: &'static str,
+    size: &'static str,
+) -> GoDefinition {
+    GoDefinition {
+        name,
+        name_de: de,
+        name_en: en,
+        dpt,
+        dpt_str: dpt_s,
+        size_str: size,
+        flags: SEND,
+    }
+}
+/// Create a bidirectional GO definition.
+const fn go_bidir(
+    name: &'static str,
+    de: &'static str,
+    en: &'static str,
+    dpt: Dpt,
+    dpt_s: &'static str,
+    size: &'static str,
+) -> GoDefinition {
+    GoDefinition {
+        name,
+        name_de: de,
+        name_en: en,
+        dpt,
+        dpt_str: dpt_s,
+        size_str: size,
+        flags: BIDIR,
+    }
+}
+
+/// Zone group object definitions (35 per zone).
 pub const ZONE_GOS: &[GoDefinition] = &[
-    // Transport commands (receive only)
-    GoDefinition {
-        name: "Play",
-        dpt: DPT_SWITCH,
-        flags: RECV,
-    },
-    GoDefinition {
-        name: "Pause",
-        dpt: DPT_SWITCH,
-        flags: RECV,
-    },
-    GoDefinition {
-        name: "Stop",
-        dpt: DPT_SWITCH,
-        flags: RECV,
-    },
-    GoDefinition {
-        name: "Track Next",
-        dpt: DPT_SWITCH,
-        flags: RECV,
-    },
-    GoDefinition {
-        name: "Track Previous",
-        dpt: DPT_SWITCH,
-        flags: RECV,
-    },
-    // Volume
-    GoDefinition {
-        name: "Volume",
-        dpt: DPT_SCALING,
-        flags: RECV,
-    },
-    GoDefinition {
-        name: "Volume Status",
-        dpt: DPT_SCALING,
-        flags: SEND,
-    },
-    GoDefinition {
-        name: "Volume Dim",
-        dpt: DPT_CONTROL_DIMMING,
-        flags: RECV,
-    },
-    // Mute
-    GoDefinition {
-        name: "Mute",
-        dpt: DPT_SWITCH,
-        flags: RECV,
-    },
-    GoDefinition {
-        name: "Mute Status",
-        dpt: DPT_SWITCH,
-        flags: SEND,
-    },
-    GoDefinition {
-        name: "Mute Toggle",
-        dpt: DPT_SWITCH,
-        flags: RECV,
-    },
-    // Playback status
-    GoDefinition {
-        name: "Control Status",
-        dpt: DPT_SWITCH,
-        flags: SEND,
-    },
-    GoDefinition {
-        name: "Track Playing Status",
-        dpt: DPT_SWITCH,
-        flags: SEND,
-    },
-    // Shuffle
-    GoDefinition {
-        name: "Shuffle",
-        dpt: DPT_SWITCH,
-        flags: RECV,
-    },
-    GoDefinition {
-        name: "Shuffle Status",
-        dpt: DPT_SWITCH,
-        flags: SEND,
-    },
-    GoDefinition {
-        name: "Shuffle Toggle",
-        dpt: DPT_SWITCH,
-        flags: RECV,
-    },
-    // Repeat (playlist)
-    GoDefinition {
-        name: "Repeat",
-        dpt: DPT_SWITCH,
-        flags: RECV,
-    },
-    GoDefinition {
-        name: "Repeat Status",
-        dpt: DPT_SWITCH,
-        flags: SEND,
-    },
-    GoDefinition {
-        name: "Repeat Toggle",
-        dpt: DPT_SWITCH,
-        flags: RECV,
-    },
-    // Repeat (single track)
-    GoDefinition {
-        name: "Track Repeat",
-        dpt: DPT_SWITCH,
-        flags: RECV,
-    },
-    GoDefinition {
-        name: "Track Repeat Status",
-        dpt: DPT_SWITCH,
-        flags: SEND,
-    },
-    GoDefinition {
-        name: "Track Repeat Toggle",
-        dpt: DPT_SWITCH,
-        flags: RECV,
-    },
-    // Playlist
-    GoDefinition {
-        name: "Playlist",
-        dpt: DPT_VALUE_1_UCOUNT,
-        flags: RECV,
-    },
-    GoDefinition {
-        name: "Playlist Status",
-        dpt: DPT_VALUE_1_UCOUNT,
-        flags: SEND,
-    },
-    GoDefinition {
-        name: "Playlist Next",
-        dpt: DPT_SWITCH,
-        flags: RECV,
-    },
-    GoDefinition {
-        name: "Playlist Previous",
-        dpt: DPT_SWITCH,
-        flags: RECV,
-    },
-    // Track metadata (send only)
-    GoDefinition {
-        name: "Track Title",
-        dpt: DPT_STRING_8859_1,
-        flags: SEND,
-    },
-    GoDefinition {
-        name: "Track Artist",
-        dpt: DPT_STRING_8859_1,
-        flags: SEND,
-    },
-    GoDefinition {
-        name: "Track Album",
-        dpt: DPT_STRING_8859_1,
-        flags: SEND,
-    },
-    GoDefinition {
-        name: "Track Progress",
-        dpt: DPT_SCALING,
-        flags: SEND,
-    },
-    // Presence
-    GoDefinition {
-        name: "Presence",
-        dpt: DPT_OCCUPANCY,
-        flags: RECV,
-    },
-    GoDefinition {
-        name: "Presence Enable",
-        dpt: DPT_SWITCH,
-        flags: BIDIR,
-    },
-    GoDefinition {
-        name: "Presence Timeout",
-        dpt: DPT_TIME_PERIOD_SEC,
-        flags: BIDIR,
-    },
-    GoDefinition {
-        name: "Presence Timer Active",
-        dpt: DPT_SWITCH,
-        flags: SEND,
-    },
-    GoDefinition {
-        name: "Presence Source Override",
-        dpt: DPT_VALUE_1_UCOUNT,
-        flags: RECV,
-    },
+    go_recv("Play", "Play", "Play", DPT_SWITCH, "DPST-1-1", "1 Bit"),
+    go_recv("Pause", "Pause", "Pause", DPT_SWITCH, "DPST-1-1", "1 Bit"),
+    go_recv("Stop", "Stop", "Stop", DPT_SWITCH, "DPST-1-1", "1 Bit"),
+    go_recv(
+        "Track Next",
+        "Nächster Titel",
+        "Next Track",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_recv(
+        "Track Previous",
+        "Vorheriger Titel",
+        "Previous Track",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_recv(
+        "Volume",
+        "Lautstärke",
+        "Volume",
+        DPT_SCALING,
+        "DPST-5-1",
+        "1 Byte",
+    ),
+    go_send(
+        "Volume Status",
+        "Lautstärke Status",
+        "Volume Status",
+        DPT_SCALING,
+        "DPST-5-1",
+        "1 Byte",
+    ),
+    go_recv(
+        "Volume Dim",
+        "Lautstärke Dimmen",
+        "Volume Dim",
+        DPT_CONTROL_DIMMING,
+        "DPST-3-7",
+        "4 Bit",
+    ),
+    go_recv("Mute", "Stumm", "Mute", DPT_SWITCH, "DPST-1-1", "1 Bit"),
+    go_send(
+        "Mute Status",
+        "Stumm Status",
+        "Mute Status",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_recv(
+        "Mute Toggle",
+        "Stumm Umschalten",
+        "Mute Toggle",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_send(
+        "Control Status",
+        "Wiedergabe Status",
+        "Playback Status",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_send(
+        "Track Playing",
+        "Titel spielt",
+        "Track Playing",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_recv(
+        "Shuffle",
+        "Zufallswiedergabe",
+        "Shuffle",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_send(
+        "Shuffle Status",
+        "Zufall Status",
+        "Shuffle Status",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_recv(
+        "Shuffle Toggle",
+        "Zufall Umschalten",
+        "Shuffle Toggle",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_recv(
+        "Repeat",
+        "Wiederholung",
+        "Repeat",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_send(
+        "Repeat Status",
+        "Wiederholung Status",
+        "Repeat Status",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_recv(
+        "Repeat Toggle",
+        "Wiederholung Umsch.",
+        "Repeat Toggle",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_recv(
+        "Track Repeat",
+        "Titel Wiederholung",
+        "Track Repeat",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_send(
+        "Track Repeat Status",
+        "Titel Wdh. Status",
+        "Track Repeat Status",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_recv(
+        "Track Repeat Toggle",
+        "Titel Wdh. Umsch.",
+        "Track Repeat Toggle",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_recv(
+        "Playlist",
+        "Playlist",
+        "Playlist",
+        DPT_VALUE_1_UCOUNT,
+        "DPST-5-10",
+        "1 Byte",
+    ),
+    go_send(
+        "Playlist Status",
+        "Playlist Status",
+        "Playlist Status",
+        DPT_VALUE_1_UCOUNT,
+        "DPST-5-10",
+        "1 Byte",
+    ),
+    go_recv(
+        "Playlist Next",
+        "Nächste Playlist",
+        "Next Playlist",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_recv(
+        "Playlist Previous",
+        "Vorherige Playlist",
+        "Previous Playlist",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_send(
+        "Track Title",
+        "Titel",
+        "Track Title",
+        DPT_STRING_8859_1,
+        "DPST-16-1",
+        "14 Bytes",
+    ),
+    go_send(
+        "Track Artist",
+        "Interpret",
+        "Track Artist",
+        DPT_STRING_8859_1,
+        "DPST-16-1",
+        "14 Bytes",
+    ),
+    go_send(
+        "Track Album",
+        "Album",
+        "Track Album",
+        DPT_STRING_8859_1,
+        "DPST-16-1",
+        "14 Bytes",
+    ),
+    go_send(
+        "Track Progress",
+        "Fortschritt",
+        "Track Progress",
+        DPT_SCALING,
+        "DPST-5-1",
+        "1 Byte",
+    ),
+    go_recv(
+        "Presence",
+        "Präsenz",
+        "Presence",
+        DPT_OCCUPANCY,
+        "DPST-1-18",
+        "1 Bit",
+    ),
+    go_bidir(
+        "Presence Enable",
+        "Präsenz Aktiviert",
+        "Presence Enable",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_bidir(
+        "Presence Timeout",
+        "Präsenz Timeout",
+        "Presence Timeout",
+        DPT_TIME_PERIOD_SEC,
+        "DPST-7-5",
+        "2 Bytes",
+    ),
+    go_send(
+        "Presence Timer Active",
+        "Präsenz Timer",
+        "Presence Timer",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_recv(
+        "Presence Source Override",
+        "Präsenz Quelle",
+        "Presence Source",
+        DPT_VALUE_1_UCOUNT,
+        "DPST-5-10",
+        "1 Byte",
+    ),
 ];
 
 // ── Client group objects (11 per client) ──────────────────────
 
+/// Client group object definitions (11 per client).
 pub const CLIENT_GOS: &[GoDefinition] = &[
-    GoDefinition {
-        name: "Volume",
-        dpt: DPT_SCALING,
-        flags: RECV,
-    },
-    GoDefinition {
-        name: "Volume Status",
-        dpt: DPT_SCALING,
-        flags: SEND,
-    },
-    GoDefinition {
-        name: "Volume Dim",
-        dpt: DPT_CONTROL_DIMMING,
-        flags: RECV,
-    },
-    GoDefinition {
-        name: "Mute",
-        dpt: DPT_SWITCH,
-        flags: RECV,
-    },
-    GoDefinition {
-        name: "Mute Status",
-        dpt: DPT_SWITCH,
-        flags: SEND,
-    },
-    GoDefinition {
-        name: "Mute Toggle",
-        dpt: DPT_SWITCH,
-        flags: RECV,
-    },
-    GoDefinition {
-        name: "Latency",
-        dpt: DPT_VALUE_1_UCOUNT,
-        flags: RECV,
-    },
-    GoDefinition {
-        name: "Latency Status",
-        dpt: DPT_VALUE_1_UCOUNT,
-        flags: SEND,
-    },
-    GoDefinition {
-        name: "Zone",
-        dpt: DPT_VALUE_1_UCOUNT,
-        flags: BIDIR,
-    },
-    GoDefinition {
-        name: "Zone Status",
-        dpt: DPT_VALUE_1_UCOUNT,
-        flags: SEND,
-    },
-    GoDefinition {
-        name: "Connected Status",
-        dpt: DPT_SWITCH,
-        flags: SEND,
-    },
+    go_recv(
+        "Volume",
+        "Lautstärke",
+        "Volume",
+        DPT_SCALING,
+        "DPST-5-1",
+        "1 Byte",
+    ),
+    go_send(
+        "Volume Status",
+        "Lautstärke Status",
+        "Volume Status",
+        DPT_SCALING,
+        "DPST-5-1",
+        "1 Byte",
+    ),
+    go_recv(
+        "Volume Dim",
+        "Lautstärke Dimmen",
+        "Volume Dim",
+        DPT_CONTROL_DIMMING,
+        "DPST-3-7",
+        "4 Bit",
+    ),
+    go_recv("Mute", "Stumm", "Mute", DPT_SWITCH, "DPST-1-1", "1 Bit"),
+    go_send(
+        "Mute Status",
+        "Stumm Status",
+        "Mute Status",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_recv(
+        "Mute Toggle",
+        "Stumm Umschalten",
+        "Mute Toggle",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_recv(
+        "Latency",
+        "Latenz",
+        "Latency",
+        DPT_VALUE_1_UCOUNT,
+        "DPST-5-10",
+        "1 Byte",
+    ),
+    go_send(
+        "Latency Status",
+        "Latenz Status",
+        "Latency Status",
+        DPT_VALUE_1_UCOUNT,
+        "DPST-5-10",
+        "1 Byte",
+    ),
+    go_bidir(
+        "Zone",
+        "Zonenzuordnung",
+        "Zone Assignment",
+        DPT_VALUE_1_UCOUNT,
+        "DPST-5-10",
+        "1 Byte",
+    ),
+    go_send(
+        "Zone Status",
+        "Zone Status",
+        "Zone Status",
+        DPT_VALUE_1_UCOUNT,
+        "DPST-5-10",
+        "1 Byte",
+    ),
+    go_send(
+        "Connected",
+        "Verbunden",
+        "Connected",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
 ];
 
 /// Compute the 1-based ASAP for a zone group object.
@@ -359,6 +520,105 @@ pub const CLIENT_GOS: &[GoDefinition] = &[
 pub const fn zone_asap(zone_index: usize, go_index: usize) -> u16 {
     ((zone_index - 1) * ZONE_GO_COUNT + go_index + 1) as u16
 }
+
+// ── Named GO indices (zone) ───────────────────────────────────
+// Use these instead of magic numbers when mapping GAs to GOs.
+
+/// Zone GO index.
+pub const ZGO_PLAY: usize = 0;
+/// Zone GO index.
+pub const ZGO_PAUSE: usize = 1;
+/// Zone GO index.
+pub const ZGO_STOP: usize = 2;
+/// Zone GO index.
+pub const ZGO_TRACK_NEXT: usize = 3;
+/// Zone GO index.
+pub const ZGO_TRACK_PREVIOUS: usize = 4;
+/// Zone GO index.
+pub const ZGO_VOLUME: usize = 5;
+/// Zone GO index.
+pub const ZGO_VOLUME_STATUS: usize = 6;
+/// Zone GO index.
+pub const ZGO_VOLUME_DIM: usize = 7;
+/// Zone GO index.
+pub const ZGO_MUTE: usize = 8;
+/// Zone GO index.
+pub const ZGO_MUTE_STATUS: usize = 9;
+/// Zone GO index.
+pub const ZGO_MUTE_TOGGLE: usize = 10;
+/// Zone GO index.
+pub const ZGO_CONTROL_STATUS: usize = 11;
+/// Zone GO index.
+pub const ZGO_TRACK_PLAYING: usize = 12;
+/// Zone GO index.
+pub const ZGO_SHUFFLE: usize = 13;
+/// Zone GO index.
+pub const ZGO_SHUFFLE_STATUS: usize = 14;
+/// Zone GO index.
+pub const ZGO_SHUFFLE_TOGGLE: usize = 15;
+/// Zone GO index.
+pub const ZGO_REPEAT: usize = 16;
+/// Zone GO index.
+pub const ZGO_REPEAT_STATUS: usize = 17;
+/// Zone GO index.
+pub const ZGO_REPEAT_TOGGLE: usize = 18;
+/// Zone GO index.
+pub const ZGO_TRACK_REPEAT: usize = 19;
+/// Zone GO index.
+pub const ZGO_TRACK_REPEAT_STATUS: usize = 20;
+/// Zone GO index.
+pub const ZGO_TRACK_REPEAT_TOGGLE: usize = 21;
+/// Zone GO index.
+pub const ZGO_PLAYLIST: usize = 22;
+/// Zone GO index.
+pub const ZGO_PLAYLIST_STATUS: usize = 23;
+/// Zone GO index.
+pub const ZGO_PLAYLIST_NEXT: usize = 24;
+/// Zone GO index.
+pub const ZGO_PLAYLIST_PREVIOUS: usize = 25;
+/// Zone GO index.
+pub const ZGO_TRACK_TITLE: usize = 26;
+/// Zone GO index.
+pub const ZGO_TRACK_ARTIST: usize = 27;
+/// Zone GO index.
+pub const ZGO_TRACK_ALBUM: usize = 28;
+/// Zone GO index.
+pub const ZGO_TRACK_PROGRESS: usize = 29;
+/// Zone GO index.
+pub const ZGO_PRESENCE: usize = 30;
+/// Zone GO index.
+pub const ZGO_PRESENCE_ENABLE: usize = 31;
+/// Zone GO index.
+pub const ZGO_PRESENCE_TIMEOUT: usize = 32;
+/// Zone GO index.
+pub const ZGO_PRESENCE_TIMER_ACTIVE: usize = 33;
+/// Zone GO index.
+pub const ZGO_PRESENCE_SOURCE_OVERRIDE: usize = 34;
+
+// ── Named GO indices (client) ─────────────────────────────────
+
+/// Client GO index.
+pub const CGO_VOLUME: usize = 0;
+/// Client GO index.
+pub const CGO_VOLUME_STATUS: usize = 1;
+/// Client GO index.
+pub const CGO_VOLUME_DIM: usize = 2;
+/// Client GO index.
+pub const CGO_MUTE: usize = 3;
+/// Client GO index.
+pub const CGO_MUTE_STATUS: usize = 4;
+/// Client GO index.
+pub const CGO_MUTE_TOGGLE: usize = 5;
+/// Client GO index.
+pub const CGO_LATENCY: usize = 6;
+/// Client GO index.
+pub const CGO_LATENCY_STATUS: usize = 7;
+/// Client GO index.
+pub const CGO_ZONE: usize = 8;
+/// Client GO index.
+pub const CGO_ZONE_STATUS: usize = 9;
+/// Client GO index.
+pub const CGO_CONNECTED: usize = 10;
 
 /// Compute the 1-based ASAP for a client group object.
 ///

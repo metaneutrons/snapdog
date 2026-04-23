@@ -5,3 +5,4 @@ edition = "2024"
 publish = false
 
 [dependencies]
+snapdog = { path = "../snapdog", default-features = false }

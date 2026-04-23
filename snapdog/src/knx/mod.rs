@@ -15,7 +15,7 @@ mod client;
 #[allow(dead_code)] // Wired up in Task 6
 mod device;
 #[allow(dead_code)]
-pub(crate) mod group_objects;
+pub mod group_objects;
 mod transport;
 
 use std::collections::HashMap;
