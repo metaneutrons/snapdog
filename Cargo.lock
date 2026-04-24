@@ -1910,7 +1910,7 @@ dependencies = [
 [[package]]
 name = "knx-core"
 version = "0.1.0"
-source = "git+https://github.com/metaneutrons/knx-rs?branch=main#a7dd4672bddb542d7f57af44eb05cd0f2cdd58bf"
+source = "git+https://github.com/metaneutrons/knx-rs?branch=main#81e3cdcd6a421ea928feec4026ef8b22b701d4a3"
 dependencies = [
  "libm",
 ]
@@ -1918,7 +1918,7 @@ dependencies = [
 [[package]]
 name = "knx-device"
 version = "0.1.0"
-source = "git+https://github.com/metaneutrons/knx-rs?branch=main#a7dd4672bddb542d7f57af44eb05cd0f2cdd58bf"
+source = "git+https://github.com/metaneutrons/knx-rs?branch=main#81e3cdcd6a421ea928feec4026ef8b22b701d4a3"
 dependencies = [
  "knx-core",
 ]
@@ -1926,7 +1926,7 @@ dependencies = [
 [[package]]
 name = "knx-ip"
 version = "0.1.0"
-source = "git+https://github.com/metaneutrons/knx-rs?branch=main#a7dd4672bddb542d7f57af44eb05cd0f2cdd58bf"
+source = "git+https://github.com/metaneutrons/knx-rs?branch=main#81e3cdcd6a421ea928feec4026ef8b22b701d4a3"
 dependencies = [
  "knx-core",
  "thiserror 2.0.18",

@@ -347,11 +347,11 @@ pub(crate) async fn start_device_transport(
     if let Some(ref path) = persist_path {
         match load_memory(path) {
             Ok(data) => {
-                if bau.restore(&data) {
+                if bau.restore(&data).is_ok() {
                     tracing::info!(
                         path = %path.display(),
-                        addr_table = ?bau.addr_table_object.load_state(),
-                        assoc_table = ?bau.assoc_table_object.load_state(),
+                        addr_table = ?bau.addr_table_object().load_state(),
+                        assoc_table = ?bau.assoc_table_object().load_state(),
                         "Restored ETS device state"
                     );
                 } else {
@@ -365,10 +365,7 @@ pub(crate) async fn start_device_transport(
         }
     }
 
-    let ets_programmed = matches!(
-        bau.addr_table_object.load_state(),
-        knx_device::table_object::LoadState::Loaded
-    );
+    let ets_programmed = bau.configured();
     if ets_programmed {
         tracing::info!("Using ETS-programmed group address tables (TOML KNX addresses ignored)");
         let ets = parse_ets_memory(bau.memory_area());
@@ -534,7 +531,7 @@ fn build_bau(ia: IndividualAddress, config: &crate::config::AppConfig) -> Bau {
     for zone in 1..=MAX_ZONES {
         for (i, go_def) in ZONE_GOS.iter().enumerate() {
             let asap = group_objects::zone_asap(zone, i);
-            if let Some(go) = bau.group_objects.get_mut(asap) {
+            if let Some(go) = bau.group_objects_mut().get_mut(asap) {
                 go.set_dpt(go_def.dpt);
             }
         }
@@ -544,7 +541,7 @@ fn build_bau(ia: IndividualAddress, config: &crate::config::AppConfig) -> Bau {
     for client in 1..=MAX_CLIENTS {
         for (i, go_def) in CLIENT_GOS.iter().enumerate() {
             let asap = group_objects::client_asap(client, i);
-            if let Some(go) = bau.group_objects.get_mut(asap) {
+            if let Some(go) = bau.group_objects_mut().get_mut(asap) {
                 go.set_dpt(go_def.dpt);
             }
         }
@@ -655,7 +652,7 @@ fn build_tables_from_config(bau: &mut Bau, config: &crate::config::AppConfig) {
     for ga in &unique_gas {
         addr_data.extend_from_slice(&ga.to_be_bytes());
     }
-    bau.address_table.load(&addr_data);
+    bau.address_table_mut().load(&addr_data);
 
     // Build association table: (TSAP, ASAP) pairs
     let mut assoc_data = Vec::new();
@@ -675,7 +672,7 @@ fn build_tables_from_config(bau: &mut Bau, config: &crate::config::AppConfig) {
         assoc_data.extend_from_slice(&tsap.to_be_bytes());
         assoc_data.extend_from_slice(&asap.to_be_bytes());
     }
-    bau.association_table.load(&assoc_data);
+    bau.association_table_mut().load(&assoc_data);
 
     tracing::info!(
         gas = unique_gas.len(),
@@ -694,15 +691,15 @@ async fn handle_write(
 ) {
     // Find the ASAP for this GA via the address table
     let ga_raw = ga.raw();
-    let Some(tsap) = bau.address_table.get_tsap(ga_raw) else {
+    let Some(tsap) = bau.address_table().get_tsap(ga_raw) else {
         // GA not in address table — can't map to a GO
         tracing::trace!(ga = %ga, "GA not in address table, skipping write");
         return;
     };
 
     // Find associated GO and write value
-    for asap in bau.association_table.asaps_for_tsap(tsap) {
-        if let Some(go) = bau.group_objects.get_mut(asap) {
+    for asap in bau.association_table().asaps_for_tsap(tsap) {
+        if let Some(go) = bau.group_objects_mut().get_mut(asap) {
             let _ = go.set_value_if_changed(value);
         }
     }
@@ -716,12 +713,12 @@ async fn handle_write(
 
 /// Check all GOs for Updated flag and forward to the listener channel.
 async fn dispatch_updated_gos(bau: &mut Bau, update_tx: &mpsc::Sender<(GroupAddress, Vec<u8>)>) {
-    while let Some(asap) = bau.group_objects.next_updated() {
+    while let Some(asap) = bau.group_objects_mut().next_updated() {
         if let Some(result) = resolve_go_update(bau, asap) {
             let _ = update_tx.send(result).await;
         }
         // Acknowledge the update
-        if let Some(go) = bau.group_objects.get_mut(asap) {
+        if let Some(go) = bau.group_objects_mut().get_mut(asap) {
             go.set_comm_flag(knx_device::group_object::ComFlag::Ok);
         }
     }
@@ -729,9 +726,9 @@ async fn dispatch_updated_gos(bau: &mut Bau, update_tx: &mpsc::Sender<(GroupAddr
 
 /// Find the next updated GO and return its GA + data.
 fn find_next_updated(bau: &mut Bau) -> Option<(GroupAddress, Vec<u8>)> {
-    let asap = bau.group_objects.next_updated()?;
+    let asap = bau.group_objects_mut().next_updated()?;
     let result = resolve_go_update(bau, asap);
-    if let Some(go) = bau.group_objects.get_mut(asap) {
+    if let Some(go) = bau.group_objects_mut().get_mut(asap) {
         go.set_comm_flag(knx_device::group_object::ComFlag::Ok);
     }
     result
@@ -739,10 +736,10 @@ fn find_next_updated(bau: &mut Bau) -> Option<(GroupAddress, Vec<u8>)> {
 
 /// Resolve an ASAP to (GroupAddress, data) via the association and address tables.
 fn resolve_go_update(bau: &Bau, asap: u16) -> Option<(GroupAddress, Vec<u8>)> {
-    let go = bau.group_objects.get(asap)?;
+    let go = bau.group_objects().get(asap)?;
     let data = go.value_ref().to_vec();
-    let tsap = bau.association_table.translate_asap(asap)?;
-    let ga_raw = bau.address_table.get_group_address(tsap)?;
+    let tsap = bau.association_table().translate_asap(asap)?;
+    let ga_raw = bau.address_table().get_group_address(tsap)?;
     Some((GroupAddress::from_raw(ga_raw), data))
 }
 
@@ -814,17 +811,17 @@ mod tests {
         let bau = build_bau(ia, &config);
 
         // Should have 5 unique GAs
-        assert_eq!(bau.address_table.entry_count(), 5);
+        assert_eq!(bau.address_table().entry_count(), 5);
 
         // Zone 1 Play (ASAP 1) should be mapped to GA 1/0/1
         let tsap = bau
-            .address_table
+            .address_table()
             .get_tsap(GroupAddress::from_str("1/0/1").unwrap().raw());
         assert!(tsap.is_some());
 
         // Client 1 Volume (ASAP 351) should be mapped to GA 2/0/1
         let tsap = bau
-            .address_table
+            .address_table()
             .get_tsap(GroupAddress::from_str("2/0/1").unwrap().raw());
         assert!(tsap.is_some());
     }
