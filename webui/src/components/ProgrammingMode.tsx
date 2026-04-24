@@ -66,14 +66,27 @@ export function ProgrammingMode() {
 
       {/* Confirmation dialog */}
       {confirming && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true">
-          <div className="bg-card border border-border rounded-lg shadow-lg p-6 max-w-sm mx-4 space-y-4">
-            <h2 className="text-sm font-semibold">
-              {t(confirming === "on" ? "confirmOn" : "confirmOff")}
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              {t(confirming === "on" ? "confirmOnDesc" : "confirmOffDesc")}
-            </p>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          role="dialog"
+          aria-modal="true"
+          onClick={cancel}
+          onKeyDown={(e) => { if (e.key === "Escape") cancel(); }}
+        >
+          <div className="bg-card border border-border rounded-lg shadow-lg p-6 max-w-sm mx-4 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start gap-3">
+              {confirming === "on" && (
+                <span className="text-amber-500 text-lg shrink-0" aria-hidden="true">⚠</span>
+              )}
+              <div className="space-y-2">
+                <h2 className="text-sm font-semibold">
+                  {t(confirming === "on" ? "confirmOn" : "confirmOff")}
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  {t(confirming === "on" ? "confirmOnDesc" : "confirmOffDesc")}
+                </p>
+              </div>
+            </div>
             <div className="flex justify-end gap-2">
               <Button variant="ghost" size="sm" onClick={cancel}>
                 {t("cancel")}
