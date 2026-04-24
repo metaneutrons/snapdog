@@ -153,12 +153,44 @@ use super::transport::KnxTransport;
 /// Parsed ETS parameters from BAU memory.
 #[derive(Debug, Default)]
 pub(crate) struct EtsParams {
+    // Numeric
     pub zone_active: [bool; MAX_ZONES],
+    pub zone_default_volume: [u8; MAX_ZONES],
     pub zone_max_volume: [u8; MAX_ZONES],
+    pub zone_airplay: [bool; MAX_ZONES],
+    pub zone_spotify: [bool; MAX_ZONES],
+    pub zone_presence_enabled: [bool; MAX_ZONES],
+    pub zone_presence_timeout: [u16; MAX_ZONES],
     pub client_active: [bool; MAX_CLIENTS],
-    pub client_max_volume: [u8; MAX_CLIENTS],
     pub client_default_zone: [u8; MAX_CLIENTS],
+    pub client_default_volume: [u8; MAX_CLIENTS],
+    pub client_max_volume: [u8; MAX_CLIENTS],
     pub client_default_latency: [u8; MAX_CLIENTS],
+    pub http_port: u16,
+    pub log_level: u8,
+    pub radio_active: [bool; mem::MAX_RADIOS],
+    // Strings
+    pub zone_names: [String; MAX_ZONES],
+    pub client_names: [String; MAX_CLIENTS],
+    pub client_macs: [String; MAX_CLIENTS],
+    pub subsonic_url: String,
+    pub subsonic_user: String,
+    pub subsonic_pass: String,
+    pub mqtt_broker: String,
+    pub mqtt_topic: String,
+    pub radio_names: [String; mem::MAX_RADIOS],
+    pub radio_urls: [String; mem::MAX_RADIOS],
+}
+
+/// Read a null-terminated or fixed-length string from a byte slice.
+fn read_string(data: &[u8], offset: usize, max_len: usize) -> String {
+    if offset + max_len > data.len() {
+        return String::new();
+    }
+    let bytes = &data[offset..offset + max_len];
+    // Find null terminator or use full length
+    let len = bytes.iter().position(|&b| b == 0).unwrap_or(max_len);
+    String::from_utf8_lossy(&bytes[..len]).into_owned()
 }
 
 /// Parse ETS parameters from BAU memory area.
@@ -167,15 +199,68 @@ pub(crate) fn parse_ets_memory(data: &[u8]) -> EtsParams {
     if data.len() < mem::TOTAL {
         return p;
     }
+    // Numeric — zones
     for i in 0..MAX_ZONES {
         p.zone_active[i] = data[mem::ZONE_ACTIVE + i] != 0;
+        p.zone_default_volume[i] = data[mem::ZONE_DEF_VOL + i];
         p.zone_max_volume[i] = data[mem::ZONE_MAX_VOL + i];
+        p.zone_airplay[i] = data[mem::ZONE_AIRPLAY + i] != 0;
+        p.zone_spotify[i] = data[mem::ZONE_SPOTIFY + i] != 0;
+        p.zone_presence_enabled[i] = data[mem::ZONE_PRESENCE_EN + i] != 0;
+        let to_off = mem::ZONE_PRESENCE_TO + i * 2;
+        p.zone_presence_timeout[i] = u16::from_le_bytes([data[to_off], data[to_off + 1]]);
     }
+    // Numeric — clients
     for i in 0..MAX_CLIENTS {
         p.client_active[i] = data[mem::CLIENT_ACTIVE + i] != 0;
-        p.client_max_volume[i] = data[mem::CLIENT_MAX_VOL + i];
         p.client_default_zone[i] = data[mem::CLIENT_DEF_ZONE + i];
+        p.client_default_volume[i] = data[mem::CLIENT_DEF_VOL + i];
+        p.client_max_volume[i] = data[mem::CLIENT_MAX_VOL + i];
         p.client_default_latency[i] = data[mem::CLIENT_DEF_LAT + i];
+    }
+    // Numeric — global
+    p.http_port =
+        u16::from_le_bytes([data[mem::GLOBAL_HTTP_PORT], data[mem::GLOBAL_HTTP_PORT + 1]]);
+    p.log_level = data[mem::GLOBAL_LOG_LVL];
+    for i in 0..mem::MAX_RADIOS {
+        p.radio_active[i] = data[mem::RADIO_ACTIVE + i] != 0;
+    }
+    // Strings
+    for i in 0..MAX_ZONES {
+        p.zone_names[i] = read_string(
+            data,
+            mem::ZONE_NAME + i * mem::ZONE_NAME_SIZE,
+            mem::ZONE_NAME_SIZE,
+        );
+    }
+    for i in 0..MAX_CLIENTS {
+        p.client_names[i] = read_string(
+            data,
+            mem::CLIENT_NAME + i * mem::CLIENT_NAME_SIZE,
+            mem::CLIENT_NAME_SIZE,
+        );
+        p.client_macs[i] = read_string(
+            data,
+            mem::CLIENT_MAC + i * mem::CLIENT_MAC_SIZE,
+            mem::CLIENT_MAC_SIZE,
+        );
+    }
+    p.subsonic_url = read_string(data, mem::GLOBAL_SUB_URL, mem::GLOBAL_SUB_URL_SIZE);
+    p.subsonic_user = read_string(data, mem::GLOBAL_SUB_USER, mem::GLOBAL_SUB_USER_SIZE);
+    p.subsonic_pass = read_string(data, mem::GLOBAL_SUB_PASS, mem::GLOBAL_SUB_PASS_SIZE);
+    p.mqtt_broker = read_string(data, mem::GLOBAL_MQTT_BROKER, mem::GLOBAL_MQTT_BROKER_SIZE);
+    p.mqtt_topic = read_string(data, mem::GLOBAL_MQTT_TOPIC, mem::GLOBAL_MQTT_TOPIC_SIZE);
+    for i in 0..mem::MAX_RADIOS {
+        p.radio_names[i] = read_string(
+            data,
+            mem::RADIO_NAME + i * mem::RADIO_NAME_SIZE,
+            mem::RADIO_NAME_SIZE,
+        );
+        p.radio_urls[i] = read_string(
+            data,
+            mem::RADIO_URL + i * mem::RADIO_URL_SIZE,
+            mem::RADIO_URL_SIZE,
+        );
     }
     p
 }
@@ -307,11 +392,22 @@ async fn bau_task(
     }
 
     // On first run (no ETS state), build tables from TOML config as fallback
-    if matches!(
+    let ets_programmed = matches!(
         bau.addr_table_object.load_state(),
         knx_device::table_object::LoadState::Loaded
-    ) {
+    );
+    if ets_programmed {
         tracing::info!("Using ETS-programmed group address tables (TOML KNX addresses ignored)");
+        // Apply ETS parameters as config overrides
+        let ets = parse_ets_memory(bau.memory_area());
+        tracing::info!(
+            zones = ets.zone_active.iter().filter(|&&a| a).count(),
+            clients = ets.client_active.iter().filter(|&&a| a).count(),
+            radios = ets.radio_active.iter().filter(|&&a| a).count(),
+            subsonic = !ets.subsonic_url.is_empty(),
+            mqtt = !ets.mqtt_broker.is_empty(),
+            "ETS parameters loaded"
+        );
     } else {
         tracing::info!("No ETS programming found — using group addresses from TOML config");
         build_tables_from_config(&mut bau, &config);
