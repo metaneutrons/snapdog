@@ -113,7 +113,8 @@ async fn start_device(
         .as_deref()
         .context("KNX device mode requires 'individual_address'")?;
 
-    let (pub_transport, listen_transport) = device::start_device_transport(addr, config).await?;
+    let (pub_transport, listen_transport, _ets_params) =
+        device::start_device_transport(addr, config).await?;
     let handle: DeviceControlHandle = std::sync::Arc::new(pub_transport.clone());
 
     spawn_bridge(

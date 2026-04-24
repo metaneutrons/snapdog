@@ -82,6 +82,19 @@
     "lost": "Verbindung verloren",
     "reconnecting": "Verbindung wird wiederhergestellt…"
   },
+  "knx": {
+    "progModeOn": "Programmiermodus aktivieren",
+    "progModeOff": "Programmiermodus deaktivieren",
+    "progActive": "Programmiermodus aktiv",
+    "progInactive": "Programmiermodus inaktiv",
+    "confirmOn": "Programmiermodus aktivieren?",
+    "confirmOnDesc": "Das Gerät wird für ETS sichtbar. Nur aktivieren, wenn Sie gerade programmieren.",
+    "confirmOff": "Programmiermodus deaktivieren?",
+    "confirmOffDesc": "ETS kann dieses Gerät nicht mehr über den Programmiermodus finden.",
+    "cancel": "Abbrechen",
+    "enable": "Aktivieren",
+    "disable": "Deaktivieren"
+  },
   "source": {
     "radio": "Radio",
     "subsonic_playlist": "Subsonic",

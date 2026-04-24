@@ -82,6 +82,19 @@
     "lost": "Connection Lost",
     "reconnecting": "Reconnecting…"
   },
+  "knx": {
+    "progModeOn": "Enable programming mode",
+    "progModeOff": "Disable programming mode",
+    "progActive": "Programming mode active",
+    "progInactive": "Programming mode inactive",
+    "confirmOn": "Enable Programming Mode?",
+    "confirmOnDesc": "The device will be discoverable by ETS. Only enable this when you are actively programming.",
+    "confirmOff": "Disable Programming Mode?",
+    "confirmOffDesc": "ETS will no longer be able to discover this device by programming mode.",
+    "cancel": "Cancel",
+    "enable": "Enable",
+    "disable": "Disable"
+  },
   "source": {
     "radio": "Radio",
     "subsonic_playlist": "Subsonic",

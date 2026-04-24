@@ -1,0 +1,94 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import { useTranslations } from "next-intl";
+import { api } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+
+/**
+ * Dezenter programming mode toggle in the toolbar.
+ * Shows a small indicator that glows red when active.
+ * Both enabling and disabling require confirmation.
+ */
+export function ProgrammingMode() {
+  const t = useTranslations("knx");
+  const [active, setActive] = useState(false);
+  const [confirming, setConfirming] = useState<"on" | "off" | null>(null);
+  const [available, setAvailable] = useState(true);
+
+  // Poll current state on mount
+  useEffect(() => {
+    api.knx.getProgrammingMode()
+      .then(setActive)
+      .catch(() => setAvailable(false));
+  }, []);
+
+  const toggle = useCallback(() => {
+    setConfirming(active ? "off" : "on");
+  }, [active]);
+
+  const confirm = useCallback(async () => {
+    const newState = confirming === "on";
+    try {
+      await api.knx.setProgrammingMode(newState);
+      setActive(newState);
+    } catch (e) {
+      console.error("Failed to set programming mode", e);
+    }
+    setConfirming(null);
+  }, [confirming]);
+
+  const cancel = useCallback(() => setConfirming(null), []);
+
+  if (!available) return null;
+
+  return (
+    <>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={toggle}
+        className={`relative px-2 py-1 text-xs font-mono transition-colors ${
+          active
+            ? "text-red-500 hover:text-red-600"
+            : "text-muted-foreground/50 hover:text-muted-foreground"
+        }`}
+        aria-label={t(active ? "progModeOff" : "progModeOn")}
+        title={t(active ? "progActive" : "progInactive")}
+      >
+        <span className="flex items-center gap-1">
+          {active && (
+            <span className="size-1.5 rounded-full bg-red-500 animate-pulse" aria-hidden="true" />
+          )}
+          PGM
+        </span>
+      </Button>
+
+      {/* Confirmation dialog */}
+      {confirming && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true">
+          <div className="bg-card border border-border rounded-lg shadow-lg p-6 max-w-sm mx-4 space-y-4">
+            <h2 className="text-sm font-semibold">
+              {t(confirming === "on" ? "confirmOn" : "confirmOff")}
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              {t(confirming === "on" ? "confirmOnDesc" : "confirmOffDesc")}
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" size="sm" onClick={cancel}>
+                {t("cancel")}
+              </Button>
+              <Button
+                variant={confirming === "on" ? "destructive" : "default"}
+                size="sm"
+                onClick={confirm}
+              >
+                {t(confirming === "on" ? "enable" : "disable")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}

@@ -326,7 +326,7 @@ pub(crate) struct DeviceListener {
 pub(crate) async fn start_device_transport(
     individual_address: &str,
     config: &crate::config::AppConfig,
-) -> Result<(DevicePublisher, DeviceListener)> {
+) -> Result<(DevicePublisher, DeviceListener, Option<EtsParams>)> {
     let ia = IndividualAddress::from_str(individual_address)
         .map_err(|e| anyhow::anyhow!("Invalid individual address: {e}"))?;
 
@@ -341,22 +341,64 @@ pub(crate) async fn start_device_transport(
         None
     };
 
+    // Build BAU and restore state before spawning the task
+    let mut bau = build_bau(ia, config);
+    let mut ets_params = None;
+
+    if let Some(ref path) = persist_path {
+        match load_memory(path) {
+            Ok(data) => {
+                if bau.restore(&data) {
+                    tracing::info!(
+                        path = %path.display(),
+                        addr_table = ?bau.addr_table_object.load_state(),
+                        assoc_table = ?bau.assoc_table_object.load_state(),
+                        "Restored ETS device state"
+                    );
+                } else {
+                    tracing::warn!(path = %path.display(), "ETS state restore failed — ETS will need to reprogram");
+                }
+            }
+            Err(e) if path.exists() => {
+                tracing::warn!(path = %path.display(), error = %e, "Discarding corrupted ETS memory file — ETS will need to reprogram");
+            }
+            Err(_) => {}
+        }
+    }
+
+    let ets_programmed = matches!(
+        bau.addr_table_object.load_state(),
+        knx_device::table_object::LoadState::Loaded
+    );
+    if ets_programmed {
+        tracing::info!("Using ETS-programmed group address tables (TOML KNX addresses ignored)");
+        let ets = parse_ets_memory(bau.memory_area());
+        tracing::info!(
+            zones = ets.zone_active.iter().filter(|&&a| a).count(),
+            clients = ets.client_active.iter().filter(|&&a| a).count(),
+            radios = ets.radio_active.iter().filter(|&&a| a).count(),
+            subsonic = !ets.subsonic_url.is_empty(),
+            mqtt = !ets.mqtt_broker.is_empty(),
+            "ETS parameters loaded"
+        );
+        ets_params = Some(ets);
+    } else {
+        tracing::info!("No ETS programming found — using group addresses from TOML config");
+        build_tables_from_config(&mut bau, config);
+    }
+
     let (cmd_tx, cmd_rx) = mpsc::channel(BAU_CHANNEL_CAPACITY);
     let (update_tx, update_rx) = mpsc::channel(BAU_CHANNEL_CAPACITY);
 
-    let config_arc = std::sync::Arc::new(config.clone());
-    tokio::spawn(bau_task(
-        ia,
-        config_arc,
-        server,
-        cmd_rx,
-        update_tx,
-        persist_path,
-    ));
+    tokio::spawn(bau_task_loop(bau, server, cmd_rx, update_tx, persist_path));
 
     tracing::info!(%individual_address, persist, "KNX device mode started");
 
-    Ok((DevicePublisher { cmd_tx }, DeviceListener { update_rx }))
+    Ok((
+        DevicePublisher { cmd_tx },
+        DeviceListener { update_rx },
+        ets_params,
+    ))
 }
 
 impl KnxTransport for DevicePublisher {
@@ -389,60 +431,13 @@ impl KnxTransport for DeviceListener {
 
 // ── BAU task ──────────────────────────────────────────────────
 
-async fn bau_task(
-    ia: IndividualAddress,
-    config: std::sync::Arc<crate::config::AppConfig>,
+async fn bau_task_loop(
+    mut bau: Bau,
     mut server: DeviceServer,
     mut cmd_rx: mpsc::Receiver<BauCmd>,
     update_tx: mpsc::Sender<(GroupAddress, Vec<u8>)>,
     persist_path: Option<PathBuf>,
 ) {
-    let mut bau = build_bau(ia, &config);
-
-    // Restore persisted ETS device state if available
-    if let Some(ref path) = persist_path {
-        match load_memory(path) {
-            Ok(data) => {
-                if bau.restore(&data) {
-                    tracing::info!(
-                        path = %path.display(),
-                        addr_table = ?bau.addr_table_object.load_state(),
-                        assoc_table = ?bau.assoc_table_object.load_state(),
-                        "Restored ETS device state"
-                    );
-                } else {
-                    tracing::warn!(path = %path.display(), "ETS state restore failed — ETS will need to reprogram");
-                }
-            }
-            Err(e) if path.exists() => {
-                tracing::warn!(path = %path.display(), error = %e, "Discarding corrupted ETS memory file — ETS will need to reprogram");
-            }
-            Err(_) => {} // file doesn't exist — first run
-        }
-    }
-
-    // On first run (no ETS state), build tables from TOML config as fallback
-    let ets_programmed = matches!(
-        bau.addr_table_object.load_state(),
-        knx_device::table_object::LoadState::Loaded
-    );
-    if ets_programmed {
-        tracing::info!("Using ETS-programmed group address tables (TOML KNX addresses ignored)");
-        // Apply ETS parameters as config overrides
-        let ets = parse_ets_memory(bau.memory_area());
-        tracing::info!(
-            zones = ets.zone_active.iter().filter(|&&a| a).count(),
-            clients = ets.client_active.iter().filter(|&&a| a).count(),
-            radios = ets.radio_active.iter().filter(|&&a| a).count(),
-            subsonic = !ets.subsonic_url.is_empty(),
-            mqtt = !ets.mqtt_broker.is_empty(),
-            "ETS parameters loaded"
-        );
-    } else {
-        tracing::info!("No ETS programming found — using group addresses from TOML config");
-        build_tables_from_config(&mut bau, &config);
-    }
-
     let mut memory_dirty = false;
     let persist_timer = tokio::time::sleep(ETS_PERSIST_DEBOUNCE);
     tokio::pin!(persist_timer);
