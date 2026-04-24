@@ -29,8 +29,16 @@ fn now_ms() -> u64 {
         .as_millis() as u64
 }
 
-/// KNX device serial number (OpenKNX manufacturer prefix 0xFA).
-const DEVICE_SERIAL: [u8; 6] = [0x00, 0xFA, 0x01, 0x02, 0x03, 0x04];
+/// KNX device serial number: manufacturer prefix (0x00FA) + last 4 bytes of host MAC.
+/// Unique per host, no configuration needed.
+fn device_serial() -> [u8; 6] {
+    let mac = mac_address::get_mac_address()
+        .ok()
+        .flatten()
+        .map(|m| m.bytes())
+        .unwrap_or([0x01, 0x02, 0x03, 0x04, 0x05, 0x06]);
+    [0x00, 0xFA, mac[2], mac[3], mac[4], mac[5]]
+}
 
 /// Maximum concurrent KNXnet/IP tunnelling connections.
 const MAX_TUNNEL_CONNECTIONS: usize = 1;
@@ -502,7 +510,7 @@ async fn bau_task(
 /// and address/association tables from TOML config.
 fn build_bau(ia: IndividualAddress, config: &crate::config::AppConfig) -> Bau {
     let device = device_object::new_device_object(
-        DEVICE_SERIAL,
+        device_serial(),
         [0x00; 6], // hardware type
     );
     let mut bau = Bau::new(device, TOTAL_GO_COUNT as u16, MAX_TUNNEL_CONNECTIONS);
