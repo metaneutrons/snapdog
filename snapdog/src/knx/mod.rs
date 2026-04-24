@@ -37,16 +37,30 @@ use transport::KnxTransport;
 // ── Start ─────────────────────────────────────────────────────
 
 /// Start the KNX bridge in the configured mode (client or device).
+/// Handle for KNX device management (programming mode, etc.).
+/// Only available in device mode.
+pub type DeviceControlHandle = std::sync::Arc<device::DevicePublisher>;
+
+/// Re-export the device control trait for use by API routes.
+pub use transport::KnxDeviceControl;
+
+/// Start the KNX bridge. Returns a device control handle in device mode.
 pub async fn start(
     config: &AppConfig,
     store: state::SharedState,
     notify_rx: tokio::sync::broadcast::Receiver<crate::api::ws::Notification>,
     zone_commands: HashMap<usize, ZoneCommandSender>,
     snap_tx: tokio::sync::mpsc::Sender<SnapcastCmd>,
-) -> Result<()> {
+) -> Result<Option<DeviceControlHandle>> {
     match config.knx.mode.as_str() {
-        "client" => start_client(config, store, notify_rx, zone_commands, snap_tx).await,
-        "device" => start_device(config, store, notify_rx, zone_commands, snap_tx).await,
+        "client" => {
+            start_client(config, store, notify_rx, zone_commands, snap_tx).await?;
+            Ok(None)
+        }
+        "device" => {
+            let handle = start_device(config, store, notify_rx, zone_commands, snap_tx).await?;
+            Ok(Some(handle))
+        }
         other => anyhow::bail!("Unknown KNX mode '{other}'"),
     }
 }
@@ -92,7 +106,7 @@ async fn start_device(
     notify_rx: tokio::sync::broadcast::Receiver<crate::api::ws::Notification>,
     zone_commands: HashMap<usize, ZoneCommandSender>,
     snap_tx: tokio::sync::mpsc::Sender<SnapcastCmd>,
-) -> Result<()> {
+) -> Result<DeviceControlHandle> {
     let addr = config
         .knx
         .individual_address
@@ -100,6 +114,7 @@ async fn start_device(
         .context("KNX device mode requires 'individual_address'")?;
 
     let (pub_transport, listen_transport) = device::start_device_transport(addr, config).await?;
+    let handle: DeviceControlHandle = std::sync::Arc::new(pub_transport.clone());
 
     spawn_bridge(
         pub_transport,
@@ -110,7 +125,7 @@ async fn start_device(
         zone_commands,
         snap_tx,
     );
-    Ok(())
+    Ok(handle)
 }
 
 fn spawn_bridge(

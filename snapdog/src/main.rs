@@ -204,6 +204,26 @@ async fn main() -> Result<()> {
     })
     .await?;
 
+    // ── KNX bridge ────────────────────────────────────────────
+    let mut knx_device_control: Option<knx::DeviceControlHandle> = None;
+    if config.knx.enabled {
+        let knx_notifications = notify_tx.subscribe();
+        match knx::start(
+            &config,
+            store.clone(),
+            knx_notifications,
+            zone_commands.clone(),
+            snap_cmd_tx.clone(),
+        )
+        .await
+        {
+            Ok(handle) => {
+                knx_device_control = handle;
+            }
+            Err(e) => tracing::warn!(error = %e, "KNX connection failed — running without KNX"),
+        }
+    }
+
     // ── API server ────────────────────────────────────────────
     let api_config = (*config).clone();
     let api_store = store.clone();
@@ -220,6 +240,7 @@ async fn main() -> Result<()> {
             api_covers,
             api_notify,
             eq_store.clone(),
+            knx_device_control,
         )
         .await
         {
@@ -244,23 +265,6 @@ async fn main() -> Result<()> {
     } else {
         None
     };
-
-    // ── KNX bridge ────────────────────────────────────────────
-    if config.knx.enabled {
-        let knx_notifications = notify_tx.subscribe();
-        match knx::start(
-            &config,
-            store.clone(),
-            knx_notifications,
-            zone_commands.clone(),
-            snap_cmd_tx.clone(),
-        )
-        .await
-        {
-            Ok(()) => {}
-            Err(e) => tracing::warn!(error = %e, "KNX connection failed — running without KNX"),
-        }
-    }
 
     // ── Main loop ─────────────────────────────────────────────
     let mqtt_zone_cmds = zone_commands.clone();

@@ -282,17 +282,39 @@ enum BauCmd {
         value: DptValue,
     },
     /// Poll for the next group object updated from the bus.
-    /// Returns (GroupAddress, raw_data) or None.
     NextUpdated {
         reply: oneshot::Sender<Option<(GroupAddress, Vec<u8>)>>,
     },
     /// Process an incoming CEMI frame from the server.
     ProcessFrame { frame: knx_core::cemi::CemiFrame },
+    /// Set programming mode on/off.
+    SetProgMode { enabled: bool },
+    /// Get current programming mode state.
+    GetProgMode { reply: oneshot::Sender<bool> },
 }
 
 /// Device-mode publisher: sends values to the BAU task.
-pub(crate) struct DevicePublisher {
+#[derive(Clone)]
+pub struct DevicePublisher {
     cmd_tx: mpsc::Sender<BauCmd>,
+}
+
+impl DevicePublisher {
+    async fn send_cmd(&self, cmd: BauCmd) {
+        let _ = self.cmd_tx.send(cmd).await;
+    }
+}
+
+impl super::transport::KnxDeviceControl for DevicePublisher {
+    async fn set_prog_mode(&self, enabled: bool) {
+        self.send_cmd(BauCmd::SetProgMode { enabled }).await;
+    }
+
+    async fn get_prog_mode(&self) -> bool {
+        let (tx, rx) = oneshot::channel();
+        self.send_cmd(BauCmd::GetProgMode { reply: tx }).await;
+        rx.await.unwrap_or(false)
+    }
 }
 
 /// Device-mode listener: receives group object updates from the BAU task.
@@ -466,9 +488,16 @@ async fn bau_task(
                         dispatch_updated_gos(&mut bau, &update_tx).await;
                     }
                     BauCmd::NextUpdated { reply } => {
-                        // Direct poll — used if needed
                         let result = find_next_updated(&mut bau);
                         let _ = reply.send(result);
+                    }
+                    BauCmd::SetProgMode { enabled } => {
+                        knx_device::device_object::set_prog_mode(bau.device_mut(), enabled);
+                        tracing::info!(enabled, "KNX programming mode changed");
+                    }
+                    BauCmd::GetProgMode { reply } => {
+                        let enabled = knx_device::device_object::prog_mode(bau.device());
+                        let _ = reply.send(enabled);
                     }
                 }
             }
