@@ -8,26 +8,39 @@ use knx_core::dpt::{Dpt, DptValue};
 use knx_ip::multiplex::MultiplexHandle;
 use knx_ip::ops::GroupOps;
 
-use super::transport::KnxTransport;
+use super::transport::{KnxListener, KnxPublisher};
 
-/// KNX transport backed by a `MultiplexHandle` (tunnel or router client).
-pub(crate) struct ClientTransport {
+/// Client-mode publisher: sends group writes via a `MultiplexHandle`.
+pub(crate) struct ClientPublisher {
     handle: MultiplexHandle,
 }
 
-impl ClientTransport {
+impl ClientPublisher {
     pub(crate) fn new(handle: MultiplexHandle) -> Self {
         Self { handle }
     }
 }
 
-impl KnxTransport for ClientTransport {
+impl KnxPublisher for ClientPublisher {
     async fn write(&self, ga: GroupAddress, dpt: Dpt, value: &DptValue) {
         if let Err(e) = self.handle.group_write_value(ga, dpt, value).await {
             tracing::warn!(ga = %ga, error = %e, "KNX write failed");
         }
     }
+}
 
+/// Client-mode listener: receives group writes via a `MultiplexHandle`.
+pub(crate) struct ClientListener {
+    handle: MultiplexHandle,
+}
+
+impl ClientListener {
+    pub(crate) fn new(handle: MultiplexHandle) -> Self {
+        Self { handle }
+    }
+}
+
+impl KnxListener for ClientListener {
     async fn recv_group_write(&mut self) -> Option<(GroupAddress, Vec<u8>)> {
         loop {
             let cemi = self.handle.recv().await?;

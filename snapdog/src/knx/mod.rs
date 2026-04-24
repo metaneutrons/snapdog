@@ -9,7 +9,7 @@
 //!
 //! Transport-agnostic: both client mode (gateway connection) and device mode
 //! (ETS-programmable KNX/IP device) share the same publisher/listener logic
-//! via the [`KnxTransport`] trait.
+//! via the [`KnxPublisher`] and [`KnxListener`] traits.
 
 mod client;
 #[allow(dead_code)] // Used at runtime in device mode (config.knx.mode = "device")
@@ -32,7 +32,7 @@ use crate::player::{ClientAction, SnapcastCmd, ZoneCommand, ZoneCommandSender};
 use crate::state;
 
 use group_objects::DPT_CONTROL_DIMMING;
-use transport::KnxTransport;
+use transport::{KnxListener, KnxPublisher};
 
 // ── Start ─────────────────────────────────────────────────────
 
@@ -84,8 +84,8 @@ async fn start_client(
     tracing::info!(%url, "KNX client connected");
 
     let mux = knx_ip::Multiplexer::new(conn);
-    let pub_transport = client::ClientTransport::new(mux.handle());
-    let listen_transport = client::ClientTransport::new(mux.handle());
+    let pub_transport = client::ClientPublisher::new(mux.handle());
+    let listen_transport = client::ClientListener::new(mux.handle());
     tokio::spawn(mux.run());
 
     spawn_bridge(
@@ -130,8 +130,8 @@ async fn start_device(
 }
 
 fn spawn_bridge(
-    pub_transport: impl KnxTransport + 'static,
-    listen_transport: impl KnxTransport + 'static,
+    pub_transport: impl KnxPublisher + 'static,
+    listen_transport: impl KnxListener + 'static,
     config: &AppConfig,
     store: state::SharedState,
     notify_rx: tokio::sync::broadcast::Receiver<crate::api::ws::Notification>,
@@ -160,7 +160,7 @@ fn spawn_bridge(
 // ── Publisher ─────────────────────────────────────────────────
 
 async fn publisher(
-    transport: impl KnxTransport,
+    transport: impl KnxPublisher,
     config: AppConfig,
     store: state::SharedState,
     mut notify_rx: tokio::sync::broadcast::Receiver<crate::api::ws::Notification>,
@@ -193,7 +193,7 @@ async fn publish_zone_state(
     zone_index: usize,
     config: &AppConfig,
     store: &state::SharedState,
-    transport: &impl KnxTransport,
+    transport: &impl KnxPublisher,
 ) {
     let s = store.read().await;
     let Some(zone) = s.zones.get(&zone_index) else {
@@ -262,7 +262,7 @@ async fn publish_zone_track(
     zone_index: usize,
     config: &AppConfig,
     store: &state::SharedState,
-    transport: &impl KnxTransport,
+    transport: &impl KnxPublisher,
 ) {
     let s = store.read().await;
     let Some(zone) = s.zones.get(&zone_index) else {
@@ -321,7 +321,7 @@ async fn publish_zone_progress(
     zone_index: usize,
     config: &AppConfig,
     store: &state::SharedState,
-    transport: &impl KnxTransport,
+    transport: &impl KnxPublisher,
 ) {
     let s = store.read().await;
     let Some(zone) = s.zones.get(&zone_index) else {
@@ -340,7 +340,7 @@ async fn publish_client_state(
     client_index: usize,
     config: &AppConfig,
     store: &state::SharedState,
-    transport: &impl KnxTransport,
+    transport: &impl KnxPublisher,
 ) {
     let s = store.read().await;
     let Some(client) = s.clients.get(&client_index) else {
@@ -389,7 +389,7 @@ async fn publish_client_state(
 // ── Listener ──────────────────────────────────────────────────
 
 async fn listener(
-    mut transport: impl KnxTransport,
+    mut transport: impl KnxListener,
     config: AppConfig,
     store: state::SharedState,
     zone_commands: HashMap<usize, ZoneCommandSender>,
@@ -632,7 +632,7 @@ fn decode_dim(payload: &[u8]) -> Option<i32> {
 
 // ── Write helper ──────────────────────────────────────────────
 
-async fn write(transport: &impl KnxTransport, ga_str: &str, dpt: Dpt, value: &DptValue) {
+async fn write(transport: &impl KnxPublisher, ga_str: &str, dpt: Dpt, value: &DptValue) {
     let ga = match GroupAddress::from_str(ga_str) {
         Ok(ga) => ga,
         Err(e) => {

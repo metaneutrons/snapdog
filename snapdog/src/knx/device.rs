@@ -156,7 +156,6 @@ use super::group_objects::{
     ZGO_TRACK_REPEAT_TOGGLE, ZGO_TRACK_TITLE, ZGO_VOLUME, ZGO_VOLUME_DIM, ZGO_VOLUME_STATUS,
     ZONE_GOS,
 };
-use super::transport::KnxTransport;
 
 /// Parsed ETS parameters from BAU memory.
 #[derive(Debug, Default)]
@@ -401,7 +400,7 @@ pub(crate) async fn start_device_transport(
     ))
 }
 
-impl KnxTransport for DevicePublisher {
+impl super::transport::KnxPublisher for DevicePublisher {
     async fn write(&self, ga: GroupAddress, dpt: Dpt, value: &DptValue) {
         let _ = self
             .cmd_tx
@@ -412,18 +411,9 @@ impl KnxTransport for DevicePublisher {
             })
             .await;
     }
-
-    async fn recv_group_write(&mut self) -> Option<(GroupAddress, Vec<u8>)> {
-        // Publisher doesn't receive — block forever
-        std::future::pending().await
-    }
 }
 
-impl KnxTransport for DeviceListener {
-    async fn write(&self, _ga: GroupAddress, _dpt: Dpt, _value: &DptValue) {
-        // Listener doesn't write
-    }
-
+impl super::transport::KnxListener for DeviceListener {
     async fn recv_group_write(&mut self) -> Option<(GroupAddress, Vec<u8>)> {
         self.update_rx.recv().await
     }
