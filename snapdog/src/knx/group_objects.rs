@@ -660,8 +660,58 @@ pub mod mem {
     pub const GLOBAL_LOG_LVL: usize = GLOBAL_HTTP_PORT + 2;
     /// Radio station active flags (20 × 1 byte).
     pub const RADIO_ACTIVE: usize = GLOBAL_LOG_LVL + 1;
-    /// Total memory size in bytes.
-    pub const TOTAL: usize = RADIO_ACTIVE + 20;
+
+    // ── String parameters (after numeric block) ───────────────
+
+    /// Maximum radio stations.
+    pub const MAX_RADIOS: usize = 20;
+
+    /// End of numeric parameters.
+    const NUMERIC_END: usize = RADIO_ACTIVE + MAX_RADIOS;
+
+    /// Zone names (10 × 20 bytes).
+    pub const ZONE_NAME: usize = NUMERIC_END;
+    /// Zone name size in bytes.
+    pub const ZONE_NAME_SIZE: usize = 20;
+    /// Client names (10 × 20 bytes).
+    pub const CLIENT_NAME: usize = ZONE_NAME + MAX_ZONES * ZONE_NAME_SIZE;
+    /// Client name size in bytes.
+    pub const CLIENT_NAME_SIZE: usize = 20;
+    /// Client MAC addresses (10 × 17 bytes).
+    pub const CLIENT_MAC: usize = CLIENT_NAME + MAX_CLIENTS * CLIENT_NAME_SIZE;
+    /// Client MAC size in bytes.
+    pub const CLIENT_MAC_SIZE: usize = 17;
+    /// Subsonic URL (60 bytes).
+    pub const GLOBAL_SUB_URL: usize = CLIENT_MAC + MAX_CLIENTS * CLIENT_MAC_SIZE;
+    /// Subsonic URL size in bytes.
+    pub const GLOBAL_SUB_URL_SIZE: usize = 60;
+    /// Subsonic user (20 bytes).
+    pub const GLOBAL_SUB_USER: usize = GLOBAL_SUB_URL + GLOBAL_SUB_URL_SIZE;
+    /// Subsonic user size in bytes.
+    pub const GLOBAL_SUB_USER_SIZE: usize = 20;
+    /// Subsonic password (20 bytes).
+    pub const GLOBAL_SUB_PASS: usize = GLOBAL_SUB_USER + GLOBAL_SUB_USER_SIZE;
+    /// Subsonic password size in bytes.
+    pub const GLOBAL_SUB_PASS_SIZE: usize = 20;
+    /// MQTT broker (40 bytes).
+    pub const GLOBAL_MQTT_BROKER: usize = GLOBAL_SUB_PASS + GLOBAL_SUB_PASS_SIZE;
+    /// MQTT broker size in bytes.
+    pub const GLOBAL_MQTT_BROKER_SIZE: usize = 40;
+    /// MQTT base topic (20 bytes).
+    pub const GLOBAL_MQTT_TOPIC: usize = GLOBAL_MQTT_BROKER + GLOBAL_MQTT_BROKER_SIZE;
+    /// MQTT base topic size in bytes.
+    pub const GLOBAL_MQTT_TOPIC_SIZE: usize = 20;
+    /// Radio station names (20 × 20 bytes).
+    pub const RADIO_NAME: usize = GLOBAL_MQTT_TOPIC + GLOBAL_MQTT_TOPIC_SIZE;
+    /// Radio name size in bytes.
+    pub const RADIO_NAME_SIZE: usize = 20;
+    /// Radio station URLs (20 × 80 bytes).
+    pub const RADIO_URL: usize = RADIO_NAME + MAX_RADIOS * RADIO_NAME_SIZE;
+    /// Radio URL size in bytes.
+    pub const RADIO_URL_SIZE: usize = 80;
+
+    /// Total memory size in bytes (numeric + strings).
+    pub const TOTAL: usize = RADIO_URL + MAX_RADIOS * RADIO_URL_SIZE;
 }
 
 /// Compute the 1-based ASAP for a client group object.

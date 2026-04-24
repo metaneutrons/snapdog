@@ -532,42 +532,7 @@ fn write_parameters(x: &mut String) {
         );
     }
 
-    // ── Text parameters (not memory-backed, ETS-only) ─────────
-    for z in 1..=MAX_ZONES {
-        param_text(
-            x,
-            &format!("Z{z:02}"),
-            "000",
-            "Name",
-            "Name",
-            "Zonenname",
-            &format!("Zone {z}"),
-        );
-    }
-    for c in 1..=MAX_CLIENTS {
-        param_text(
-            x,
-            &format!("C{c:02}"),
-            "000",
-            "Name",
-            "Name",
-            "Clientname",
-            &format!("Client {c}"),
-        );
-    }
-    for c in 1..=MAX_CLIENTS {
-        param_text(
-            x,
-            &format!("C{c:02}"),
-            "010",
-            "MAC",
-            "MAC",
-            "MAC-Adresse",
-            "",
-        );
-    }
-
-    // ── Global parameters ─────────────────────────────────────
+    // ── Global numeric parameters ───────────────────────────────
     param_mem(
         x,
         "G",
@@ -590,11 +555,101 @@ fn write_parameters(x: &mut String) {
         &mut off,
         8,
     );
-    param_text(x, "G", "010", "SubURL", "Text60", "Subsonic URL", "");
-    param_text(x, "G", "011", "SubUser", "Text20", "Subsonic Benutzer", "");
-    param_text(x, "G", "012", "SubPass", "Text20", "Subsonic Passwort", "");
-    param_text(x, "G", "013", "MqttBrk", "Text40", "MQTT Broker", "");
-    param_text(
+
+    // ── Radio active flags (numeric, 20 × 1 byte) ────────────
+    for r in 1..=mem::MAX_RADIOS {
+        let p = format!("R{r:02}");
+        param_mem(x, &p, "002", "Active", "YesNo", "Aktiv", "0", &mut off, 8);
+    }
+
+    // ── String parameters (order matches mem:: layout) ────────
+    for z in 1..=MAX_ZONES {
+        let p = format!("Z{z:02}");
+        param_mem(
+            x,
+            &p,
+            "000",
+            "Name",
+            "Name",
+            "Zonenname",
+            &format!("Zone {z}"),
+            &mut off,
+            mem::ZONE_NAME_SIZE as u16 * 8,
+        );
+    }
+    for c in 1..=MAX_CLIENTS {
+        let p = format!("C{c:02}");
+        param_mem(
+            x,
+            &p,
+            "000",
+            "Name",
+            "Name",
+            "Clientname",
+            &format!("Client {c}"),
+            &mut off,
+            mem::CLIENT_NAME_SIZE as u16 * 8,
+        );
+    }
+    for c in 1..=MAX_CLIENTS {
+        let p = format!("C{c:02}");
+        param_mem(
+            x,
+            &p,
+            "010",
+            "MAC",
+            "MAC",
+            "MAC-Adresse",
+            "",
+            &mut off,
+            mem::CLIENT_MAC_SIZE as u16 * 8,
+        );
+    }
+    param_mem(
+        x,
+        "G",
+        "010",
+        "SubURL",
+        "Text60",
+        "Subsonic URL",
+        "",
+        &mut off,
+        mem::GLOBAL_SUB_URL_SIZE as u16 * 8,
+    );
+    param_mem(
+        x,
+        "G",
+        "011",
+        "SubUser",
+        "Text20",
+        "Subsonic Benutzer",
+        "",
+        &mut off,
+        mem::GLOBAL_SUB_USER_SIZE as u16 * 8,
+    );
+    param_mem(
+        x,
+        "G",
+        "012",
+        "SubPass",
+        "Text20",
+        "Subsonic Passwort",
+        "",
+        &mut off,
+        mem::GLOBAL_SUB_PASS_SIZE as u16 * 8,
+    );
+    param_mem(
+        x,
+        "G",
+        "013",
+        "MqttBrk",
+        "Text40",
+        "MQTT Broker",
+        "",
+        &mut off,
+        mem::GLOBAL_MQTT_BROKER_SIZE as u16 * 8,
+    );
+    param_mem(
         x,
         "G",
         "014",
@@ -602,14 +657,36 @@ fn write_parameters(x: &mut String) {
         "Text20",
         "MQTT Base Topic",
         "snapdog",
+        &mut off,
+        mem::GLOBAL_MQTT_TOPIC_SIZE as u16 * 8,
     );
-
-    // ── Radio stations ────────────────────────────────────────
-    for r in 1..=20usize {
+    for r in 1..=mem::MAX_RADIOS {
         let p = format!("R{r:02}");
-        param_text(x, &p, "000", "Name", "Text20", "Stationsname", "");
-        param_text(x, &p, "001", "URL", "Text80", "Stream URL", "");
-        param_mem(x, &p, "002", "Active", "YesNo", "Aktiv", "0", &mut off, 8);
+        param_mem(
+            x,
+            &p,
+            "000",
+            "Name",
+            "Text20",
+            "Stationsname",
+            "",
+            &mut off,
+            mem::RADIO_NAME_SIZE as u16 * 8,
+        );
+    }
+    for r in 1..=mem::MAX_RADIOS {
+        let p = format!("R{r:02}");
+        param_mem(
+            x,
+            &p,
+            "001",
+            "URL",
+            "Text80",
+            "Stream URL",
+            "",
+            &mut off,
+            mem::RADIO_URL_SIZE as u16 * 8,
+        );
     }
 
     w(x, "            </Parameters>");
@@ -652,24 +729,6 @@ fn param_mem(
     );
     w(x, "              </Union>");
     *offset += bytes;
-}
-
-/// Emit a text parameter (not memory-backed).
-fn param_text(
-    x: &mut String,
-    prefix: &str,
-    num: &str,
-    name: &str,
-    pt: &str,
-    text: &str,
-    default: &str,
-) {
-    w(
-        x,
-        &format!(
-            r#"              <Parameter Id="{AID}_P-{prefix}{num}" Name="{prefix}_{name}" ParameterType="{AID}_PT-{pt}" Text="{text}" Value="{default}" />"#
-        ),
-    );
 }
 
 fn write_com_objects(x: &mut String) {
