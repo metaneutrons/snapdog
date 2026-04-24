@@ -46,22 +46,22 @@ export function ProgrammingMode() {
     <>
       <Button
         variant="ghost"
-        size="sm"
+        size="icon"
         onClick={toggle}
-        className={`relative px-2 py-1 text-xs font-mono transition-colors ${
+        className={`size-7 rounded-full transition-colors ${
           active
             ? "text-red-500 hover:text-red-600"
-            : "text-muted-foreground/50 hover:text-muted-foreground"
+            : "text-muted-foreground/30 hover:text-muted-foreground/50"
         }`}
         aria-label={t(active ? "progModeOff" : "progModeOn")}
         title={t(active ? "progActive" : "progInactive")}
       >
-        <span className="flex items-center gap-1">
-          {active && (
-            <span className="size-1.5 rounded-full bg-red-500 animate-pulse" aria-hidden="true" />
-          )}
-          PGM
-        </span>
+        <span
+          className={`size-2 rounded-full ${
+            active ? "bg-red-500 animate-pulse" : "bg-current"
+          }`}
+          aria-hidden="true"
+        />
       </Button>
 
       {/* Confirmation dialog */}
