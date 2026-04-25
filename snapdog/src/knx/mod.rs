@@ -12,7 +12,7 @@
 //! via the [`KnxPublisher`] and [`KnxListener`] traits.
 
 mod client;
-#[allow(dead_code)] // Used at runtime in device mode (config.knx.mode = "device")
+#[allow(dead_code)] // BauCmd variants used only in device mode at runtime
 mod device;
 pub mod group_objects;
 mod transport;

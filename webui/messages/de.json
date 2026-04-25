@@ -68,7 +68,8 @@
   "playlist": {
     "loading": "Wiedergabelisten werden geladen…",
     "empty": "Keine Wiedergabelisten verfügbar",
-    "play": "{name} abspielen"
+    "play": "{name} abspielen",
+    "tracks": "{count, plural, one {# track} other {# tracks}}"
   },
   "auth": {
     "title": "Authentifizierung erforderlich",

@@ -24,7 +24,8 @@
   "volume": {
     "label": "Volumen",
     "mute": "Silenciar",
-    "unmute": "Activar sonido"
+    "unmute": "Activar sonido",
+    "maxVolume": "Maximum volume: {max}%"
   },
   "seek": {
     "label": "Buscar"
@@ -67,7 +68,8 @@
   "playlist": {
     "loading": "Cargando listas de reproducción…",
     "empty": "No hay listas de reproducción disponibles",
-    "play": "Reproducir {name}"
+    "play": "Reproducir {name}",
+    "tracks": "{count, plural, one {# track} other {# tracks}}"
   },
   "auth": {
     "title": "Autenticación requerida",
@@ -76,6 +78,19 @@
     "submit": "Autenticar",
     "checking": "Verificando…",
     "invalid": "Clave API no válida. Inténtelo de nuevo."
+  },
+  "knx": {
+    "progModeOn": "Enable programming mode",
+    "progModeOff": "Disable programming mode",
+    "progActive": "Programming mode active",
+    "progInactive": "Programming mode inactive",
+    "confirmOn": "Enable Programming Mode?",
+    "confirmOnDesc": "The device will be discoverable by ETS.",
+    "confirmOff": "Disable Programming Mode?",
+    "confirmOffDesc": "ETS will no longer discover this device.",
+    "cancel": "Cancel",
+    "enable": "Enable",
+    "disable": "Disable"
   },
   "connection": {
     "lost": "Conexión perdida",
@@ -86,6 +101,7 @@
     "subsonic_playlist": "Subsonic",
     "subsonic_track": "Subsonic",
     "airplay": "AirPlay",
+    "spotify": "Spotify",
     "url": "URL"
   }
 }

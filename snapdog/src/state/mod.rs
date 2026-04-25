@@ -136,6 +136,9 @@ pub struct ClientState {
     pub is_snapdog: bool,
 }
 
+/// Default initial volume for zones and clients.
+pub const DEFAULT_VOLUME: i32 = 50;
+
 fn default_volume() -> i32 {
     100
 }

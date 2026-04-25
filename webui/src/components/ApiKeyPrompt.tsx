@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { setApiKey } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 
@@ -9,6 +10,7 @@ interface ApiKeyPromptProps {
 
 export function ApiKeyPrompt({ onAuthenticated }: ApiKeyPromptProps) {
   const t = useTranslations("auth");
+  const trapRef = useFocusTrap<HTMLDivElement>();
   const [key, setKey] = useState("");
   const [error, setError] = useState(false);
   const [checking, setChecking] = useState(false);

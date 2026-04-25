@@ -170,7 +170,7 @@ async fn get_all(State(state): State<SharedState>) -> Json<Vec<ZoneInfo>> {
                     index: z.index,
                     name: z.name.clone(),
                     icon: z.icon.clone(),
-                    volume: zs.map_or(50, |s| s.volume),
+                    volume: zs.map_or(crate::state::DEFAULT_VOLUME, |s| s.volume),
                     muted: zs.is_some_and(|s| s.muted),
                     playback: zs.map_or("stopped".into(), |s| s.playback.to_string()),
                     source: zs.map_or("idle".into(), |s| s.source.to_string()),
@@ -194,7 +194,7 @@ async fn get_zone(State(state): State<SharedState>, Path(idx): Path<usize>) -> i
         index: cfg.index,
         name: cfg.name.clone(),
         icon: cfg.icon.clone(),
-        volume: zs.map_or(50, |s| s.volume),
+        volume: zs.map_or(crate::state::DEFAULT_VOLUME, |s| s.volume),
         muted: zs.is_some_and(|s| s.muted),
         playback: zs.map_or("stopped".into(), |s| s.playback.to_string()),
         source: zs.map_or("idle".into(), |s| s.source.to_string()),
@@ -221,7 +221,9 @@ async fn set_volume(
     Path(idx): Path<usize>,
     Json(value): Json<VolumeValue>,
 ) -> impl IntoResponse {
-    let current = read_zone(&state, idx).await.map_or(50, |z| z.volume);
+    let current = read_zone(&state, idx)
+        .await
+        .map_or(crate::state::DEFAULT_VOLUME, |z| z.volume);
     let volume = value
         .resolve(current)
         .map_err(|e| ApiError::BadRequest(e.to_string()))?;

@@ -50,7 +50,7 @@ function ClientCard({ client }: { client: ClientInfo }) {
         {/* Name row: icon + connection indicator + name + menu */}
         <div className="flex items-center gap-1.5">
           <span className="text-lg shrink-0">{client.icon || "🔊"}</span>
-          <div className={`size-2 rounded-full shrink-0 ${client.connected ? "bg-green-500" : "bg-destructive"}`} />
+          <div className={`size-2 shrink-0 ${client.connected ? "rounded-full bg-green-500" : "rotate-45 bg-destructive"}`} />
           <span className="sr-only">{client.connected ? t("connected") : t("disconnected")}</span>
           <span className="text-sm font-medium truncate">{client.name}</span>
           {otherZones.length > 0 && (
@@ -71,7 +71,7 @@ function ClientCard({ client }: { client: ClientInfo }) {
                       <button
                         key={z.index}
                         onClick={() => {
-                          api.clients.setZone(client.index, z.index).catch(() => {});
+                          api.clients.setZone(client.index, z.index).catch((e: unknown) => console.error("API error", e));
                           setMenuOpen(false);
                         }}
                         className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent transition-colors"
@@ -92,9 +92,9 @@ function ClientCard({ client }: { client: ClientInfo }) {
             <VolumeSlider
               volume={client.volume}
               muted={client.muted}
-              onVolumeChange={(v) => api.clients.setVolume(client.index, v).catch(() => {})}
-              onMuteToggle={() => api.clients.toggleMute(client.index).catch(() => {})}
-              onUnmute={() => api.clients.setMute(client.index, false).catch(() => {})}
+              onVolumeChange={(v) => api.clients.setVolume(client.index, v).catch((e: unknown) => console.error("API error", e))}
+              onMuteToggle={() => api.clients.toggleMute(client.index).catch((e: unknown) => console.error("API error", e))}
+              onUnmute={() => api.clients.setMute(client.index, false).catch((e: unknown) => console.error("API error", e))}
               max={client.max_volume}
               compact
             />

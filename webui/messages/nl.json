@@ -24,7 +24,8 @@
   "volume": {
     "label": "Volume",
     "mute": "Dempen",
-    "unmute": "Dempen opheffen"
+    "unmute": "Dempen opheffen",
+    "maxVolume": "Maximum volume: {max}%"
   },
   "seek": {
     "label": "Zoeken"
@@ -67,7 +68,8 @@
   "playlist": {
     "loading": "Afspeellijsten laden…",
     "empty": "Geen afspeellijsten beschikbaar",
-    "play": "{name} afspelen"
+    "play": "{name} afspelen",
+    "tracks": "{count, plural, one {# track} other {# tracks}}"
   },
   "auth": {
     "title": "Authenticatie vereist",
@@ -76,6 +78,19 @@
     "submit": "Authenticeren",
     "checking": "Controleren…",
     "invalid": "Ongeldige API-sleutel. Probeer het opnieuw."
+  },
+  "knx": {
+    "progModeOn": "Enable programming mode",
+    "progModeOff": "Disable programming mode",
+    "progActive": "Programming mode active",
+    "progInactive": "Programming mode inactive",
+    "confirmOn": "Enable Programming Mode?",
+    "confirmOnDesc": "The device will be discoverable by ETS.",
+    "confirmOff": "Disable Programming Mode?",
+    "confirmOffDesc": "ETS will no longer discover this device.",
+    "cancel": "Cancel",
+    "enable": "Enable",
+    "disable": "Disable"
   },
   "connection": {
     "lost": "Verbinding verbroken",
@@ -86,6 +101,7 @@
     "subsonic_playlist": "Subsonic",
     "subsonic_track": "Subsonic",
     "airplay": "AirPlay",
+    "spotify": "Spotify",
     "url": "URL"
   }
 }

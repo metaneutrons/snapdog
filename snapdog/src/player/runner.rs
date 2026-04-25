@@ -571,7 +571,7 @@ async fn run(
                     ZoneCommand::AdjustVolume(delta) => {
                         let new_vol = {
                             let s = store.read().await;
-                            s.zones.get(&zone_index).map_or(50, |z| (z.volume + delta).clamp(0, 100))
+                            s.zones.get(&zone_index).map_or(crate::state::DEFAULT_VOLUME, |z| (z.volume + delta).clamp(0, 100))
                         };
                         update_and_notify(store, zone_index, notify, |z| z.volume = new_vol).await;
                         if let Some(ref gid) = group_id {

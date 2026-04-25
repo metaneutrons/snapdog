@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 /**
  * Dezenter programming mode toggle in the toolbar.
@@ -39,6 +40,7 @@ export function ProgrammingMode() {
   }, [confirming]);
 
   const cancel = useCallback(() => setConfirming(null), []);
+  const trapRef = useFocusTrap<HTMLDivElement>();
 
   if (!available) return null;
 
@@ -73,7 +75,7 @@ export function ProgrammingMode() {
           onClick={cancel}
           onKeyDown={(e) => { if (e.key === "Escape") cancel(); }}
         >
-          <div className="bg-card border border-border rounded-lg shadow-lg p-6 max-w-sm mx-4 space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div ref={trapRef} className="bg-card border border-border rounded-lg shadow-lg p-6 max-w-sm mx-4 space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start gap-3">
               {confirming === "on" && (
                 <span className="text-amber-500 text-lg shrink-0" aria-hidden="true">⚠</span>

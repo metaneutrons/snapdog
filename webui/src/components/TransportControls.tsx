@@ -29,11 +29,11 @@ export function TransportControls({ zone }: TransportControlsProps) {
 
   const cmd = (action: string) => {
     switch (action) {
-      case "play": api.zones.play(index).catch(() => {}); break;
-      case "pause": api.zones.pause(index).catch(() => {}); break;
-      case "stop": api.zones.stop(index).catch(() => {}); break;
-      case "next": api.zones.next(index).catch(() => {}); break;
-      case "previous": api.zones.previous(index).catch(() => {}); break;
+      case "play": api.zones.play(index).catch((e: unknown) => console.error("API error", e)); break;
+      case "pause": api.zones.pause(index).catch((e: unknown) => console.error("API error", e)); break;
+      case "stop": api.zones.stop(index).catch((e: unknown) => console.error("API error", e)); break;
+      case "next": api.zones.next(index).catch((e: unknown) => console.error("API error", e)); break;
+      case "previous": api.zones.previous(index).catch((e: unknown) => console.error("API error", e)); break;
     }
   };
 

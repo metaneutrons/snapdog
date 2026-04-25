@@ -292,7 +292,7 @@ async fn main() -> Result<()> {
                 let cmd = if let player::SnapcastCmd::Client { ref client_id, action: player::ClientAction::AdjustVolume(delta) } = cmd {
                     let current = store.read().await.clients.values()
                         .find(|c| c.snapcast_id.as_deref() == Some(client_id))
-                        .map_or(50, |c| c.base_volume);
+                        .map_or(crate::state::DEFAULT_VOLUME, |c| c.base_volume);
                     player::SnapcastCmd::Client {
                         client_id: client_id.clone(),
                         action: player::ClientAction::Volume((current + delta).clamp(0, 100)),

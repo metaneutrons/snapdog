@@ -68,7 +68,8 @@
   "playlist": {
     "loading": "Loading playlists…",
     "empty": "No playlists available",
-    "play": "Play {name}"
+    "play": "Play {name}",
+    "tracks": "{count, plural, one {# track} other {# tracks}}"
   },
   "auth": {
     "title": "Authentication Required",

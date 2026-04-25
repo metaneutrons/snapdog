@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslations } from "next-intl";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { api, type EqBand, type EqConfig } from "@/lib/api";
@@ -21,6 +22,7 @@ const DEFAULT_BAND: EqBand = { freq: 1000, gain: 0, q: 1.0, type: "peaking" };
 
 export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) {
   const t = useTranslations("eq");
+  const trapRef = useFocusTrap<HTMLDivElement>();
   const [config, setConfig] = useState<EqConfig>({ enabled: false, bands: [], preset: "flat" });
   const [abBypass, setAbBypass] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -37,7 +39,7 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
 
   // Debounced push to server
   const pushConfig = useCallback(
-    (c: EqConfig) => { eqApi.set(c).catch(() => {}); },
+    (c: EqConfig) => { eqApi.set(c).catch((e: unknown) => console.error("API error", e)); },
     [zoneId, clientId],
   );
 
@@ -74,7 +76,7 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
   };
 
   const applyPreset = (name: string) => {
-    eqApi.applyPreset(name).then(setConfig).catch(() => {});
+    eqApi.applyPreset(name).then(setConfig).catch((e: unknown) => console.error("API error", e));
   };
 
   const toggleAB = () => {
@@ -134,7 +136,7 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
             className="text-sm bg-muted border border-border rounded px-2 py-1"
             aria-label={t("preset")}
           >
-            <option value="" disabled>Preset…</option>
+            <option value="" disabled>{t("preset")}…</option>
             {PRESETS.map((p) => (
               <option key={p} value={p}>{p.replace("_", " ")}</option>
             ))}
@@ -183,6 +185,7 @@ function BandRow({
   onRemove: () => void;
 }) {
   const t = useTranslations("eq");
+  const trapRef = useFocusTrap<HTMLDivElement>();
   return (
     <div className="flex items-center gap-2 text-sm">
       <span className="w-5 text-muted-foreground text-xs">{index + 1}</span>
