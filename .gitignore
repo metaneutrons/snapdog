@@ -22,5 +22,6 @@ snapcast-state.json
 # OpenKNXproducer
 tools/
 knx/*.knxprod
+knx/*.xml
 knx/*.debug.xml
 include/

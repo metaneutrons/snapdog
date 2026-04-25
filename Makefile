@@ -2,14 +2,9 @@
 
 # ── KNX Product Database ───────────────────────────────────────
 
-## Generate KNX ETS XML from group object definitions
-knx-xml:
+## Generate SnapDog.knxprod (XML + signed archive in one step)
+knxprod:
 	cargo run -p xtask -- knx/SnapDog.xml
-
-## Generate SnapDog.knxprod (cross-platform, no external tools)
-knxprod: knx-xml
-	cargo install --git https://github.com/metaneutrons/knx-rs knx-prod --locked 2>/dev/null || true
-	knx-prod knx/SnapDog.xml -o knx/SnapDog.knxprod
 
 ## First-time setup: configure git hooks
 setup:
@@ -32,8 +27,8 @@ test:
 build-webui:
 	cd webui && npm ci && npm run build
 
-## Build everything: WebUI then Rust binary
-build-all: build-webui
+## Build everything: WebUI, Rust binary, and KNX product database
+build-all: build-webui knxprod
 	cargo build --release
 
 ## Start dev environment

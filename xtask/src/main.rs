@@ -24,19 +24,41 @@ const AID: &str = "M-00FA_A-FF01-01-0000";
 const MFR: &str = "M-00FA";
 
 fn main() {
-    let output = std::env::args()
+    let xml_path = std::env::args()
         .nth(1)
         .unwrap_or_else(|| "knx/SnapDog.xml".into());
+    let knxprod_path = xml_path.replace(".xml", ".knxprod");
+
+    // Step 1: Generate ETS XML
     let xml = generate_xml();
-    std::fs::write(&output, xml).expect("failed to write XML");
+    std::fs::write(&xml_path, xml).expect("failed to write XML");
     eprintln!(
-        "✅ Generated {output} ({} zones × {} COs + {} clients × {} COs = {} COs)",
+        "  Generated {xml_path} ({} zones × {} COs + {} clients × {} COs = {} COs)",
         MAX_ZONES,
         ZONE_GOS.len(),
         MAX_CLIENTS,
         CLIENT_GOS.len(),
         MAX_ZONES * ZONE_GOS.len() + MAX_CLIENTS * CLIENT_GOS.len()
     );
+
+    // Step 2: Generate .knxprod (signed ZIP archive for ETS import)
+    let xml_file = std::path::Path::new(&xml_path);
+    let knxprod_file = std::path::Path::new(&knxprod_path);
+    match knx_prod::generate_knxprod(xml_file, knxprod_file) {
+        Ok(metadata) => {
+            let size = std::fs::metadata(knxprod_file)
+                .map(|m| m.len())
+                .unwrap_or(0);
+            eprintln!(
+                "✅ Generated {knxprod_path} ({size} bytes, app: {})",
+                metadata.application_id
+            );
+        }
+        Err(e) => {
+            eprintln!("❌ Failed to generate {knxprod_path}: {e}");
+            std::process::exit(1);
+        }
+    }
 }
 
 struct CoGroup {

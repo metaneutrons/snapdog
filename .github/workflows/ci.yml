@@ -120,10 +120,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: sudo apt-get update && sudo apt-get install -y libasound2-dev
-      - name: Generate ETS XML
-        run: cargo run -p xtask -- knx/SnapDog.xml
       - name: Generate knxprod
-        run: cargo install --git https://github.com/metaneutrons/knx-rs knx-prod --locked && knx-prod knx/SnapDog.xml -o knx/SnapDog.knxprod
+        run: cargo run -p xtask -- knx/SnapDog.xml
       - uses: actions/upload-artifact@v4
         with:
           name: snapdog-knxprod
