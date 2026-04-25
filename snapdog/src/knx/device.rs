@@ -215,7 +215,7 @@ pub(crate) fn parse_ets_memory(data: &[u8]) -> EtsParams {
     }
     // Numeric — global
     p.http_port =
-        u16::from_le_bytes([data[mem::GLOBAL_HTTP_PORT], data[mem::GLOBAL_HTTP_PORT + 1]]);
+        u16::from_be_bytes([data[mem::GLOBAL_HTTP_PORT], data[mem::GLOBAL_HTTP_PORT + 1]]);
     p.log_level = data[mem::GLOBAL_LOG_LVL];
     for i in 0..mem::MAX_RADIOS {
         p.radio_active[i] = data[mem::RADIO_ACTIVE + i] != 0;
