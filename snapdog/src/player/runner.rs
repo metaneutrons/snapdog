@@ -618,21 +618,27 @@ async fn run(
                             if is_idle {
                                 // Resolve source: schedule → default → resume
                                 let resolved = resolve_presence_source(config, zone_index);
-                                update_and_notify(store, zone_index, notify, |z| z.presence_source = true).await;
                                 match resolved {
                                     Some(crate::config::PresenceSource::Radio(idx)) => {
+                                        update_and_notify(store, zone_index, notify, |z| z.presence_source = true).await;
                                         // Unified index 0 = radio, idx = station within radio
                                         let _ = self_tx.send(ZoneCommand::SetPlaylist(0, idx)).await;
+                                        tracing::info!(zone = zone_index, "Presence: playback started");
                                     }
                                     Some(crate::config::PresenceSource::Playlist(ref id)) => {
+                                        update_and_notify(store, zone_index, notify, |z| z.presence_source = true).await;
                                         let _ = self_tx.send(ZoneCommand::PlaySubsonicPlaylist(id.clone(), 0)).await;
+                                        tracing::info!(zone = zone_index, "Presence: playback started");
                                     }
-                                    Some(crate::config::PresenceSource::None) => {}
+                                    Some(crate::config::PresenceSource::None) => {
+                                        update_and_notify(store, zone_index, notify, |z| z.presence_source = false).await;
+                                    }
                                     None => {
+                                        update_and_notify(store, zone_index, notify, |z| z.presence_source = true).await;
                                         let _ = self_tx.send(ZoneCommand::Play).await;
+                                        tracing::info!(zone = zone_index, "Presence: playback started");
                                     }
                                 }
-                                tracing::info!(zone = zone_index, "Presence: playback started");
                             }
                         } else {
                             let should_timer = store.read().await.zones.get(&zone_index).is_some_and(|z| z.presence_source && z.playback == crate::state::PlaybackState::Playing);

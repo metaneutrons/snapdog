@@ -204,7 +204,7 @@ pub(crate) fn parse_ets_memory(data: &[u8]) -> EtsParams {
         p.zone_spotify[i] = data[mem::ZONE_SPOTIFY + i] != 0;
         p.zone_presence_enabled[i] = data[mem::ZONE_PRESENCE_EN + i] != 0;
         let to_off = mem::ZONE_PRESENCE_TO + i * 2;
-        p.zone_presence_timeout[i] = u16::from_le_bytes([data[to_off], data[to_off + 1]]);
+        p.zone_presence_timeout[i] = u16::from_be_bytes([data[to_off], data[to_off + 1]]);
     }
     // Numeric — clients
     for i in 0..MAX_CLIENTS {
@@ -216,7 +216,7 @@ pub(crate) fn parse_ets_memory(data: &[u8]) -> EtsParams {
     }
     // Numeric — global
     p.http_port =
-        u16::from_le_bytes([data[mem::GLOBAL_HTTP_PORT], data[mem::GLOBAL_HTTP_PORT + 1]]);
+        u16::from_be_bytes([data[mem::GLOBAL_HTTP_PORT], data[mem::GLOBAL_HTTP_PORT + 1]]);
     p.log_level = data[mem::GLOBAL_LOG_LVL];
     for i in 0..mem::MAX_RADIOS {
         p.radio_active[i] = data[mem::RADIO_ACTIVE + i] != 0;
