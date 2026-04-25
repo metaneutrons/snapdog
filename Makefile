@@ -4,7 +4,7 @@
 
 ## Generate SnapDog.knxprod (XML + signed archive in one step)
 knxprod:
-	cargo run -p xtask -- knx/SnapDog.xml
+	cargo run -p xtask -- knx/snapdog.xml
 
 ## First-time setup: configure git hooks
 setup:

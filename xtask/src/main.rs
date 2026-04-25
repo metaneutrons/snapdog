@@ -26,7 +26,7 @@ const MFR: &str = "M-00FA";
 fn main() {
     let xml_path = std::env::args()
         .nth(1)
-        .unwrap_or_else(|| "knx/SnapDog.xml".into());
+        .unwrap_or_else(|| "knx/snapdog.xml".into());
     let knxprod_path = xml_path.replace(".xml", ".knxprod");
 
     // Step 1: Generate ETS XML
