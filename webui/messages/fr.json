@@ -39,7 +39,9 @@
     "unknownTitle": "Inconnu",
     "unknownArtist": "Artiste inconnu",
     "error": "Une erreur est survenue",
-    "retry": "Réessayer"
+    "retry": "Réessayer",
+    "presenceDetected": "Présence détectée",
+    "presenceTimerActive": "Minuterie d'arrêt automatique active"
   },
   "client": {
     "clients": "{count, plural, one {# client} other {# clients}}",
@@ -80,17 +82,17 @@
     "invalid": "Clé API invalide. Veuillez réessayer."
   },
   "knx": {
-    "progModeOn": "Enable programming mode",
-    "progModeOff": "Disable programming mode",
-    "progActive": "Programming mode active",
-    "progInactive": "Programming mode inactive",
-    "confirmOn": "Enable Programming Mode?",
-    "confirmOnDesc": "The device will be discoverable by ETS.",
-    "confirmOff": "Disable Programming Mode?",
-    "confirmOffDesc": "ETS will no longer discover this device.",
-    "cancel": "Cancel",
-    "enable": "Enable",
-    "disable": "Disable"
+    "progModeOn": "Activer le mode programmation",
+    "progModeOff": "Désactiver le mode programmation",
+    "progActive": "Mode programmation actif",
+    "progInactive": "Mode programmation inactif",
+    "confirmOn": "Activer le mode programmation ?",
+    "confirmOnDesc": "L'appareil sera détectable par ETS. N'activez que pendant la programmation.",
+    "confirmOff": "Désactiver le mode programmation ?",
+    "confirmOffDesc": "ETS ne pourra plus détecter cet appareil via le mode programmation.",
+    "cancel": "Annuler",
+    "enable": "Activer",
+    "disable": "Désactiver"
   },
   "connection": {
     "lost": "Connexion perdue",

@@ -39,7 +39,9 @@
     "unknownTitle": "Desconocido",
     "unknownArtist": "Artista desconocido",
     "error": "Algo salió mal",
-    "retry": "Intentar de nuevo"
+    "retry": "Intentar de nuevo",
+    "presenceDetected": "Presencia detectada",
+    "presenceTimerActive": "Temporizador de apagado automático activo"
   },
   "client": {
     "clients": "{count, plural, one {# cliente} other {# clientes}}",
@@ -80,17 +82,17 @@
     "invalid": "Clave API no válida. Inténtelo de nuevo."
   },
   "knx": {
-    "progModeOn": "Enable programming mode",
-    "progModeOff": "Disable programming mode",
-    "progActive": "Programming mode active",
-    "progInactive": "Programming mode inactive",
-    "confirmOn": "Enable Programming Mode?",
-    "confirmOnDesc": "The device will be discoverable by ETS.",
-    "confirmOff": "Disable Programming Mode?",
-    "confirmOffDesc": "ETS will no longer discover this device.",
-    "cancel": "Cancel",
-    "enable": "Enable",
-    "disable": "Disable"
+    "progModeOn": "Activar modo programación",
+    "progModeOff": "Desactivar modo programación",
+    "progActive": "Modo programación activo",
+    "progInactive": "Modo programación inactivo",
+    "confirmOn": "¿Activar modo programación?",
+    "confirmOnDesc": "El dispositivo será detectable por ETS. Active solo durante la programación.",
+    "confirmOff": "¿Desactivar modo programación?",
+    "confirmOffDesc": "ETS ya no podrá detectar este dispositivo mediante el modo programación.",
+    "cancel": "Cancelar",
+    "enable": "Activar",
+    "disable": "Desactivar"
   },
   "connection": {
     "lost": "Conexión perdida",

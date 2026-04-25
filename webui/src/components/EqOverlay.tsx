@@ -107,7 +107,7 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label={t("title", { zone: label })} onKeyDown={(e) => { if (e.key === "Escape") handleClose(); }}>
       <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={handleClose} role="presentation" />
-      <div className="relative z-10 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-xl space-y-5" ref={(el) => el?.focus()} tabIndex={-1}>
+      <div className="relative z-10 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-xl space-y-5" ref={trapRef}>
         {/* Header */}
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">{t("title", { zone: label })}</h2>

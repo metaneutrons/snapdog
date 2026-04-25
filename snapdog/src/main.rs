@@ -64,6 +64,10 @@ struct Cli {
 const VOLUME_COALESCE_MS: u64 = 50;
 /// Channel capacity for Snapcast commands from zone players, API, MQTT, KNX.
 const SNAPCAST_CMD_CHANNEL_SIZE: usize = 64;
+/// Path for persisted zone/client state.
+const STATE_FILE: &str = "state.json";
+/// Path for persisted EQ configuration.
+const EQ_FILE: &str = "eq.json";
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -129,7 +133,7 @@ async fn main() -> Result<()> {
     );
 
     // ── Initialize subsystems ─────────────────────────────────
-    let store = state::init(&config, Some(&PathBuf::from("state.json")))?;
+    let store = state::init(&config, Some(&PathBuf::from(STATE_FILE)))?;
     let covers = state::cover::new_cache();
     let (notify_tx, _) = api::ws::notification_channel();
 
@@ -152,7 +156,7 @@ async fn main() -> Result<()> {
 
     // EQ store (needed by event handler + zone players + API)
     let eq_store = Arc::new(std::sync::Mutex::new(audio::eq::EqStore::load(
-        std::path::Path::new("eq.json"),
+        std::path::Path::new(EQ_FILE),
     )));
 
     #[cfg(feature = "snapcast-embedded")]

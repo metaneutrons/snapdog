@@ -129,18 +129,7 @@ fn load_memory(path: &std::path::Path) -> Result<Vec<u8>> {
 
 /// CRC32 (ISO 3309 / ITU-T V.42 — same as zlib/PNG).
 fn crc32(data: &[u8]) -> u32 {
-    let mut crc: u32 = 0xFFFF_FFFF;
-    for &byte in data {
-        crc ^= byte as u32;
-        for _ in 0..8 {
-            crc = if crc & 1 != 0 {
-                (crc >> 1) ^ 0xEDB8_8320
-            } else {
-                crc >> 1
-            };
-        }
-    }
-    !crc
+    crc32fast::hash(data)
 }
 
 use super::group_objects::{
@@ -280,12 +269,6 @@ enum BauCmd {
         dpt: Dpt,
         value: DptValue,
     },
-    /// Poll for the next group object updated from the bus.
-    NextUpdated {
-        reply: oneshot::Sender<Option<(GroupAddress, Vec<u8>)>>,
-    },
-    /// Process an incoming CEMI frame from the server.
-    ProcessFrame { frame: knx_core::cemi::CemiFrame },
     /// Set programming mode on/off.
     SetProgMode { enabled: bool },
     /// Get current programming mode state.
@@ -460,18 +443,6 @@ async fn bau_task_loop(
                 match cmd {
                     BauCmd::Write { ga, dpt, value } => {
                         handle_write(&mut bau, &server, ga, dpt, &value).await;
-                    }
-                    BauCmd::ProcessFrame { frame } => {
-                        bau.process_frame(&frame, now_ms());
-                        bau.poll(now_ms());
-                        while let Some(out) = bau.next_outgoing_frame() {
-                            let _ = server.send_frame(out).await;
-                        }
-                        dispatch_updated_gos(&mut bau, &update_tx).await;
-                    }
-                    BauCmd::NextUpdated { reply } => {
-                        let result = find_next_updated(&mut bau);
-                        let _ = reply.send(result);
                     }
                     BauCmd::SetProgMode { enabled } => {
                         knx_device::device_object::set_prog_mode(bau.device_mut(), enabled);
@@ -725,15 +696,6 @@ async fn dispatch_updated_gos(bau: &mut Bau, update_tx: &mpsc::Sender<(GroupAddr
 }
 
 /// Find the next updated GO and return its GA + data.
-fn find_next_updated(bau: &mut Bau) -> Option<(GroupAddress, Vec<u8>)> {
-    let asap = bau.group_objects_mut().next_updated()?;
-    let result = resolve_go_update(bau, asap);
-    if let Some(go) = bau.group_objects_mut().get_mut(asap) {
-        go.set_comm_flag(knx_device::group_object::ComFlag::Ok);
-    }
-    result
-}
-
 /// Resolve an ASAP to (GroupAddress, data) via the association and address tables.
 fn resolve_go_update(bau: &Bau, asap: u16) -> Option<(GroupAddress, Vec<u8>)> {
     let go = bau.group_objects().get(asap)?;

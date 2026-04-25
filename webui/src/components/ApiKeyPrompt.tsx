@@ -39,7 +39,7 @@ export function ApiKeyPrompt({ onAuthenticated }: ApiKeyPromptProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label={t("title")}>
       <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" role="presentation" />
-      <div className="relative z-10 w-full max-w-sm mx-4 rounded-2xl border border-border bg-card p-6 shadow-xl space-y-4">
+      <div ref={trapRef} className="relative z-10 w-full max-w-sm mx-4 rounded-2xl border border-border bg-card p-6 shadow-xl space-y-4">
         <div className="space-y-1">
           <h2 className="text-lg font-semibold">{t("title")}</h2>
           <p className="text-sm text-muted-foreground">

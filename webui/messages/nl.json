@@ -39,7 +39,9 @@
     "unknownTitle": "Onbekend",
     "unknownArtist": "Onbekende artiest",
     "error": "Er is iets misgegaan",
-    "retry": "Opnieuw proberen"
+    "retry": "Opnieuw proberen",
+    "presenceDetected": "Aanwezigheid gedetecteerd",
+    "presenceTimerActive": "Automatische uitschakeltimer actief"
   },
   "client": {
     "clients": "{count, plural, one {# client} other {# clients}}",
@@ -80,17 +82,17 @@
     "invalid": "Ongeldige API-sleutel. Probeer het opnieuw."
   },
   "knx": {
-    "progModeOn": "Enable programming mode",
-    "progModeOff": "Disable programming mode",
-    "progActive": "Programming mode active",
-    "progInactive": "Programming mode inactive",
-    "confirmOn": "Enable Programming Mode?",
-    "confirmOnDesc": "The device will be discoverable by ETS.",
-    "confirmOff": "Disable Programming Mode?",
-    "confirmOffDesc": "ETS will no longer discover this device.",
-    "cancel": "Cancel",
-    "enable": "Enable",
-    "disable": "Disable"
+    "progModeOn": "Programmeermodus activeren",
+    "progModeOff": "Programmeermodus deactiveren",
+    "progActive": "Programmeermodus actief",
+    "progInactive": "Programmeermodus inactief",
+    "confirmOn": "Programmeermodus activeren?",
+    "confirmOnDesc": "Het apparaat wordt zichtbaar voor ETS. Activeer alleen tijdens het programmeren.",
+    "confirmOff": "Programmeermodus deactiveren?",
+    "confirmOffDesc": "ETS kan dit apparaat niet meer detecteren via de programmeermodus.",
+    "cancel": "Annuleren",
+    "enable": "Activeren",
+    "disable": "Deactiveren"
   },
   "connection": {
     "lost": "Verbinding verbroken",

@@ -39,7 +39,9 @@
     "unknownTitle": "Unknown",
     "unknownArtist": "Unknown Artist",
     "error": "Something went wrong",
-    "retry": "Try again"
+    "retry": "Try again",
+    "presenceDetected": "Presence detected",
+    "presenceTimerActive": "Presence auto-off timer active"
   },
   "client": {
     "clients": "{count, plural, one {# client} other {# clients}}",

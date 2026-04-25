@@ -39,7 +39,9 @@
     "unknownTitle": "Unbekannt",
     "unknownArtist": "Unbekannter Künstler",
     "error": "Etwas ist schiefgelaufen",
-    "retry": "Erneut versuchen"
+    "retry": "Erneut versuchen",
+    "presenceDetected": "Präsenz erkannt",
+    "presenceTimerActive": "Präsenz Auto-Off Timer aktiv"
   },
   "client": {
     "clients": "{count, plural, one {# Client} other {# Clients}}",
