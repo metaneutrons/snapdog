@@ -723,11 +723,11 @@ mod tests {
         let mut data = vec![0u8; mem::TOTAL];
         data[mem::ZONE_ACTIVE] = 1;
         data[mem::ZONE_ACTIVE + 2] = 1;
-        data[mem::ZONE_MAX_VOL + 0] = 80;
-        data[mem::CLIENT_ACTIVE + 0] = 1;
-        data[mem::CLIENT_MAX_VOL + 0] = 60;
-        data[mem::CLIENT_DEF_ZONE + 0] = 3;
-        data[mem::CLIENT_DEF_LAT + 0] = 50;
+        data[mem::ZONE_MAX_VOL] = 80;
+        data[mem::CLIENT_ACTIVE] = 1;
+        data[mem::CLIENT_MAX_VOL] = 60;
+        data[mem::CLIENT_DEF_ZONE] = 3;
+        data[mem::CLIENT_DEF_LAT] = 50;
         let p = parse_ets_memory(&data);
         assert!(p.zone_active[0]);
         assert!(!p.zone_active[1]);

@@ -722,6 +722,7 @@ pub const fn client_asap(client_index: usize, go_index: usize) -> u16 {
 }
 
 #[cfg(test)]
+#[allow(clippy::assertions_on_constants)]
 mod tests {
     use super::*;
 
