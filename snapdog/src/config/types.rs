@@ -83,18 +83,109 @@ pub enum GroupVolumeMode {
 }
 
 impl GroupVolumeMode {
-    /// Compute effective client volume given the client's base volume and zone volume.
-    pub fn effective(self, base_volume: i32, zone_volume: i32) -> i32 {
+    /// Compute effective client volume given the client's base volume, zone volume,
+    /// and maximum volume limit.
+    pub fn effective(self, base_volume: i32, zone_volume: i32, max_volume: i32) -> i32 {
+        let max = max_volume.clamp(0, 100);
+        let base = base_volume.clamp(0, max);
         let z = zone_volume.clamp(0, 100);
         match self {
-            Self::Absolute => z,
-            Self::Relative => (base_volume.clamp(0, 100) * z / 100).clamp(0, 100),
+            Self::Absolute => z.min(max),
+            Self::Relative => (base * z / 100).clamp(0, max),
             Self::Compressed => {
                 let factor = (z as f64 / 100.0).sqrt();
-                (base_volume.clamp(0, 100) as f64 * factor).round() as i32
+                (base as f64 * factor).round().min(max as f64) as i32
             }
         }
     }
+}
+
+// ── Presence ───────────────────────────────────────────────────
+
+/// Presence-triggered playback source.
+#[derive(Debug, Clone)]
+pub enum PresenceSource {
+    /// Play a radio station by index (0-based).
+    Radio(usize),
+    /// Play a Subsonic playlist by ID.
+    Playlist(String),
+    /// Do nothing (presence ignored in this time slot).
+    None,
+}
+
+impl<'de> serde::Deserialize<'de> for PresenceSource {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(d)?;
+        match s.as_str() {
+            "none" => Ok(Self::None),
+            _ if s.starts_with("radio:") => {
+                let idx = s[6..].parse::<usize>().map_err(|_| {
+                    serde::de::Error::custom(format!(
+                        "invalid radio index in '{s}', expected radio:<number>"
+                    ))
+                })?;
+                Ok(Self::Radio(idx))
+            }
+            _ if s.starts_with("playlist:") => {
+                let id = &s[9..];
+                if id.is_empty() {
+                    return Err(serde::de::Error::custom(
+                        "empty playlist ID in presence source",
+                    ));
+                }
+                Ok(Self::Playlist(id.to_string()))
+            }
+            _ => Err(serde::de::Error::custom(format!(
+                "invalid presence source '{s}', expected 'none', 'radio:<index>', or 'playlist:<id>'"
+            ))),
+        }
+    }
+}
+
+/// A time-based presence schedule entry.
+#[derive(Debug, Clone, Deserialize)]
+pub struct PresenceScheduleEntry {
+    /// Start time in HH:MM format (24h).
+    pub from: String,
+    /// End time in HH:MM format (24h). Must be after `from`.
+    pub to: String,
+    /// Source to play during this time window.
+    pub source: PresenceSource,
+}
+
+/// Presence-triggered playback configuration for a zone.
+#[derive(Debug, Clone, Deserialize)]
+pub struct PresenceConfig {
+    /// Auto-off delay in seconds after presence lost. 0 = immediate stop.
+    #[serde(default = "default_auto_off_delay")]
+    pub auto_off_delay: u16,
+    /// Default source when no schedule matches. If unset, resumes last source.
+    pub default_source: Option<PresenceSource>,
+    /// Time-based source schedule. First match wins.
+    #[serde(default)]
+    pub schedule: Vec<PresenceScheduleEntry>,
+}
+
+/// Default auto-off delay in seconds (15 minutes).
+pub(crate) const DEFAULT_AUTO_OFF_DELAY: u16 = 900;
+
+pub(crate) fn default_auto_off_delay() -> u16 {
+    DEFAULT_AUTO_OFF_DELAY
+}
+
+/// Parse a HH:MM time string into minutes since midnight.
+pub fn parse_time(s: &str) -> anyhow::Result<u16> {
+    let parts: Vec<&str> = s.split(':').collect();
+    anyhow::ensure!(parts.len() == 2, "expected HH:MM format, got '{s}'");
+    let h: u16 = parts[0]
+        .parse()
+        .map_err(|_| anyhow::anyhow!("invalid hour in '{s}'"))?;
+    let m: u16 = parts[1]
+        .parse()
+        .map_err(|_| anyhow::anyhow!("invalid minute in '{s}'"))?;
+    anyhow::ensure!(h <= 23, "hour must be 0-23, got {h} in '{s}'");
+    anyhow::ensure!(m <= 59, "minute must be 0-59, got {m} in '{s}'");
+    Ok(h * 60 + m)
 }
 
 /// Audio output configuration (sample rate, bit depth, codec, encryption).
@@ -286,9 +377,22 @@ pub struct KnxConfig {
     /// Enable KNX integration.
     #[serde(default)]
     pub enabled: bool,
-    /// KNX connection URL. Unicast = tunnel, multicast = router.
+    /// Operating mode: `"client"` (default) connects to a gateway,
+    /// `"device"` runs as ETS-programmable KNX/IP device on port 3671.
+    #[serde(default = "default_knx_mode")]
+    pub mode: String,
+    /// KNX connection URL (client mode only). Unicast = tunnel, multicast = router.
     /// Examples: `udp://192.168.1.50:3671`, `udp://224.0.23.12:3671`
     pub url: Option<String>,
+    /// KNX individual address (device mode only). Example: `"1.1.100"`
+    pub individual_address: Option<String>,
+    /// Persist ETS-programmed configuration across restarts (device mode only).
+    /// Defaults to `true` when mode is `"device"`.
+    pub persist_ets_config: Option<bool>,
+}
+
+fn default_knx_mode() -> String {
+    "client".to_string()
 }
 
 // ── Raw zone/client/radio (user-facing, optional fields) ──────
@@ -310,6 +414,8 @@ pub struct RawZoneConfig {
     pub knx: RawZoneKnxConfig,
     /// Override group volume mode for this zone.
     pub group_volume_mode: Option<GroupVolumeMode>,
+    /// Presence-triggered playback configuration.
+    pub presence: Option<PresenceConfig>,
 }
 
 /// KNX group addresses for zone control (all optional, explicit config only).
@@ -377,6 +483,20 @@ pub struct RawZoneKnxConfig {
     pub repeat_status: Option<String>,
     /// Playlist repeat toggle command.
     pub repeat_toggle: Option<String>,
+    /// Presence command (DPT 1.018 Occupancy).
+    pub presence: Option<String>,
+    /// Presence enable/disable (DPT 1.001).
+    pub presence_enable: Option<String>,
+    /// Presence enable status feedback.
+    pub presence_enable_status: Option<String>,
+    /// Presence auto-off timeout (DPT 7.005, seconds).
+    pub presence_timeout: Option<String>,
+    /// Presence auto-off timeout status feedback.
+    pub presence_timeout_status: Option<String>,
+    /// Presence auto-off timer active status (DPT 1.001).
+    pub presence_timer_status: Option<String>,
+    /// Presence source override (DPT 5.010, 0=schedule).
+    pub presence_source_override: Option<String>,
 }
 
 /// Client (speaker) definition as written in TOML.
@@ -391,6 +511,9 @@ pub struct RawClientConfig {
     /// Emoji icon for the client.
     #[serde(default = "default_client_icon")]
     pub icon: String,
+    /// Maximum volume (0–100). Limits how loud this client can go.
+    #[serde(default = "default_max_volume")]
+    pub max_volume: i32,
     /// KNX group addresses for this client.
     #[serde(default)]
     pub knx: RawClientKnxConfig,
@@ -528,6 +651,8 @@ pub struct ZoneConfig {
     pub knx: ZoneKnxAddresses,
     /// Group volume mode (resolved from zone override or global default).
     pub group_volume_mode: GroupVolumeMode,
+    /// Presence-triggered playback configuration.
+    pub presence: Option<PresenceConfig>,
 }
 
 /// Resolved KNX group addresses for a zone (all optional, explicit config only).
@@ -595,6 +720,20 @@ pub struct ZoneKnxAddresses {
     pub repeat_status: Option<String>,
     /// Playlist repeat toggle command.
     pub repeat_toggle: Option<String>,
+    /// Presence command.
+    pub presence: Option<String>,
+    /// Presence enable/disable.
+    pub presence_enable: Option<String>,
+    /// Presence enable status feedback.
+    pub presence_enable_status: Option<String>,
+    /// Presence auto-off timeout.
+    pub presence_timeout: Option<String>,
+    /// Presence auto-off timeout status feedback.
+    pub presence_timeout_status: Option<String>,
+    /// Presence auto-off timer active status.
+    pub presence_timer_status: Option<String>,
+    /// Presence source override.
+    pub presence_source_override: Option<String>,
 }
 
 /// Resolved client configuration.
@@ -610,6 +749,8 @@ pub struct ClientConfig {
     pub zone_index: usize,
     /// Emoji icon.
     pub icon: String,
+    /// Maximum volume (0–100). Limits how loud this client can go.
+    pub max_volume: i32,
     /// KNX group addresses.
     pub knx: ClientKnxAddresses,
 }
@@ -708,6 +849,9 @@ fn default_zone_icon() -> String {
 fn default_client_icon() -> String {
     "🎵".into()
 }
-fn default_true() -> bool {
+pub(crate) fn default_max_volume() -> i32 {
+    100
+}
+pub(crate) fn default_true() -> bool {
     true
 }

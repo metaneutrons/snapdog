@@ -1,0 +1,802 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Fabian Schmieder
+
+//! Group object definitions — single source of truth for all KNX communication objects.
+//!
+//! Used by:
+//! - Device mode runtime (BAU `GroupObjectStore` construction)
+//! - `cargo xtask generate-knxprod-xml` (OpenKNXproducer XML generation)
+
+use knx_core::dpt::{DPT_SCALING, DPT_STRING_8859_1, DPT_SWITCH, DPT_VALUE_1_UCOUNT, Dpt};
+
+/// Maximum number of zones supported.
+pub const MAX_ZONES: usize = 10;
+
+/// Maximum number of clients supported.
+pub const MAX_CLIENTS: usize = 10;
+
+/// Number of group objects per zone.
+pub const ZONE_GO_COUNT: usize = ZONE_GOS.len();
+
+/// Number of group objects per client.
+pub const CLIENT_GO_COUNT: usize = CLIENT_GOS.len();
+
+/// Total number of group objects.
+pub const TOTAL_GO_COUNT: usize = MAX_ZONES * ZONE_GO_COUNT + MAX_CLIENTS * CLIENT_GO_COUNT;
+
+/// KNX communication object flags (matching ETS flag bits).
+pub struct GoFlags {
+    /// Communication enabled (K-flag).
+    pub communicate: bool,
+    /// Read enabled (L-flag) — bus can read this object.
+    pub read: bool,
+    /// Write enabled (S-flag) — bus can write this object.
+    pub write: bool,
+    /// Transmit on change (Ü-flag) — send to bus when value changes.
+    pub transmit: bool,
+    /// Update on response (A-flag) — update value from GroupValueResponse.
+    pub update: bool,
+}
+
+/// Shorthand flag sets.
+const RECV: GoFlags = GoFlags {
+    communicate: true,
+    read: false,
+    write: true,
+    transmit: false,
+    update: false,
+};
+const SEND: GoFlags = GoFlags {
+    communicate: true,
+    read: true,
+    write: false,
+    transmit: true,
+    update: false,
+};
+const BIDIR: GoFlags = GoFlags {
+    communicate: true,
+    read: true,
+    write: true,
+    transmit: true,
+    update: true,
+};
+
+/// DPT 3.007 — Controlled dimming.
+pub const DPT_CONTROL_DIMMING: Dpt = Dpt::new(3, 7);
+
+/// DPT 1.018 — Occupancy (presence sensor).
+const DPT_OCCUPANCY: Dpt = Dpt::new(1, 18);
+
+/// DPT 7.005 — Time period in seconds (UInt16).
+pub const DPT_TIME_PERIOD_SEC: Dpt = Dpt::new(7, 5);
+
+/// Definition of a single group object.
+pub struct GoDefinition {
+    /// Human-readable name (used in ETS and logs).
+    pub name: &'static str,
+    /// German display name (ETS Text attribute).
+    pub name_de: &'static str,
+    /// English display name (ETS FunctionText attribute).
+    pub name_en: &'static str,
+    /// KNX datapoint type.
+    pub dpt: Dpt,
+    /// ETS DPT string (e.g. "DPST-1-1").
+    pub dpt_str: &'static str,
+    /// ETS ObjectSize string (e.g. "1 Bit").
+    pub size_str: &'static str,
+    /// Communication flags.
+    pub flags: GoFlags,
+}
+
+impl GoFlags {
+    /// Encode as a 16-bit group object descriptor (upper bits).
+    pub const fn to_descriptor_bits(&self, size_code: u8) -> u16 {
+        let mut bits: u16 = 0;
+        if self.communicate {
+            bits |= 1 << 10;
+        }
+        if self.read {
+            bits |= 1 << 11;
+        }
+        if self.write {
+            bits |= 1 << 12;
+        }
+        if self.transmit {
+            bits |= 1 << 14;
+        }
+        if self.update {
+            bits |= 1 << 15;
+        }
+        bits | (size_code as u16)
+    }
+}
+
+// ── Zone group objects (35 per zone) ──────────────────────────
+
+/// Create a receive-only GO definition.
+const fn go_recv(
+    name: &'static str,
+    de: &'static str,
+    en: &'static str,
+    dpt: Dpt,
+    dpt_s: &'static str,
+    size: &'static str,
+) -> GoDefinition {
+    GoDefinition {
+        name,
+        name_de: de,
+        name_en: en,
+        dpt,
+        dpt_str: dpt_s,
+        size_str: size,
+        flags: RECV,
+    }
+}
+/// Create a send-only GO definition.
+const fn go_send(
+    name: &'static str,
+    de: &'static str,
+    en: &'static str,
+    dpt: Dpt,
+    dpt_s: &'static str,
+    size: &'static str,
+) -> GoDefinition {
+    GoDefinition {
+        name,
+        name_de: de,
+        name_en: en,
+        dpt,
+        dpt_str: dpt_s,
+        size_str: size,
+        flags: SEND,
+    }
+}
+/// Create a bidirectional GO definition.
+const fn go_bidir(
+    name: &'static str,
+    de: &'static str,
+    en: &'static str,
+    dpt: Dpt,
+    dpt_s: &'static str,
+    size: &'static str,
+) -> GoDefinition {
+    GoDefinition {
+        name,
+        name_de: de,
+        name_en: en,
+        dpt,
+        dpt_str: dpt_s,
+        size_str: size,
+        flags: BIDIR,
+    }
+}
+
+/// Zone group object definitions (35 per zone).
+pub const ZONE_GOS: &[GoDefinition] = &[
+    go_recv("Play", "Play", "Play", DPT_SWITCH, "DPST-1-1", "1 Bit"),
+    go_recv("Pause", "Pause", "Pause", DPT_SWITCH, "DPST-1-1", "1 Bit"),
+    go_recv("Stop", "Stop", "Stop", DPT_SWITCH, "DPST-1-1", "1 Bit"),
+    go_recv(
+        "Track Next",
+        "Nächster Titel",
+        "Next Track",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_recv(
+        "Track Previous",
+        "Vorheriger Titel",
+        "Previous Track",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_recv(
+        "Volume",
+        "Lautstärke",
+        "Volume",
+        DPT_SCALING,
+        "DPST-5-1",
+        "1 Byte",
+    ),
+    go_send(
+        "Volume Status",
+        "Lautstärke Status",
+        "Volume Status",
+        DPT_SCALING,
+        "DPST-5-1",
+        "1 Byte",
+    ),
+    go_recv(
+        "Volume Dim",
+        "Lautstärke Dimmen",
+        "Volume Dim",
+        DPT_CONTROL_DIMMING,
+        "DPST-3-7",
+        "4 Bit",
+    ),
+    go_recv("Mute", "Stumm", "Mute", DPT_SWITCH, "DPST-1-1", "1 Bit"),
+    go_send(
+        "Mute Status",
+        "Stumm Status",
+        "Mute Status",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_recv(
+        "Mute Toggle",
+        "Stumm Umschalten",
+        "Mute Toggle",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_send(
+        "Control Status",
+        "Wiedergabe Status",
+        "Playback Status",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_send(
+        "Track Playing",
+        "Titel spielt",
+        "Track Playing",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_recv(
+        "Shuffle",
+        "Zufallswiedergabe",
+        "Shuffle",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_send(
+        "Shuffle Status",
+        "Zufall Status",
+        "Shuffle Status",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_recv(
+        "Shuffle Toggle",
+        "Zufall Umschalten",
+        "Shuffle Toggle",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_recv(
+        "Repeat",
+        "Wiederholung",
+        "Repeat",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_send(
+        "Repeat Status",
+        "Wiederholung Status",
+        "Repeat Status",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_recv(
+        "Repeat Toggle",
+        "Wiederholung Umsch.",
+        "Repeat Toggle",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_recv(
+        "Track Repeat",
+        "Titel Wiederholung",
+        "Track Repeat",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_send(
+        "Track Repeat Status",
+        "Titel Wdh. Status",
+        "Track Repeat Status",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_recv(
+        "Track Repeat Toggle",
+        "Titel Wdh. Umsch.",
+        "Track Repeat Toggle",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_recv(
+        "Playlist",
+        "Playlist",
+        "Playlist",
+        DPT_VALUE_1_UCOUNT,
+        "DPST-5-10",
+        "1 Byte",
+    ),
+    go_send(
+        "Playlist Status",
+        "Playlist Status",
+        "Playlist Status",
+        DPT_VALUE_1_UCOUNT,
+        "DPST-5-10",
+        "1 Byte",
+    ),
+    go_recv(
+        "Playlist Next",
+        "Nächste Playlist",
+        "Next Playlist",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_recv(
+        "Playlist Previous",
+        "Vorherige Playlist",
+        "Previous Playlist",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_send(
+        "Track Title",
+        "Titel",
+        "Track Title",
+        DPT_STRING_8859_1,
+        "DPST-16-1",
+        "14 Bytes",
+    ),
+    go_send(
+        "Track Artist",
+        "Interpret",
+        "Track Artist",
+        DPT_STRING_8859_1,
+        "DPST-16-1",
+        "14 Bytes",
+    ),
+    go_send(
+        "Track Album",
+        "Album",
+        "Track Album",
+        DPT_STRING_8859_1,
+        "DPST-16-1",
+        "14 Bytes",
+    ),
+    go_send(
+        "Track Progress",
+        "Fortschritt",
+        "Track Progress",
+        DPT_SCALING,
+        "DPST-5-1",
+        "1 Byte",
+    ),
+    go_recv(
+        "Presence",
+        "Präsenz",
+        "Presence",
+        DPT_OCCUPANCY,
+        "DPST-1-18",
+        "1 Bit",
+    ),
+    go_bidir(
+        "Presence Enable",
+        "Präsenz Aktiviert",
+        "Presence Enable",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_bidir(
+        "Presence Timeout",
+        "Präsenz Timeout",
+        "Presence Timeout",
+        DPT_TIME_PERIOD_SEC,
+        "DPST-7-5",
+        "2 Bytes",
+    ),
+    go_send(
+        "Presence Timer Active",
+        "Präsenz Timer",
+        "Presence Timer",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_recv(
+        "Presence Source Override",
+        "Präsenz Quelle",
+        "Presence Source",
+        DPT_VALUE_1_UCOUNT,
+        "DPST-5-10",
+        "1 Byte",
+    ),
+];
+
+// ── Client group objects (11 per client) ──────────────────────
+
+/// Client group object definitions (11 per client).
+pub const CLIENT_GOS: &[GoDefinition] = &[
+    go_recv(
+        "Volume",
+        "Lautstärke",
+        "Volume",
+        DPT_SCALING,
+        "DPST-5-1",
+        "1 Byte",
+    ),
+    go_send(
+        "Volume Status",
+        "Lautstärke Status",
+        "Volume Status",
+        DPT_SCALING,
+        "DPST-5-1",
+        "1 Byte",
+    ),
+    go_recv(
+        "Volume Dim",
+        "Lautstärke Dimmen",
+        "Volume Dim",
+        DPT_CONTROL_DIMMING,
+        "DPST-3-7",
+        "4 Bit",
+    ),
+    go_recv("Mute", "Stumm", "Mute", DPT_SWITCH, "DPST-1-1", "1 Bit"),
+    go_send(
+        "Mute Status",
+        "Stumm Status",
+        "Mute Status",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_recv(
+        "Mute Toggle",
+        "Stumm Umschalten",
+        "Mute Toggle",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+    go_recv(
+        "Latency",
+        "Latenz",
+        "Latency",
+        DPT_VALUE_1_UCOUNT,
+        "DPST-5-10",
+        "1 Byte",
+    ),
+    go_send(
+        "Latency Status",
+        "Latenz Status",
+        "Latency Status",
+        DPT_VALUE_1_UCOUNT,
+        "DPST-5-10",
+        "1 Byte",
+    ),
+    go_bidir(
+        "Zone",
+        "Zonenzuordnung",
+        "Zone Assignment",
+        DPT_VALUE_1_UCOUNT,
+        "DPST-5-10",
+        "1 Byte",
+    ),
+    go_send(
+        "Zone Status",
+        "Zone Status",
+        "Zone Status",
+        DPT_VALUE_1_UCOUNT,
+        "DPST-5-10",
+        "1 Byte",
+    ),
+    go_send(
+        "Connected",
+        "Verbunden",
+        "Connected",
+        DPT_SWITCH,
+        "DPST-1-1",
+        "1 Bit",
+    ),
+];
+
+/// Compute the 1-based ASAP for a zone group object.
+///
+/// Zone `zone_index` (1-based), GO `go_index` (0-based within `ZONE_GOS`).
+pub const fn zone_asap(zone_index: usize, go_index: usize) -> u16 {
+    ((zone_index - 1) * ZONE_GO_COUNT + go_index + 1) as u16
+}
+
+// ── Named GO indices (zone) ───────────────────────────────────
+// Use these instead of magic numbers when mapping GAs to GOs.
+
+/// Zone GO index.
+pub const ZGO_PLAY: usize = 0;
+/// Zone GO index.
+pub const ZGO_PAUSE: usize = 1;
+/// Zone GO index.
+pub const ZGO_STOP: usize = 2;
+/// Zone GO index.
+pub const ZGO_TRACK_NEXT: usize = 3;
+/// Zone GO index.
+pub const ZGO_TRACK_PREVIOUS: usize = 4;
+/// Zone GO index.
+pub const ZGO_VOLUME: usize = 5;
+/// Zone GO index.
+pub const ZGO_VOLUME_STATUS: usize = 6;
+/// Zone GO index.
+pub const ZGO_VOLUME_DIM: usize = 7;
+/// Zone GO index.
+pub const ZGO_MUTE: usize = 8;
+/// Zone GO index.
+pub const ZGO_MUTE_STATUS: usize = 9;
+/// Zone GO index.
+pub const ZGO_MUTE_TOGGLE: usize = 10;
+/// Zone GO index.
+pub const ZGO_CONTROL_STATUS: usize = 11;
+/// Zone GO index.
+pub const ZGO_TRACK_PLAYING: usize = 12;
+/// Zone GO index.
+pub const ZGO_SHUFFLE: usize = 13;
+/// Zone GO index.
+pub const ZGO_SHUFFLE_STATUS: usize = 14;
+/// Zone GO index.
+pub const ZGO_SHUFFLE_TOGGLE: usize = 15;
+/// Zone GO index.
+pub const ZGO_REPEAT: usize = 16;
+/// Zone GO index.
+pub const ZGO_REPEAT_STATUS: usize = 17;
+/// Zone GO index.
+pub const ZGO_REPEAT_TOGGLE: usize = 18;
+/// Zone GO index.
+pub const ZGO_TRACK_REPEAT: usize = 19;
+/// Zone GO index.
+pub const ZGO_TRACK_REPEAT_STATUS: usize = 20;
+/// Zone GO index.
+pub const ZGO_TRACK_REPEAT_TOGGLE: usize = 21;
+/// Zone GO index.
+pub const ZGO_PLAYLIST: usize = 22;
+/// Zone GO index.
+pub const ZGO_PLAYLIST_STATUS: usize = 23;
+/// Zone GO index.
+pub const ZGO_PLAYLIST_NEXT: usize = 24;
+/// Zone GO index.
+pub const ZGO_PLAYLIST_PREVIOUS: usize = 25;
+/// Zone GO index.
+pub const ZGO_TRACK_TITLE: usize = 26;
+/// Zone GO index.
+pub const ZGO_TRACK_ARTIST: usize = 27;
+/// Zone GO index.
+pub const ZGO_TRACK_ALBUM: usize = 28;
+/// Zone GO index.
+pub const ZGO_TRACK_PROGRESS: usize = 29;
+/// Zone GO index.
+pub const ZGO_PRESENCE: usize = 30;
+/// Zone GO index.
+pub const ZGO_PRESENCE_ENABLE: usize = 31;
+/// Zone GO index.
+pub const ZGO_PRESENCE_TIMEOUT: usize = 32;
+/// Zone GO index.
+pub const ZGO_PRESENCE_TIMER_ACTIVE: usize = 33;
+/// Zone GO index.
+pub const ZGO_PRESENCE_SOURCE_OVERRIDE: usize = 34;
+
+// ── Named GO indices (client) ─────────────────────────────────
+
+/// Client GO index.
+pub const CGO_VOLUME: usize = 0;
+/// Client GO index.
+pub const CGO_VOLUME_STATUS: usize = 1;
+/// Client GO index.
+pub const CGO_VOLUME_DIM: usize = 2;
+/// Client GO index.
+pub const CGO_MUTE: usize = 3;
+/// Client GO index.
+pub const CGO_MUTE_STATUS: usize = 4;
+/// Client GO index.
+pub const CGO_MUTE_TOGGLE: usize = 5;
+/// Client GO index.
+pub const CGO_LATENCY: usize = 6;
+/// Client GO index.
+pub const CGO_LATENCY_STATUS: usize = 7;
+/// Client GO index.
+pub const CGO_ZONE: usize = 8;
+/// Client GO index.
+pub const CGO_ZONE_STATUS: usize = 9;
+/// Client GO index.
+pub const CGO_CONNECTED: usize = 10;
+
+// ── ETS Memory Layout (SSOT — used by xtask and device.rs) ───
+
+/// Byte offsets for ETS parameters in BAU memory.
+pub mod mem {
+    use super::{MAX_CLIENTS, MAX_ZONES};
+
+    /// Zone active flags (10 × 1 byte).
+    pub const ZONE_ACTIVE: usize = 0;
+    /// Zone default volume (10 × 1 byte).
+    pub const ZONE_DEF_VOL: usize = ZONE_ACTIVE + MAX_ZONES;
+    /// Zone max volume (10 × 1 byte).
+    pub const ZONE_MAX_VOL: usize = ZONE_DEF_VOL + MAX_ZONES;
+    /// Zone AirPlay enabled (10 × 1 byte).
+    pub const ZONE_AIRPLAY: usize = ZONE_MAX_VOL + MAX_ZONES;
+    /// Zone Spotify enabled (10 × 1 byte).
+    pub const ZONE_SPOTIFY: usize = ZONE_AIRPLAY + MAX_ZONES;
+    /// Zone presence enabled (10 × 1 byte).
+    pub const ZONE_PRESENCE_EN: usize = ZONE_SPOTIFY + MAX_ZONES;
+    /// Zone presence timeout (10 × 2 bytes).
+    pub const ZONE_PRESENCE_TO: usize = ZONE_PRESENCE_EN + MAX_ZONES;
+    /// Zone sample rate enum (10 × 1 byte).
+    pub const ZONE_SRATE: usize = ZONE_PRESENCE_TO + MAX_ZONES * 2;
+    /// Zone bit depth enum (10 × 1 byte).
+    pub const ZONE_BITD: usize = ZONE_SRATE + MAX_ZONES;
+    /// Client active flags (10 × 1 byte).
+    pub const CLIENT_ACTIVE: usize = ZONE_BITD + MAX_ZONES;
+    /// Client default zone (10 × 1 byte).
+    pub const CLIENT_DEF_ZONE: usize = CLIENT_ACTIVE + MAX_CLIENTS;
+    /// Client default volume (10 × 1 byte).
+    pub const CLIENT_DEF_VOL: usize = CLIENT_DEF_ZONE + MAX_CLIENTS;
+    /// Client max volume (10 × 1 byte).
+    pub const CLIENT_MAX_VOL: usize = CLIENT_DEF_VOL + MAX_CLIENTS;
+    /// Client default latency (10 × 1 byte).
+    pub const CLIENT_DEF_LAT: usize = CLIENT_MAX_VOL + MAX_CLIENTS;
+    /// Global HTTP port (2 bytes).
+    pub const GLOBAL_HTTP_PORT: usize = CLIENT_DEF_LAT + MAX_CLIENTS;
+    /// Global log level enum (1 byte).
+    pub const GLOBAL_LOG_LVL: usize = GLOBAL_HTTP_PORT + 2;
+    /// Radio station active flags (20 × 1 byte).
+    pub const RADIO_ACTIVE: usize = GLOBAL_LOG_LVL + 1;
+
+    // ── String parameters (after numeric block) ───────────────
+
+    /// Maximum radio stations.
+    pub const MAX_RADIOS: usize = 20;
+
+    /// End of numeric parameters.
+    const NUMERIC_END: usize = RADIO_ACTIVE + MAX_RADIOS;
+
+    /// Zone names (10 × 20 bytes).
+    pub const ZONE_NAME: usize = NUMERIC_END;
+    /// Zone name size in bytes.
+    pub const ZONE_NAME_SIZE: usize = 20;
+    /// Client names (10 × 20 bytes).
+    pub const CLIENT_NAME: usize = ZONE_NAME + MAX_ZONES * ZONE_NAME_SIZE;
+    /// Client name size in bytes.
+    pub const CLIENT_NAME_SIZE: usize = 20;
+    /// Client MAC addresses (10 × 17 bytes).
+    pub const CLIENT_MAC: usize = CLIENT_NAME + MAX_CLIENTS * CLIENT_NAME_SIZE;
+    /// Client MAC size in bytes.
+    pub const CLIENT_MAC_SIZE: usize = 17;
+    /// Subsonic URL (60 bytes).
+    pub const GLOBAL_SUB_URL: usize = CLIENT_MAC + MAX_CLIENTS * CLIENT_MAC_SIZE;
+    /// Subsonic URL size in bytes.
+    pub const GLOBAL_SUB_URL_SIZE: usize = 60;
+    /// Subsonic user (20 bytes).
+    pub const GLOBAL_SUB_USER: usize = GLOBAL_SUB_URL + GLOBAL_SUB_URL_SIZE;
+    /// Subsonic user size in bytes.
+    pub const GLOBAL_SUB_USER_SIZE: usize = 20;
+    /// Subsonic password (20 bytes).
+    pub const GLOBAL_SUB_PASS: usize = GLOBAL_SUB_USER + GLOBAL_SUB_USER_SIZE;
+    /// Subsonic password size in bytes.
+    pub const GLOBAL_SUB_PASS_SIZE: usize = 20;
+    /// MQTT broker (40 bytes).
+    pub const GLOBAL_MQTT_BROKER: usize = GLOBAL_SUB_PASS + GLOBAL_SUB_PASS_SIZE;
+    /// MQTT broker size in bytes.
+    pub const GLOBAL_MQTT_BROKER_SIZE: usize = 40;
+    /// MQTT base topic (20 bytes).
+    pub const GLOBAL_MQTT_TOPIC: usize = GLOBAL_MQTT_BROKER + GLOBAL_MQTT_BROKER_SIZE;
+    /// MQTT base topic size in bytes.
+    pub const GLOBAL_MQTT_TOPIC_SIZE: usize = 20;
+    /// Radio station names (20 × 20 bytes).
+    pub const RADIO_NAME: usize = GLOBAL_MQTT_TOPIC + GLOBAL_MQTT_TOPIC_SIZE;
+    /// Radio name size in bytes.
+    pub const RADIO_NAME_SIZE: usize = 20;
+    /// Radio station URLs (20 × 80 bytes).
+    pub const RADIO_URL: usize = RADIO_NAME + MAX_RADIOS * RADIO_NAME_SIZE;
+    /// Radio URL size in bytes.
+    pub const RADIO_URL_SIZE: usize = 80;
+
+    /// Total memory size in bytes (numeric + strings).
+    pub const TOTAL: usize = RADIO_URL + MAX_RADIOS * RADIO_URL_SIZE;
+}
+
+/// Compute the 1-based ASAP for a client group object.
+///
+/// Client `client_index` (1-based), GO `go_index` (0-based within `CLIENT_GOS`).
+pub const fn client_asap(client_index: usize, go_index: usize) -> u16 {
+    (MAX_ZONES * ZONE_GO_COUNT + (client_index - 1) * CLIENT_GO_COUNT + go_index + 1) as u16
+}
+
+#[cfg(test)]
+#[allow(clippy::assertions_on_constants)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn zone_go_count() {
+        assert_eq!(ZONE_GOS.len(), 35);
+    }
+
+    #[test]
+    fn client_go_count() {
+        assert_eq!(CLIENT_GOS.len(), 11);
+    }
+
+    #[test]
+    fn total_go_count() {
+        assert_eq!(TOTAL_GO_COUNT, 460);
+    }
+
+    #[test]
+    fn zone_asap_layout() {
+        // Zone 1, first GO → ASAP 1
+        assert_eq!(zone_asap(1, 0), 1);
+        // Zone 1, last GO → ASAP 30
+        assert_eq!(zone_asap(1, 34), 35);
+        // Zone 2, first GO → ASAP 31
+        assert_eq!(zone_asap(2, 0), 36);
+        // Zone 10, last GO → ASAP 300
+        assert_eq!(zone_asap(10, 34), 350);
+    }
+
+    #[test]
+    fn client_asap_layout() {
+        // Client 1, first GO → ASAP 301
+        assert_eq!(client_asap(1, 0), 351);
+        // Client 1, last GO → ASAP 311
+        assert_eq!(client_asap(1, 10), 361);
+        // Client 10, last GO → ASAP 410
+        assert_eq!(client_asap(10, 10), 460);
+    }
+
+    #[test]
+    fn no_asap_overlap() {
+        let last_zone = zone_asap(MAX_ZONES, ZONE_GO_COUNT - 1);
+        let first_client = client_asap(1, 0);
+        assert_eq!(last_zone + 1, first_client);
+    }
+
+    #[test]
+    fn recv_flags() {
+        assert!(RECV.write);
+        assert!(RECV.communicate);
+        assert!(!RECV.read);
+        assert!(!RECV.transmit);
+    }
+
+    #[test]
+    fn send_flags() {
+        assert!(SEND.read);
+        assert!(SEND.transmit);
+        assert!(SEND.communicate);
+        assert!(!SEND.write);
+    }
+
+    #[test]
+    fn descriptor_bits_recv() {
+        // RECV: communicate(10) + write(12) = 0x1400 | size
+        let bits = RECV.to_descriptor_bits(1);
+        assert_eq!(bits, (1 << 10) | (1 << 12) | 1);
+    }
+
+    #[test]
+    fn descriptor_bits_send() {
+        // SEND: communicate(10) + read(11) + transmit(14) = 0x4C00 | size
+        let bits = SEND.to_descriptor_bits(1);
+        assert_eq!(bits, (1 << 10) | (1 << 11) | (1 << 14) | 1);
+    }
+}

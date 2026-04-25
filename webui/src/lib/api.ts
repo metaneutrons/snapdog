@@ -219,4 +219,9 @@ export const clientEq = {
   applyPreset: (clientId: number, name: string) => post<EqConfig>(`${C}/${clientId}/eq/preset`, name),
 };
 
-export const api = { zones, clients, media, system, health, eq, clientEq };
+const knx = {
+  getProgrammingMode: () => get<boolean>("/api/v1/knx/programming-mode"),
+  setProgrammingMode: (enabled: boolean) => put<boolean>("/api/v1/knx/programming-mode", enabled),
+};
+
+export const api = { zones, clients, media, system, health, eq, clientEq, knx };

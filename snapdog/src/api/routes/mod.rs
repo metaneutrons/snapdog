@@ -4,6 +4,7 @@
 pub mod client_eq;
 pub mod clients;
 pub mod eq;
+pub mod knx;
 pub mod media;
 pub mod system;
 pub mod zones;

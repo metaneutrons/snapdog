@@ -10,6 +10,9 @@ import { api } from "@/lib/api";
 
 export interface ZoneState extends ZoneInfo {
   track: TrackMetadata | null;
+  presence: boolean;
+  presenceEnabled: boolean;
+  presenceTimerActive: boolean;
 }
 
 // ── Store shape ───────────────────────────────────────────────
@@ -36,6 +39,7 @@ interface AppState {
     track: Pick<TrackMetadata, "title" | "artist" | "album" | "duration_ms" | "position_ms" | "seekable" | "cover_url">,
   ) => void;
   updateZoneProgress: (id: number, position_ms: number, duration_ms: number) => void;
+  updateZonePresence: (id: number, presence: boolean, enabled: boolean, timerActive: boolean) => void;
 
   // Client updates
   setClients: (clients: ClientInfo[]) => void;
@@ -67,7 +71,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       const zones = new Map<number, ZoneState>();
       for (const z of zoneList) {
-        zones.set(z.index, { ...z, track: null });
+        zones.set(z.index, { ...z, track: null, presence: z.presence ?? false, presenceEnabled: z.presence_enabled ?? true, presenceTimerActive: z.presence_timer_active ?? false });
       }
 
       // Fetch track metadata for each zone in parallel
@@ -101,6 +105,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       zones.set(z.index, {
         ...z,
         track: existing?.track ?? null,
+        presence: existing?.presence ?? false,
+        presenceEnabled: existing?.presenceEnabled ?? true,
+        presenceTimerActive: existing?.presenceTimerActive ?? false,
       });
     }
     set({ zones });
@@ -119,7 +126,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (z) {
       zones.set(id, {
         ...z,
-        track: z.track ? { ...z.track, ...track } : null,
+        track: z.track ? { ...z.track, ...track } : {
+          title: '', artist: '', album: '', album_artist: null, genre: null, year: null,
+          track_number: null, disc_number: null, duration_ms: 0, position_ms: 0, seekable: false,
+          bitrate_kbps: null, content_type: null, sample_rate: null, source: 'idle',
+          cover_url: null, playlist_index: null, playlist_track_index: null, playlist_track_count: null,
+          ...track as Partial<TrackMetadata>,
+        } as TrackMetadata,
       });
     }
     set({ zones });
@@ -130,6 +143,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     const z = zones.get(id);
     if (z?.track) {
       zones.set(id, { ...z, track: { ...z.track, position_ms, duration_ms } });
+    }
+    set({ zones });
+  },
+
+  updateZonePresence: (id, presence, enabled, timerActive) => {
+    const zones = new Map(get().zones);
+    const z = zones.get(id);
+    if (z) {
+      zones.set(id, { ...z, presence, presenceEnabled: enabled, presenceTimerActive: timerActive });
     }
     set({ zones });
   },

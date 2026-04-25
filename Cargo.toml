@@ -3,6 +3,7 @@ resolver = "2"
 members = [
   "snapdog",
   "snapdog-client",
+  "xtask",
 ]
 
 [workspace.package]
@@ -46,8 +47,9 @@ biquad = "0.6"
 rumqttc = "0.25"
 
 # KNX
-knxkit = { git = "https://github.com/metaneutrons/knxkit", branch = "metaneutrons/v0.2-dev" }
-knxkit_dpt = { git = "https://github.com/metaneutrons/knxkit", branch = "metaneutrons/v0.2-dev" }
+knx-core = { git = "https://github.com/metaneutrons/knx-rs", branch = "main" }
+knx-ip = { git = "https://github.com/metaneutrons/knx-rs", branch = "main" }
+knx-device = { git = "https://github.com/metaneutrons/knx-rs", branch = "main" }
 
 # HTTP client (Subsonic API, radio streams)
 reqwest = { version = "0.12", features = ["json", "stream"] }
@@ -70,6 +72,7 @@ snapcast-proto = "0.7"
 md5 = "0.7"
 fastrand = "2"
 bytes = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 # Testing
 [workspace.dependencies.mockall]

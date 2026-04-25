@@ -41,6 +41,8 @@ pub struct AppState {
     pub notifications: tokio::sync::broadcast::Sender<ws::Notification>,
     /// Shared parametric EQ store.
     pub eq_store: std::sync::Arc<std::sync::Mutex<crate::audio::eq::EqStore>>,
+    /// KNX device control (programming mode). `None` in client mode.
+    pub knx_device_control: Option<crate::knx::DeviceControlHandle>,
     /// Cached Subsonic playlist list with expiry timestamp.
     pub playlist_cache:
         tokio::sync::RwLock<Option<(std::time::Instant, Vec<crate::subsonic::PlaylistEntry>)>>,
@@ -50,6 +52,7 @@ pub struct AppState {
 pub type SharedState = Arc<AppState>;
 
 /// Start the HTTP server.
+#[expect(clippy::too_many_arguments)]
 pub async fn serve(
     config: AppConfig,
     store: state::SharedState,
@@ -58,6 +61,7 @@ pub async fn serve(
     covers: state::cover::SharedCoverCache,
     notifications: tokio::sync::broadcast::Sender<ws::Notification>,
     eq_store: std::sync::Arc<std::sync::Mutex<crate::audio::eq::EqStore>>,
+    knx_device_control: Option<crate::knx::DeviceControlHandle>,
 ) -> Result<()> {
     let port = config.http.port;
     let state = Arc::new(AppState {
@@ -68,6 +72,7 @@ pub async fn serve(
         covers,
         notifications,
         eq_store,
+        knx_device_control,
         playlist_cache: tokio::sync::RwLock::new(None),
     });
 
@@ -85,7 +90,8 @@ pub async fn serve(
             routes::clients::router(state.clone()).merge(routes::client_eq::router(state.clone())),
         )
         .nest("/api/v1/media", routes::media::router(state.clone()))
-        .nest("/api/v1/system", routes::system::router(state.clone()));
+        .nest("/api/v1/system", routes::system::router(state.clone()))
+        .nest("/api/v1/knx", routes::knx::router(state.clone()));
 
     if !api_keys.is_empty() {
         tracing::info!(keys = api_keys.len(), "API authentication enabled");

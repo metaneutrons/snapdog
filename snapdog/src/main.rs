@@ -64,6 +64,10 @@ struct Cli {
 const VOLUME_COALESCE_MS: u64 = 50;
 /// Channel capacity for Snapcast commands from zone players, API, MQTT, KNX.
 const SNAPCAST_CMD_CHANNEL_SIZE: usize = 64;
+/// Path for persisted zone/client state.
+const STATE_FILE: &str = "state.json";
+/// Path for persisted EQ configuration.
+const EQ_FILE: &str = "eq.json";
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -129,7 +133,7 @@ async fn main() -> Result<()> {
     );
 
     // ── Initialize subsystems ─────────────────────────────────
-    let store = state::init(&config, Some(&PathBuf::from("state.json")))?;
+    let store = state::init(&config, Some(&PathBuf::from(STATE_FILE)))?;
     let covers = state::cover::new_cache();
     let (notify_tx, _) = api::ws::notification_channel();
 
@@ -152,7 +156,7 @@ async fn main() -> Result<()> {
 
     // EQ store (needed by event handler + zone players + API)
     let eq_store = Arc::new(std::sync::Mutex::new(audio::eq::EqStore::load(
-        std::path::Path::new("eq.json"),
+        std::path::Path::new(EQ_FILE),
     )));
 
     #[cfg(feature = "snapcast-embedded")]
@@ -204,6 +208,26 @@ async fn main() -> Result<()> {
     })
     .await?;
 
+    // ── KNX bridge ────────────────────────────────────────────
+    let mut knx_device_control: Option<knx::DeviceControlHandle> = None;
+    if config.knx.enabled {
+        let knx_notifications = notify_tx.subscribe();
+        match knx::start(
+            &config,
+            store.clone(),
+            knx_notifications,
+            zone_commands.clone(),
+            snap_cmd_tx.clone(),
+        )
+        .await
+        {
+            Ok(handle) => {
+                knx_device_control = handle;
+            }
+            Err(e) => tracing::warn!(error = %e, "KNX connection failed — running without KNX"),
+        }
+    }
+
     // ── API server ────────────────────────────────────────────
     let api_config = (*config).clone();
     let api_store = store.clone();
@@ -220,6 +244,7 @@ async fn main() -> Result<()> {
             api_covers,
             api_notify,
             eq_store.clone(),
+            knx_device_control,
         )
         .await
         {
@@ -245,26 +270,10 @@ async fn main() -> Result<()> {
         None
     };
 
-    // ── KNX bridge ────────────────────────────────────────────
-    if config.knx.enabled {
-        let knx_notifications = notify_tx.subscribe();
-        match knx::start(
-            &config,
-            store.clone(),
-            knx_notifications,
-            zone_commands.clone(),
-            snap_cmd_tx.clone(),
-        )
-        .await
-        {
-            Ok(()) => {}
-            Err(e) => tracing::warn!(error = %e, "KNX connection failed — running without KNX"),
-        }
-    }
-
     // ── Main loop ─────────────────────────────────────────────
     let mqtt_zone_cmds = zone_commands.clone();
     let mqtt_store = store.clone();
+    let mqtt_snap_tx = snap_cmd_tx.clone();
     let cmd_backend = backend.clone();
 
     // Volume coalescing: buffer rapid volume changes per client (50ms window)
@@ -283,6 +292,18 @@ async fn main() -> Result<()> {
         tokio::select! {
             // Snapcast commands from zone players / API / MQTT / KNX
             Some(cmd) = snap_cmd_rx.recv() => {
+                // Convert relative volume adjustments to absolute
+                let cmd = if let player::SnapcastCmd::Client { ref client_id, action: player::ClientAction::AdjustVolume(delta) } = cmd {
+                    let current = store.read().await.clients.values()
+                        .find(|c| c.snapcast_id.as_deref() == Some(client_id))
+                        .map_or(crate::state::DEFAULT_VOLUME, |c| c.base_volume);
+                    player::SnapcastCmd::Client {
+                        client_id: client_id.clone(),
+                        action: player::ClientAction::Volume((current + delta).clamp(0, 100)),
+                    }
+                } else {
+                    cmd
+                };
                 // Coalesce client volume commands (50ms window)
                 if let player::SnapcastCmd::Client { ref client_id, action: player::ClientAction::Volume(v) } = cmd {
                     pending_volumes.insert(client_id.clone(), v);
@@ -318,7 +339,7 @@ async fn main() -> Result<()> {
             // MQTT events
             _ = async {
                 if let Some(ref mut bridge) = mqtt_bridge {
-                    bridge.poll_once(&mqtt_zone_cmds, &mqtt_store).await;
+                    bridge.poll_once(&mqtt_zone_cmds, &mqtt_store, &mqtt_snap_tx).await;
                 } else {
                     std::future::pending::<()>().await;
                 }

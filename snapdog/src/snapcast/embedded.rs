@@ -160,6 +160,10 @@ impl EmbeddedBackend {
                         message: snapcast_server::CustomMessage::new(type_id, payload),
                     }]
                 }
+                ClientAction::AdjustVolume(_) => {
+                    // Converted to absolute Volume in main loop before reaching backend
+                    vec![]
+                }
             },
             SnapcastCmd::ReconcileZones => unreachable!("handled in execute"),
         }
@@ -270,7 +274,7 @@ impl SnapcastBackend for EmbeddedBackend {
                         })
                         .map(|c| ServerCommand::SetClientVolume {
                             client_id: c.snapcast_id.clone().unwrap(),
-                            volume: mode.effective(c.base_volume, *percent) as u16,
+                            volume: mode.effective(c.base_volume, *percent, c.max_volume) as u16,
                             muted: c.muted,
                         })
                         .collect()
@@ -305,28 +309,29 @@ impl SnapcastBackend for EmbeddedBackend {
                         .clients
                         .values()
                         .find(|c| c.snapcast_id.as_deref() == Some(client_id))
-                        .map(|c| (c.zone_index, c.muted));
+                        .map(|c| (c.zone_index, c.muted, c.max_volume));
                     let (zone_vol, mode) = client_zone
-                        .map(|(zi, _)| {
+                        .map(|(zi, _, _)| {
                             let zv = s.zones.get(&zi).map(|z| z.volume).unwrap_or(100);
                             let m = self.volume_modes.get(&zi).copied().unwrap_or_default();
                             (zv, m)
                         })
                         .unwrap_or((100, Default::default()));
-                    let muted = client_zone.map(|(_, m)| m).unwrap_or(false);
+                    let muted = client_zone.map(|(_, m, _)| m).unwrap_or(false);
+                    let max_vol = client_zone.map(|(_, _, mv)| mv).unwrap_or(100);
                     // Now mutate
                     if let Some(c) = s
                         .clients
                         .values_mut()
                         .find(|c| c.snapcast_id.as_deref() == Some(client_id))
                     {
-                        c.base_volume = (*percent).clamp(0, 100);
+                        c.base_volume = (*percent).clamp(0, max_vol);
                     }
-                    let base = (*percent).clamp(0, 100);
+                    let base = (*percent).clamp(0, max_vol);
                     drop(s);
                     vec![ServerCommand::SetClientVolume {
                         client_id: client_id.clone(),
-                        volume: mode.effective(base, zone_vol) as u16,
+                        volume: mode.effective(base, zone_vol, max_vol) as u16,
                         muted,
                     }]
                 }

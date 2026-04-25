@@ -22,7 +22,7 @@ export function PlaylistBrowser({ zone }: PlaylistBrowserProps) {
   useEffect(() => {
     api.media.playlists()
       .then(setPlaylists)
-      .catch(() => {})
+      .catch((e: unknown) => console.error("API error", e))
       .finally(() => setLoading(false));
   }, []);
 
@@ -40,7 +40,7 @@ export function PlaylistBrowser({ zone }: PlaylistBrowserProps) {
   };
 
   const playTrack = (playlistId: number, trackIndex: number) => {
-    api.zones.playPlaylist(zone.index, playlistId, trackIndex).catch(() => {});
+    api.zones.playPlaylist(zone.index, playlistId, trackIndex).catch((e: unknown) => console.error("API error", e));
   };
 
   if (loading) {
@@ -84,7 +84,7 @@ export function PlaylistBrowser({ zone }: PlaylistBrowserProps) {
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium truncate">{pl.name}</div>
                 <div className="text-xs text-muted-foreground">
-                  {pl.song_count} tracks{Number(pl.duration) > 0 ? ` · ${formatDuration(Number(pl.duration))}` : ""}
+                  {t("tracks", { count: pl.song_count })}{Number(pl.duration) > 0 ? ` · ${formatDuration(Number(pl.duration))}` : ""}
                 </div>
               </div>
             </button>

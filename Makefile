@@ -1,4 +1,10 @@
-.PHONY: setup check fmt clippy test dev build-webui build-all
+.PHONY: setup check fmt clippy test dev build-webui build-all knxprod
+
+# ── KNX Product Database ───────────────────────────────────────
+
+## Generate SnapDog.knxprod (XML + signed archive in one step)
+knxprod:
+	cargo run -p xtask -- knx/snapdog.xml
 
 ## First-time setup: configure git hooks
 setup:
@@ -21,8 +27,8 @@ test:
 build-webui:
 	cd webui && npm ci && npm run build
 
-## Build everything: WebUI then Rust binary
-build-all: build-webui
+## Build everything: WebUI, Rust binary, and KNX product database
+build-all: build-webui knxprod
 	cargo build --release
 
 ## Start dev environment

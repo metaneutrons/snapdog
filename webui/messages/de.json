@@ -24,7 +24,8 @@
   "volume": {
     "label": "Lautstärke",
     "mute": "Stumm",
-    "unmute": "Ton an"
+    "unmute": "Ton an",
+    "maxVolume": "Maximale Lautstärke: {max}%"
   },
   "seek": {
     "label": "Spulen"
@@ -38,7 +39,9 @@
     "unknownTitle": "Unbekannt",
     "unknownArtist": "Unbekannter Künstler",
     "error": "Etwas ist schiefgelaufen",
-    "retry": "Erneut versuchen"
+    "retry": "Erneut versuchen",
+    "presenceDetected": "Präsenz erkannt",
+    "presenceTimerActive": "Präsenz Auto-Off Timer aktiv"
   },
   "client": {
     "clients": "{count, plural, one {# Client} other {# Clients}}",
@@ -67,7 +70,8 @@
   "playlist": {
     "loading": "Wiedergabelisten werden geladen…",
     "empty": "Keine Wiedergabelisten verfügbar",
-    "play": "{name} abspielen"
+    "play": "{name} abspielen",
+    "tracks": "{count, plural, one {# track} other {# tracks}}"
   },
   "auth": {
     "title": "Authentifizierung erforderlich",
@@ -81,11 +85,25 @@
     "lost": "Verbindung verloren",
     "reconnecting": "Verbindung wird wiederhergestellt…"
   },
+  "knx": {
+    "progModeOn": "Programmiermodus aktivieren",
+    "progModeOff": "Programmiermodus deaktivieren",
+    "progActive": "Programmiermodus aktiv",
+    "progInactive": "Programmiermodus inaktiv",
+    "confirmOn": "Programmiermodus aktivieren?",
+    "confirmOnDesc": "Das Gerät wird für ETS sichtbar. Nur aktivieren, wenn Sie gerade programmieren.",
+    "confirmOff": "Programmiermodus deaktivieren?",
+    "confirmOffDesc": "ETS kann dieses Gerät nicht mehr über den Programmiermodus finden.",
+    "cancel": "Abbrechen",
+    "enable": "Aktivieren",
+    "disable": "Deaktivieren"
+  },
   "source": {
     "radio": "Radio",
     "subsonic_playlist": "Subsonic",
     "subsonic_track": "Subsonic",
     "airplay": "AirPlay",
+    "spotify": "Spotify",
     "url": "URL"
   }
 }

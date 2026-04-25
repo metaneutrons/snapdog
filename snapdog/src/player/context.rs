@@ -90,6 +90,8 @@ pub enum GroupAction {
 pub enum ClientAction {
     /// Set the client volume (0–100).
     Volume(i32),
+    /// Adjust the client volume by a relative delta (from DPT 3.007 dimming).
+    AdjustVolume(i32),
     /// Set the client mute state.
     Mute(bool),
     /// Set the client latency offset in milliseconds.

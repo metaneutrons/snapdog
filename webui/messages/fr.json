@@ -24,7 +24,8 @@
   "volume": {
     "label": "Volume",
     "mute": "Muet",
-    "unmute": "Son activé"
+    "unmute": "Son activé",
+    "maxVolume": "Maximum volume: {max}%"
   },
   "seek": {
     "label": "Recherche"
@@ -38,7 +39,9 @@
     "unknownTitle": "Inconnu",
     "unknownArtist": "Artiste inconnu",
     "error": "Une erreur est survenue",
-    "retry": "Réessayer"
+    "retry": "Réessayer",
+    "presenceDetected": "Présence détectée",
+    "presenceTimerActive": "Minuterie d'arrêt automatique active"
   },
   "client": {
     "clients": "{count, plural, one {# client} other {# clients}}",
@@ -67,7 +70,8 @@
   "playlist": {
     "loading": "Chargement des playlists…",
     "empty": "Aucune playlist disponible",
-    "play": "Lire {name}"
+    "play": "Lire {name}",
+    "tracks": "{count, plural, one {# track} other {# tracks}}"
   },
   "auth": {
     "title": "Authentification requise",
@@ -76,6 +80,19 @@
     "submit": "S'authentifier",
     "checking": "Vérification…",
     "invalid": "Clé API invalide. Veuillez réessayer."
+  },
+  "knx": {
+    "progModeOn": "Activer le mode programmation",
+    "progModeOff": "Désactiver le mode programmation",
+    "progActive": "Mode programmation actif",
+    "progInactive": "Mode programmation inactif",
+    "confirmOn": "Activer le mode programmation ?",
+    "confirmOnDesc": "L'appareil sera détectable par ETS. N'activez que pendant la programmation.",
+    "confirmOff": "Désactiver le mode programmation ?",
+    "confirmOffDesc": "ETS ne pourra plus détecter cet appareil via le mode programmation.",
+    "cancel": "Annuler",
+    "enable": "Activer",
+    "disable": "Désactiver"
   },
   "connection": {
     "lost": "Connexion perdue",
@@ -86,6 +103,7 @@
     "subsonic_playlist": "Subsonic",
     "subsonic_track": "Subsonic",
     "airplay": "AirPlay",
+    "spotify": "Spotify",
     "url": "URL"
   }
 }

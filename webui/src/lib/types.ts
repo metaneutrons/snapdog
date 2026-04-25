@@ -8,7 +8,8 @@ export type SourceType =
   | "subsonic_playlist"
   | "subsonic_track"
   | "url"
-  | "airplay";
+  | "airplay"
+  | "spotify";
 
 // ── Zone ──────────────────────────────────────────────────────
 
@@ -23,6 +24,9 @@ export interface ZoneInfo {
   shuffle: boolean;
   repeat: boolean;
   track_repeat: boolean;
+  presence: boolean;
+  presence_enabled: boolean;
+  presence_timer_active: boolean;
 }
 
 export interface TrackMetadata {
@@ -41,6 +45,7 @@ export interface TrackMetadata {
   content_type: string | null;
   sample_rate: number | null;
   source: string;
+  /** Injected from zone state by the API, not from the track source. */
   cover_url: string | null;
   playlist_index: number | null;
   playlist_track_index: number | null;
@@ -63,6 +68,7 @@ export interface ClientInfo {
   zone_index: number;
   icon: string;
   volume: number;
+  max_volume: number;
   muted: boolean;
   connected: boolean;
   is_snapdog: boolean;
@@ -149,11 +155,29 @@ export interface WsClientStateChanged {
   zone: number;
 }
 
+export interface WsZonePresenceChanged {
+  type: "zone_presence_changed";
+  zone: number;
+  presence: boolean;
+  enabled: boolean;
+  timer_active: boolean;
+}
+
+export interface WsZoneEqChanged {
+  type: "zone_eq_changed";
+  zone: number;
+  enabled: boolean;
+  bands: Array<{ filter_type: string; frequency: number; gain: number; q: number }>;
+  preset?: string;
+}
+
 export type WsNotification =
   | WsZoneStateChanged
   | WsZoneTrackChanged
   | WsZoneProgress
-  | WsClientStateChanged;
+  | WsClientStateChanged
+  | WsZonePresenceChanged
+  | WsZoneEqChanged;
 
 export interface WsCommand {
   zone: number;

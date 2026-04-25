@@ -110,4 +110,22 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           # Unfixable transitive deps — review periodically
-          ignore: RUSTSEC-2023-0071,RUSTSEC-2026-0049,RUSTSEC-2026-0098,RUSTSEC-2026-0099,RUSTSEC-2025-0134,RUSTSEC-2026-0097
+          ignore: RUSTSEC-2023-0071,RUSTSEC-2026-0049,RUSTSEC-2026-0098,RUSTSEC-2026-0099,RUSTSEC-2026-0104,RUSTSEC-2025-0134,RUSTSEC-2026-0097
+
+  knxprod:
+    name: KNX Product Database
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+      - name: Generate knxprod
+        run: |
+          mkdir -p knx
+          cargo run -p xtask -- knx/snapdog.xml
+      - uses: actions/upload-artifact@v7
+        with:
+          name: snapdog-knxprod
+          path: knx/snapdog.knxprod
+          if-no-files-found: error

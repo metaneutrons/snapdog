@@ -45,6 +45,8 @@ pub enum ZoneCommand {
     // ── Zone settings ─────────────────────────────────────────
     /// Set the zone volume (0–100).
     SetVolume(i32),
+    /// Adjust the zone volume by a relative delta (from DPT 3.007 dimming).
+    AdjustVolume(i32),
     /// Set the zone mute state.
     SetMute(bool),
     /// Toggle the zone mute state.
@@ -61,6 +63,14 @@ pub enum ZoneCommand {
     SetTrackRepeat(bool),
     /// Toggle single-track repeat.
     ToggleTrackRepeat,
+
+    // ── Presence ──────────────────────────────────────────────
+    /// Set presence state (from KNX occupancy sensor, MQTT, or API).
+    SetPresence(bool),
+    /// Enable or disable presence-triggered playback.
+    SetPresenceEnabled(bool),
+    /// Set auto-off delay in seconds.
+    SetAutoOffDelay(u16),
 
     // ── DSP ───────────────────────────────────────────────────
     /// Apply a new parametric EQ configuration to the zone.

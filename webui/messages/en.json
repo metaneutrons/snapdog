@@ -24,7 +24,8 @@
   "volume": {
     "label": "Volume",
     "mute": "Mute",
-    "unmute": "Unmute"
+    "unmute": "Unmute",
+    "maxVolume": "Maximum volume: {max}%"
   },
   "seek": {
     "label": "Seek"
@@ -38,7 +39,9 @@
     "unknownTitle": "Unknown",
     "unknownArtist": "Unknown Artist",
     "error": "Something went wrong",
-    "retry": "Try again"
+    "retry": "Try again",
+    "presenceDetected": "Presence detected",
+    "presenceTimerActive": "Presence auto-off timer active"
   },
   "client": {
     "clients": "{count, plural, one {# client} other {# clients}}",
@@ -67,7 +70,8 @@
   "playlist": {
     "loading": "Loading playlists…",
     "empty": "No playlists available",
-    "play": "Play {name}"
+    "play": "Play {name}",
+    "tracks": "{count, plural, one {# track} other {# tracks}}"
   },
   "auth": {
     "title": "Authentication Required",
@@ -81,11 +85,25 @@
     "lost": "Connection Lost",
     "reconnecting": "Reconnecting…"
   },
+  "knx": {
+    "progModeOn": "Enable programming mode",
+    "progModeOff": "Disable programming mode",
+    "progActive": "Programming mode active",
+    "progInactive": "Programming mode inactive",
+    "confirmOn": "Enable Programming Mode?",
+    "confirmOnDesc": "The device will be discoverable by ETS. Only enable this when you are actively programming.",
+    "confirmOff": "Disable Programming Mode?",
+    "confirmOffDesc": "ETS will no longer be able to discover this device by programming mode.",
+    "cancel": "Cancel",
+    "enable": "Enable",
+    "disable": "Disable"
+  },
   "source": {
     "radio": "Radio",
     "subsonic_playlist": "Subsonic",
     "subsonic_track": "Subsonic",
     "airplay": "AirPlay",
+    "spotify": "Spotify",
     "url": "URL"
   }
 }
