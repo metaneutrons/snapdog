@@ -185,7 +185,6 @@ function BandRow({
   onRemove: () => void;
 }) {
   const t = useTranslations("eq");
-  const trapRef = useFocusTrap<HTMLDivElement>();
   return (
     <div className="flex items-center gap-2 text-sm">
       <span className="w-5 text-muted-foreground text-xs">{index + 1}</span>

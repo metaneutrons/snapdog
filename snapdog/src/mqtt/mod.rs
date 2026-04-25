@@ -297,46 +297,49 @@ impl MqttBridge {
             ["clients", idx, "volume", "set"] => {
                 let index: usize = idx.parse()?;
                 let volume: i32 = payload.parse()?;
-                let store = state.read().await;
-                if let Some(client) = store.clients.get(&index) {
-                    if let Some(ref snap_id) = client.snapcast_id {
-                        let _ = snap_tx
-                            .send(SnapcastCmd::Client {
-                                client_id: snap_id.clone(),
-                                action: ClientAction::Volume(volume.clamp(0, 100)),
-                            })
-                            .await;
-                    }
+                let snap_id = {
+                    let store = state.read().await;
+                    store.clients.get(&index).and_then(|c| c.snapcast_id.clone())
+                };
+                if let Some(snap_id) = snap_id {
+                    let _ = snap_tx
+                        .send(SnapcastCmd::Client {
+                            client_id: snap_id,
+                            action: ClientAction::Volume(volume.clamp(0, 100)),
+                        })
+                        .await;
                 }
             }
             ["clients", idx, "mute", "set"] => {
                 let index: usize = idx.parse()?;
                 let muted: bool = payload.parse()?;
-                let store = state.read().await;
-                if let Some(client) = store.clients.get(&index) {
-                    if let Some(ref snap_id) = client.snapcast_id {
-                        let _ = snap_tx
-                            .send(SnapcastCmd::Client {
-                                client_id: snap_id.clone(),
-                                action: ClientAction::Mute(muted),
-                            })
-                            .await;
-                    }
+                let snap_id = {
+                    let store = state.read().await;
+                    store.clients.get(&index).and_then(|c| c.snapcast_id.clone())
+                };
+                if let Some(snap_id) = snap_id {
+                    let _ = snap_tx
+                        .send(SnapcastCmd::Client {
+                            client_id: snap_id,
+                            action: ClientAction::Mute(muted),
+                        })
+                        .await;
                 }
             }
             ["clients", idx, "latency", "set"] => {
                 let index: usize = idx.parse()?;
                 let latency: i32 = payload.parse()?;
-                let store = state.read().await;
-                if let Some(client) = store.clients.get(&index) {
-                    if let Some(ref snap_id) = client.snapcast_id {
-                        let _ = snap_tx
-                            .send(SnapcastCmd::Client {
-                                client_id: snap_id.clone(),
-                                action: ClientAction::Latency(latency),
-                            })
-                            .await;
-                    }
+                let snap_id = {
+                    let store = state.read().await;
+                    store.clients.get(&index).and_then(|c| c.snapcast_id.clone())
+                };
+                if let Some(snap_id) = snap_id {
+                    let _ = snap_tx
+                        .send(SnapcastCmd::Client {
+                            client_id: snap_id,
+                            action: ClientAction::Latency(latency),
+                        })
+                        .await;
                 }
             }
             ["clients", idx, "zone", "set"] => {

@@ -140,7 +140,7 @@ pub struct ClientState {
 pub const DEFAULT_VOLUME: i32 = 50;
 
 fn default_volume() -> i32 {
-    100
+    DEFAULT_VOLUME
 }
 use crate::config::{default_auto_off_delay, default_max_volume, default_true};
 
