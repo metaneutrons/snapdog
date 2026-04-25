@@ -325,9 +325,9 @@ impl SnapcastBackend for EmbeddedBackend {
                         .values_mut()
                         .find(|c| c.snapcast_id.as_deref() == Some(client_id))
                     {
-                        c.base_volume = (*percent).clamp(0, 100);
+                        c.base_volume = (*percent).clamp(0, max_vol);
                     }
-                    let base = (*percent).clamp(0, 100);
+                    let base = (*percent).clamp(0, max_vol);
                     drop(s);
                     vec![ServerCommand::SetClientVolume {
                         client_id: client_id.clone(),

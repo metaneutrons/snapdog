@@ -155,7 +155,7 @@ impl SnapcastBackend for ProcessBackend {
                                 (zv, m, mv)
                             })
                             .unwrap_or((100, Default::default(), 100));
-                        let base = v.clamp(0, 100);
+                        let base = v.clamp(0, max_vol);
                         if let Some(c) = s
                             .clients
                             .values_mut()
