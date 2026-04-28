@@ -11,11 +11,11 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use anyhow::{Context, Result};
-use knx_core::address::{GroupAddress, IndividualAddress};
-use knx_core::dpt::{Dpt, DptValue};
-use knx_device::bau::Bau;
-use knx_device::device_object;
-use knx_ip::tunnel_server::{DeviceServer, ServerEvent};
+use knx_rs_core::address::{GroupAddress, IndividualAddress};
+use knx_rs_core::dpt::{Dpt, DptValue};
+use knx_rs_device::bau::Bau;
+use knx_rs_device::device_object;
+use knx_rs_ip::tunnel_server::{DeviceServer, ServerEvent};
 use tokio::sync::{mpsc, oneshot};
 
 use super::group_objects::mem;
@@ -445,11 +445,11 @@ async fn bau_task_loop(
                         handle_write(&mut bau, &server, ga, dpt, &value).await;
                     }
                     BauCmd::SetProgMode { enabled } => {
-                        knx_device::device_object::set_prog_mode(bau.device_mut(), enabled);
+                        knx_rs_device::device_object::set_prog_mode(bau.device_mut(), enabled);
                         tracing::info!(enabled, "KNX programming mode changed");
                     }
                     BauCmd::GetProgMode { reply } => {
-                        let enabled = knx_device::device_object::prog_mode(bau.device());
+                        let enabled = knx_rs_device::device_object::prog_mode(bau.device());
                         let _ = reply.send(enabled);
                     }
                 }
@@ -690,7 +690,7 @@ async fn dispatch_updated_gos(bau: &mut Bau, update_tx: &mpsc::Sender<(GroupAddr
         }
         // Acknowledge the update
         if let Some(go) = bau.group_objects_mut().get_mut(asap) {
-            go.set_comm_flag(knx_device::group_object::ComFlag::Ok);
+            go.set_comm_flag(knx_rs_device::group_object::ComFlag::Ok);
         }
     }
 }

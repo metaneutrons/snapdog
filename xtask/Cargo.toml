@@ -6,4 +6,4 @@ publish = false
 
 [dependencies]
 snapdog = { path = "../snapdog", default-features = false }
-knx-prod = { git = "https://github.com/metaneutrons/knx-rs", branch = "main" }
+knx-rs-prod = "0.1.0"

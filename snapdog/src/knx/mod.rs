@@ -20,8 +20,8 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use anyhow::{Context, Result};
-use knx_core::address::GroupAddress;
-use knx_core::dpt::{
+use knx_rs_core::address::GroupAddress;
+use knx_rs_core::dpt::{
     self, DPT_SCALING, DPT_STRING_8859_1, DPT_SWITCH, DPT_VALUE_1_UCOUNT, DPT_VALUE_2_UCOUNT, Dpt,
     DptValue,
 };
@@ -76,13 +76,13 @@ async fn start_client(
         .url
         .as_deref()
         .context("KNX client mode requires 'url'")?;
-    let spec = knx_ip::parse_url(url).context("Invalid KNX URL")?;
-    let conn = knx_ip::connect(spec)
+    let spec = knx_rs_ip::parse_url(url).context("Invalid KNX URL")?;
+    let conn = knx_rs_ip::connect(spec)
         .await
         .context("KNX connection failed")?;
     tracing::info!(%url, "KNX client connected");
 
-    let mux = knx_ip::Multiplexer::new(conn);
+    let mux = knx_rs_ip::Multiplexer::new(conn);
     let pub_transport = client::ClientPublisher::new(mux.handle());
     let listen_transport = client::ClientListener::new(mux.handle());
     tokio::spawn(mux.run());
@@ -646,7 +646,7 @@ async fn write(transport: &impl KnxPublisher, ga_str: &str, dpt: Dpt, value: &Dp
 mod tests {
     use super::*;
     use crate::player::ZoneCommand;
-    use knx_core::address::GroupAddress;
+    use knx_rs_core::address::GroupAddress;
     use std::sync::Arc;
     use tokio::sync::{RwLock, mpsc};
 

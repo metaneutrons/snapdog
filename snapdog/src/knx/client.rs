@@ -3,10 +3,10 @@
 
 //! Client-mode KNX transport — connects to an external KNX/IP gateway.
 
-use knx_core::address::GroupAddress;
-use knx_core::dpt::{Dpt, DptValue};
-use knx_ip::multiplex::MultiplexHandle;
-use knx_ip::ops::GroupOps;
+use knx_rs_core::address::GroupAddress;
+use knx_rs_core::dpt::{Dpt, DptValue};
+use knx_rs_ip::multiplex::MultiplexHandle;
+use knx_rs_ip::ops::GroupOps;
 
 use super::transport::{KnxListener, KnxPublisher};
 

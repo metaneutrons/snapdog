@@ -7,7 +7,7 @@
 //! - Device mode runtime (BAU `GroupObjectStore` construction)
 //! - `cargo xtask generate-knxprod-xml` (OpenKNXproducer XML generation)
 
-use knx_core::dpt::{DPT_SCALING, DPT_STRING_8859_1, DPT_SWITCH, DPT_VALUE_1_UCOUNT, Dpt};
+use knx_rs_core::dpt::{DPT_SCALING, DPT_STRING_8859_1, DPT_SWITCH, DPT_VALUE_1_UCOUNT, Dpt};
 
 /// Maximum number of zones supported.
 pub const MAX_ZONES: usize = 10;

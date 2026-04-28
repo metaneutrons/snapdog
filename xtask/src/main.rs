@@ -44,7 +44,7 @@ fn main() {
     // Step 2: Generate .knxprod (signed ZIP archive for ETS import)
     let xml_file = std::path::Path::new(&xml_path);
     let knxprod_file = std::path::Path::new(&knxprod_path);
-    match knx_prod::generate_knxprod(xml_file, knxprod_file) {
+    match knx_rs_prod::generate_knxprod(xml_file, knxprod_file) {
         Ok(metadata) => {
             let size = std::fs::metadata(knxprod_file)
                 .map(|m| m.len())

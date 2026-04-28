@@ -1059,7 +1059,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1617,7 +1617,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -1953,36 +1953,40 @@ dependencies = [
 ]
 
 [[package]]
-name = "knx-core"
+name = "knx-rs-core"
 version = "0.1.0"
-source = "git+https://github.com/metaneutrons/knx-rs?branch=main#e249711adc69bc33fab77035207a860578fedf53"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d8212f0394748a3e47f1693e84cf26fe899473cf48850c02f7cc0d87675ef8a"
 dependencies = [
  "libm",
 ]
 
 [[package]]
-name = "knx-device"
+name = "knx-rs-device"
 version = "0.1.0"
-source = "git+https://github.com/metaneutrons/knx-rs?branch=main#e249711adc69bc33fab77035207a860578fedf53"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df614be4e1f55f03ee0da37617c084364c2d29492a6a4dd90d57010e35008620"
 dependencies = [
- "knx-core",
+ "knx-rs-core",
 ]
 
 [[package]]
-name = "knx-ip"
+name = "knx-rs-ip"
 version = "0.1.0"
-source = "git+https://github.com/metaneutrons/knx-rs?branch=main#e249711adc69bc33fab77035207a860578fedf53"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d29a7b73327be7cee4f0ff820731713330362c27ddc93489fae1850a58e05be"
 dependencies = [
- "knx-core",
+ "knx-rs-core",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
 ]
 
 [[package]]
-name = "knx-prod"
+name = "knx-rs-prod"
 version = "0.1.0"
-source = "git+https://github.com/metaneutrons/knx-rs?branch=main#e249711adc69bc33fab77035207a860578fedf53"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "080c70bf6b5e319c73883efe781b4fdcd5a827b124aaf200266c6269c8128bd8"
 dependencies = [
  "base64",
  "clap",
@@ -2555,7 +2559,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3538,7 +3542,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3969,9 +3973,9 @@ dependencies = [
  "dotenvy",
  "fastrand",
  "futures-util",
- "knx-core",
- "knx-device",
- "knx-ip",
+ "knx-rs-core",
+ "knx-rs-device",
+ "knx-rs-ip",
  "librespot-connect",
  "librespot-core",
  "librespot-discovery",
@@ -4367,7 +4371,7 @@ dependencies = [
  "getrandom 0.4.2",
  "once_cell",
  "rustix 1.1.4",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5220,7 +5224,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5845,7 +5849,7 @@ dependencies = [
 name = "xtask"
 version = "0.1.0"
 dependencies = [
- "knx-prod",
+ "knx-rs-prod",
  "snapdog",
 ]
 

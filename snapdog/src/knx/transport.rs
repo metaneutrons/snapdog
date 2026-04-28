@@ -3,8 +3,8 @@
 
 //! KNX transport abstractions — shared interfaces for client and device modes.
 
-use knx_core::address::GroupAddress;
-use knx_core::dpt::{Dpt, DptValue};
+use knx_rs_core::address::GroupAddress;
+use knx_rs_core::dpt::{Dpt, DptValue};
 
 /// Write-only interface to the KNX bus.
 ///
