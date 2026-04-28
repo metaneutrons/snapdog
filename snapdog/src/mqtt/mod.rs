@@ -299,7 +299,10 @@ impl MqttBridge {
                 let volume: i32 = payload.parse()?;
                 let snap_id = {
                     let store = state.read().await;
-                    store.clients.get(&index).and_then(|c| c.snapcast_id.clone())
+                    store
+                        .clients
+                        .get(&index)
+                        .and_then(|c| c.snapcast_id.clone())
                 };
                 if let Some(snap_id) = snap_id {
                     let _ = snap_tx
@@ -315,7 +318,10 @@ impl MqttBridge {
                 let muted: bool = payload.parse()?;
                 let snap_id = {
                     let store = state.read().await;
-                    store.clients.get(&index).and_then(|c| c.snapcast_id.clone())
+                    store
+                        .clients
+                        .get(&index)
+                        .and_then(|c| c.snapcast_id.clone())
                 };
                 if let Some(snap_id) = snap_id {
                     let _ = snap_tx
@@ -331,7 +337,10 @@ impl MqttBridge {
                 let latency: i32 = payload.parse()?;
                 let snap_id = {
                     let store = state.read().await;
-                    store.clients.get(&index).and_then(|c| c.snapcast_id.clone())
+                    store
+                        .clients
+                        .get(&index)
+                        .and_then(|c| c.snapcast_id.clone())
                 };
                 if let Some(snap_id) = snap_id {
                     let _ = snap_tx

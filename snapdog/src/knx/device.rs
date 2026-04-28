@@ -369,6 +369,12 @@ pub(crate) async fn start_device_transport(
     let (cmd_tx, cmd_rx) = mpsc::channel(BAU_CHANNEL_CAPACITY);
     let (update_tx, update_rx) = mpsc::channel(BAU_CHANNEL_CAPACITY);
 
+    // Activate programming mode if requested via CLI
+    if config.knx.start_prog_mode {
+        knx_rs_device::device_object::set_prog_mode(bau.device_mut(), true);
+        tracing::info!("KNX programming mode active (--knx-prog-mode)");
+    }
+
     tokio::spawn(bau_task_loop(bau, server, cmd_rx, update_tx, persist_path));
 
     tracing::info!(%individual_address, persist, "KNX device mode started");

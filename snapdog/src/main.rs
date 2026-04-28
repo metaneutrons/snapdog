@@ -23,9 +23,17 @@ use snapdog::*;
 #[derive(Parser)]
 #[command(version, about)]
 struct Cli {
-    /// Path to configuration file (optional — defaults are used if omitted)
+    /// Path to configuration file (TOML)
     #[arg(short, long)]
     config: Option<PathBuf>,
+
+    /// KNX device mode — ETS programs everything, no TOML required
+    #[arg(long)]
+    knx_device: bool,
+
+    /// Start with KNX programming mode active (requires --knx-device)
+    #[arg(long, requires = "knx_device")]
+    knx_prog_mode: bool,
 
     /// HTTP API port
     #[arg(short, long)]
@@ -74,13 +82,34 @@ async fn main() -> Result<()> {
     // ── Parse config ──────────────────────────────────────────
     let cli = Cli::parse();
 
+    if cli.config.is_none() && !cli.knx_device {
+        // Neither --config nor --knx-device specified — show help and exit
+        use clap::CommandFactory;
+        Cli::command().print_help()?;
+        eprintln!("\n\nerror: specify --config <PATH> or --knx-device");
+        std::process::exit(1);
+    }
+
     let mut app_config = if let Some(ref config_path) = cli.config {
         config::load(config_path)?
-    } else if std::path::Path::new("snapdog.toml").exists() {
-        config::load(&PathBuf::from("snapdog.toml"))?
     } else {
+        // --knx-device without --config: start with defaults, ETS provides config
         config::load_raw(config::RawConfig::default())?
     };
+
+    // --knx-device enables device mode
+    if cli.knx_device {
+        app_config.knx.enabled = true;
+        app_config.knx.mode = "device".into();
+        if app_config.knx.individual_address.is_none() {
+            app_config.knx.individual_address = Some("15.15.255".into());
+        }
+    }
+
+    // --knx-prog-mode: set flag for BAU task to activate on start
+    if cli.knx_prog_mode {
+        app_config.knx.start_prog_mode = true;
+    }
 
     // CLI overrides
     if let Some(port) = cli.port {

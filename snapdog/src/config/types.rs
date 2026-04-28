@@ -389,6 +389,9 @@ pub struct KnxConfig {
     /// Persist ETS-programmed configuration across restarts (device mode only).
     /// Defaults to `true` when mode is `"device"`.
     pub persist_ets_config: Option<bool>,
+    /// Start with programming mode active (set via --knx-prog-mode CLI flag).
+    #[serde(default)]
+    pub start_prog_mode: bool,
 }
 
 fn default_knx_mode() -> String {
