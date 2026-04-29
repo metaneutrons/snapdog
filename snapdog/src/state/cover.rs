@@ -121,7 +121,7 @@ pub async fn fetch_cover(url: &str) -> Option<(Vec<u8>, String)> {
     }
 
     let client = reqwest::Client::builder()
-        .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+        .user_agent(crate::USER_AGENT)
         .build()
         .ok()?;
     let resp = client.get(url).send().await.ok()?.error_for_status().ok()?;

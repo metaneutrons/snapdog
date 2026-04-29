@@ -4,11 +4,19 @@
 //! WebSocket endpoint for real-time state notifications.
 
 use axum::Router;
+
+/// WebSocket ping interval to detect dead connections.
+const WS_PING_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
 use axum::extract::State;
+
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+
 use axum::response::IntoResponse;
+
 use axum::routing::get;
+
 use serde::Serialize;
+
 use tokio::sync::broadcast;
 
 use crate::api::SharedState;
@@ -122,7 +130,7 @@ async fn ws_handler(ws: WebSocketUpgrade, State(state): State<SharedState>) -> i
 
 async fn handle_socket(mut socket: WebSocket, state: SharedState) {
     let mut rx = state.notifications.subscribe();
-    let mut ping_interval = tokio::time::interval(std::time::Duration::from_secs(30));
+    let mut ping_interval = tokio::time::interval(WS_PING_INTERVAL);
     tracing::debug!("WebSocket client connected");
 
     loop {
