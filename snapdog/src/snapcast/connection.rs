@@ -19,6 +19,15 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 
 use super::protocol::{Notification, RawMessage, Request};
 
+/// Maximum connection attempts before giving up on initial connect.
+const MAX_CONNECT_ATTEMPTS: u32 = 10;
+/// Delay between initial connection attempts.
+const CONNECT_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(500);
+/// Maximum reconnection attempts before giving up.
+const MAX_RECONNECT_ATTEMPTS: u64 = 10;
+/// Maximum reconnect delay in seconds (capped exponential backoff).
+const MAX_RECONNECT_DELAY_SECS: u64 = 5;
+
 /// A pending request awaiting its response.
 type PendingTx = oneshot::Sender<Result<Value, super::protocol::RpcError>>;
 
@@ -47,11 +56,11 @@ impl Connection {
                     Ok(s) => break s,
                     Err(e) => {
                         attempts += 1;
-                        if attempts >= 10 {
+                        if attempts >= MAX_CONNECT_ATTEMPTS {
                             return Err(e).context("Failed to connect to Snapcast JSON-RPC");
                         }
                         tracing::debug!(attempt = attempts, "Snapcast not ready, retrying...");
-                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                        tokio::time::sleep(CONNECT_RETRY_DELAY).await;
                     }
                 }
             }
@@ -213,8 +222,8 @@ async fn reconnect(
     tokio::io::Lines<BufReader<tokio::net::tcp::OwnedReadHalf>>,
     tokio::net::tcp::OwnedWriteHalf,
 )> {
-    for attempt in 1..=10 {
-        let delay = std::time::Duration::from_secs(attempt.min(5));
+    for attempt in 1..=MAX_RECONNECT_ATTEMPTS {
+        let delay = std::time::Duration::from_secs(attempt.min(MAX_RECONNECT_DELAY_SECS));
         tracing::info!(
             attempt,
             delay_secs = delay.as_secs(),

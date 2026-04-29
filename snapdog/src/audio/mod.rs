@@ -65,6 +65,10 @@ const HTTP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 const MAX_RETRIES: u32 = 3;
 /// Base delay between retries (doubles each attempt).
 const RETRY_BASE_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
+/// Pipe buffer size: ~4s of audio at 128kbps. Provides smooth playback during brief network hiccups.
+const PIPE_BUFFER_SIZE: usize = 64 * 1024;
+/// Maximum consecutive HLS segment failures before giving up.
+const MAX_HLS_FAILURES: u32 = 5;
 
 /// Build a reqwest client with User-Agent and timeout.
 fn http_client() -> Result<reqwest::Client> {
@@ -163,9 +167,8 @@ pub async fn decode_http_stream(
         return Ok(());
     }
 
-    // Pipe buffer: ~4s of audio at 128kbps = 64KB.
-    // Provides smooth playback during brief network hiccups.
-    let (mut pipe_tx, pipe_rx) = tokio::io::duplex(64 * 1024);
+    // Pipe buffer: provides smooth playback during brief network hiccups.
+    let (mut pipe_tx, pipe_rx) = tokio::io::duplex(PIPE_BUFFER_SIZE);
 
     // Task: read HTTP chunks, strip ICY metadata, write audio to pipe
     let url_clone = url.clone();
@@ -228,7 +231,7 @@ async fn decode_hls_stream(
     let base_url = url::Url::parse(&playlist_url).context("Failed to parse HLS playlist URL")?;
     let content_type = "audio/aac".to_string();
 
-    let (mut pipe_tx, pipe_rx) = tokio::io::duplex(64 * 1024);
+    let (mut pipe_tx, pipe_rx) = tokio::io::duplex(PIPE_BUFFER_SIZE);
 
     let hls_task = tokio::spawn(async move {
         use tokio::io::AsyncWriteExt;
@@ -330,7 +333,7 @@ async fn decode_hls_stream(
                     Err(e) => {
                         consecutive_failures += 1;
                         tracing::warn!(error = %e, consecutive_failures, "HLS segment failed after retries");
-                        if consecutive_failures >= 5 {
+                        if consecutive_failures >= MAX_HLS_FAILURES {
                             tracing::error!("Too many consecutive HLS failures");
                             break;
                         }

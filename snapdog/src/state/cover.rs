@@ -123,15 +123,31 @@ pub async fn fetch_cover(url: &str) -> Option<(Vec<u8>, String)> {
     let client = reqwest::Client::builder()
         .user_agent(crate::USER_AGENT)
         .build()
+        .inspect_err(
+            |e| tracing::debug!(error = %e, url, "Failed to build HTTP client for cover fetch"),
+        )
         .ok()?;
-    let resp = client.get(url).send().await.ok()?.error_for_status().ok()?;
+    let resp = client
+        .get(url)
+        .send()
+        .await
+        .inspect_err(|e| tracing::debug!(error = %e, url, "Cover art request failed"))
+        .ok()?
+        .error_for_status()
+        .inspect_err(|e| tracing::debug!(error = %e, url, "Cover art HTTP error"))
+        .ok()?;
     let mime = resp
         .headers()
         .get("content-type")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("application/octet-stream")
         .to_string();
-    let bytes = resp.bytes().await.ok()?.to_vec();
+    let bytes = resp
+        .bytes()
+        .await
+        .inspect_err(|e| tracing::debug!(error = %e, url, "Failed to read cover art bytes"))
+        .ok()?
+        .to_vec();
     Some((bytes, mime))
 }
 

@@ -81,6 +81,46 @@ const STATE_FILE: &str = "state.json";
 /// Path for persisted EQ configuration.
 const EQ_FILE: &str = "eq.json";
 
+/// Coalesces rapid volume changes per client within a time window.
+struct VolumeCoalescer {
+    pending: std::collections::HashMap<String, (i32, tokio::time::Instant)>,
+    window: std::time::Duration,
+}
+
+impl VolumeCoalescer {
+    fn new(window: std::time::Duration) -> Self {
+        Self {
+            pending: std::collections::HashMap::new(),
+            window,
+        }
+    }
+
+    fn push(&mut self, client_id: String, volume: i32) {
+        self.pending.insert(
+            client_id,
+            (volume, tokio::time::Instant::now() + self.window),
+        );
+    }
+
+    fn flush_expired(&mut self) -> Vec<(String, i32)> {
+        let now = tokio::time::Instant::now();
+        let expired: Vec<_> = self
+            .pending
+            .iter()
+            .filter(|(_, (_, deadline))| now >= *deadline)
+            .map(|(id, (vol, _))| (id.clone(), *vol))
+            .collect();
+        for (id, _) in &expired {
+            self.pending.remove(id);
+        }
+        expired
+    }
+
+    fn next_deadline(&self) -> Option<tokio::time::Instant> {
+        self.pending.values().map(|(_, d)| *d).min()
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // ── Parse config ──────────────────────────────────────────
@@ -104,7 +144,7 @@ async fn main() -> Result<()> {
     // --knx-device enables device mode
     if cli.knx_device {
         app_config.knx.enabled = true;
-        app_config.knx.mode = "device".into();
+        app_config.knx.mode = config::KnxMode::Device;
         app_config.knx.individual_address =
             Some(cli.knx_address.unwrap_or_else(|| "15.15.255".into()));
     }
@@ -119,7 +159,12 @@ async fn main() -> Result<()> {
         app_config.http.port = port;
     }
     if let Some(ref codec) = cli.codec {
-        app_config.audio.codec = codec.clone();
+        app_config.audio.codec = match codec.as_str() {
+            "flac" => config::AudioCodec::Flac,
+            "f32lz4" => config::AudioCodec::F32lz4,
+            "f32lz4e" => config::AudioCodec::F32lz4e,
+            other => anyhow::bail!("Unknown codec '{other}' — use flac, f32lz4, or f32lz4e"),
+        };
     }
     if let Some(rate) = cli.sample_rate {
         app_config.audio.sample_rate = rate;
@@ -137,7 +182,16 @@ async fn main() -> Result<()> {
         app_config.snapcast.mdns_name = s.clone();
     }
     if let Some(ref level) = cli.log_level {
-        app_config.system.log_level = level.clone();
+        app_config.system.log_level = match level.as_str() {
+            "trace" => config::LogLevel::Trace,
+            "debug" => config::LogLevel::Debug,
+            "info" => config::LogLevel::Info,
+            "warn" => config::LogLevel::Warn,
+            "error" => config::LogLevel::Error,
+            other => anyhow::bail!(
+                "Unknown log level '{other}' — use trace, debug, info, warn, or error"
+            ),
+        };
     }
 
     let config_label = cli
@@ -261,6 +315,8 @@ async fn main() -> Result<()> {
     }
 
     // ── API server ────────────────────────────────────────────
+    // Intentionally spawned without shutdown propagation: if the API dies,
+    // the main loop continues serving MQTT/KNX/Snapcast. The API is non-critical.
     let api_config = (*config).clone();
     let api_store = store.clone();
     let api_commands = zone_commands.clone();
@@ -308,14 +364,12 @@ async fn main() -> Result<()> {
     let mqtt_snap_tx = snap_cmd_tx.clone();
     let cmd_backend = backend.clone();
 
-    // Volume coalescing: buffer rapid volume changes per client (50ms window)
-    let mut pending_volumes: std::collections::HashMap<String, i32> =
-        std::collections::HashMap::new();
-    let mut coalesce_deadline: Option<tokio::time::Instant> = None;
+    // Volume coalescing: buffer rapid volume changes per client
+    let mut coalescer = VolumeCoalescer::new(std::time::Duration::from_millis(VOLUME_COALESCE_MS));
 
     loop {
         let sleep = async {
-            match coalesce_deadline {
+            match coalescer.next_deadline() {
                 Some(d) => tokio::time::sleep_until(d).await,
                 None => std::future::pending().await,
             }
@@ -336,19 +390,18 @@ async fn main() -> Result<()> {
                 } else {
                     cmd
                 };
-                // Coalesce client volume commands (50ms window)
+                // Coalesce client volume commands
                 if let player::SnapcastCmd::Client { ref client_id, action: player::ClientAction::Volume(v) } = cmd {
-                    pending_volumes.insert(client_id.clone(), v);
-                    coalesce_deadline = Some(tokio::time::Instant::now() + std::time::Duration::from_millis(VOLUME_COALESCE_MS));
+                    coalescer.push(client_id.clone(), v);
                 } else {
                     if let Err(e) = cmd_backend.execute(cmd).await {
                         tracing::warn!(error = %e, "Snapcast command failed");
                     }
                 }
             }
-            // Coalesce timer fired — flush pending volumes
+            // Coalesce timer fired — flush expired volumes
             _ = sleep => {
-                for (client_id, volume) in pending_volumes.drain() {
+                for (client_id, volume) in coalescer.flush_expired() {
                     let cmd = player::SnapcastCmd::Client {
                         client_id,
                         action: player::ClientAction::Volume(volume),
@@ -357,7 +410,6 @@ async fn main() -> Result<()> {
                         tracing::warn!(error = %e, "Snapcast volume command failed");
                     }
                 }
-                coalesce_deadline = None;
             }
             // Snapcast server notifications → state updates (process backend only)
             _ = async {

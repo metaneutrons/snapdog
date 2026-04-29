@@ -19,7 +19,7 @@ pub struct SubsonicClient {
     base_url: String,
     username: String,
     password: String,
-    format: String,
+    format: crate::config::SubsonicFormat,
     http: reqwest::Client,
 }
 
@@ -30,7 +30,7 @@ impl SubsonicClient {
             base_url: config.url.trim_end_matches('/').to_string(),
             username: config.username.clone(),
             password: config.password.clone(),
-            format: config.format.clone(),
+            format: config.format,
             http: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(10))
                 .connect_timeout(std::time::Duration::from_secs(5))
@@ -93,7 +93,7 @@ impl SubsonicClient {
             salt,
             API_VERSION,
             CLIENT_NAME,
-            self.format
+            self.format.as_str()
         );
         if offset_secs > 0 {
             url.push_str(&format!("&timeOffset={offset_secs}"));

@@ -3,7 +3,116 @@
 
 //! Configuration types: raw TOML structs and resolved application config.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+
+// ── Typed enums for config fields ─────────────────────────────
+
+/// KNX operating mode.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum KnxMode {
+    /// Connect to a KNX/IP gateway.
+    #[default]
+    Client,
+    /// Run as ETS-programmable KNX/IP device.
+    Device,
+}
+
+impl KnxMode {
+    /// String representation for matching and display.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Client => "client",
+            Self::Device => "device",
+        }
+    }
+}
+
+/// Audio codec for Snapcast streaming.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AudioCodec {
+    /// FLAC lossless compression.
+    #[default]
+    Flac,
+    /// Raw f32 with LZ4 compression.
+    F32lz4,
+    /// Raw f32 with LZ4 compression + encryption.
+    F32lz4e,
+}
+
+impl AudioCodec {
+    /// String representation for Snapcast protocol.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Flac => "flac",
+            Self::F32lz4 => "f32lz4",
+            Self::F32lz4e => "f32lz4e",
+        }
+    }
+}
+
+impl std::fmt::Display for AudioCodec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Tracing log level.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LogLevel {
+    /// Most verbose.
+    Trace,
+    /// Debug messages.
+    Debug,
+    /// Normal operation.
+    #[default]
+    Info,
+    /// Warnings only.
+    Warn,
+    /// Errors only.
+    Error,
+}
+
+impl std::fmt::Display for LogLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Trace => "trace",
+            Self::Debug => "debug",
+            Self::Info => "info",
+            Self::Warn => "warn",
+            Self::Error => "error",
+        })
+    }
+}
+
+/// Subsonic stream format.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SubsonicFormat {
+    /// Original file (no transcoding).
+    #[default]
+    Raw,
+    /// FLAC lossless.
+    Flac,
+    /// MP3 lossy.
+    Mp3,
+    /// Opus lossy.
+    Opus,
+}
+
+impl SubsonicFormat {
+    /// String representation for Subsonic API URL parameter.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Raw => "raw",
+            Self::Flac => "flac",
+            Self::Mp3 => "mp3",
+            Self::Opus => "opus",
+        }
+    }
+}
 
 // ── Raw TOML structs (what the user writes) ───────────────────
 
@@ -49,25 +158,15 @@ pub struct RawConfig {
 }
 
 /// System-level settings.
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Default, Deserialize, Clone)]
 pub struct SystemConfig {
     /// Tracing log level: trace, debug, info, warn, error.
-    #[serde(default = "default_log_level")]
-    pub log_level: String,
+    #[serde(default)]
+    pub log_level: LogLevel,
     /// Optional log file path (daily rotation).
     pub log_file: Option<String>,
 }
 
-impl Default for SystemConfig {
-    fn default() -> Self {
-        Self {
-            log_level: default_log_level(),
-            log_file: None,
-        }
-    }
-}
-
-/// Audio output format — SSOT with Snapcast stream configuration.
 /// How zone (group) volume changes affect individual client volumes.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -200,9 +299,9 @@ pub struct AudioConfig {
     /// Number of audio channels (typically 2 for stereo).
     #[serde(default = "default_channels")]
     pub channels: u16,
-    /// Snapcast codec: "flac", "f32lz4", "f32lz4e".
-    #[serde(default = "default_codec")]
-    pub codec: String,
+    /// Snapcast codec: flac, f32lz4, f32lz4e.
+    #[serde(default)]
+    pub codec: AudioCodec,
     /// Pre-shared key for f32lz4e encryption (default: built-in key).
     #[serde(default)]
     pub encryption_psk: Option<String>,
@@ -217,7 +316,7 @@ impl Default for AudioConfig {
             sample_rate: default_sample_rate(),
             bit_depth: default_bit_depth(),
             channels: default_channels(),
-            codec: default_codec(),
+            codec: AudioCodec::default(),
             encryption_psk: None,
             group_volume_mode: GroupVolumeMode::default(),
         }
@@ -342,17 +441,13 @@ pub struct SubsonicConfig {
     pub username: String,
     /// Authentication password.
     pub password: String,
-    /// Stream format: "raw" (original file), "flac", "mp3", "opus".
-    /// Default: "flac" (lossless, streamable, no buffering delay).
-    #[serde(default = "default_subsonic_format")]
-    pub format: String,
+    /// Audio output format — SSOT with Snapcast stream configuration.
+    /// Stream format: raw (original file), flac, mp3, opus.
+    #[serde(default)]
+    pub format: SubsonicFormat,
     /// Skip TLS certificate verification (for self-signed certs).
     #[serde(default)]
     pub tls_skip_verify: bool,
-}
-
-fn default_subsonic_format() -> String {
-    "flac".into()
 }
 
 /// MQTT bridge configuration.
@@ -377,10 +472,10 @@ pub struct KnxConfig {
     /// Enable KNX integration.
     #[serde(default)]
     pub enabled: bool,
-    /// Operating mode: `"client"` (default) connects to a gateway,
-    /// `"device"` runs as ETS-programmable KNX/IP device on port 3671.
-    #[serde(default = "default_knx_mode")]
-    pub mode: String,
+    /// Operating mode: `client` (default) connects to a gateway,
+    /// `device` runs as ETS-programmable KNX/IP device on port 3671.
+    #[serde(default)]
+    pub mode: KnxMode,
     /// KNX connection URL (client mode only). Unicast = tunnel, multicast = router.
     /// Examples: `udp://192.168.1.50:3671`, `udp://224.0.23.12:3671`
     pub url: Option<String>,
@@ -392,10 +487,6 @@ pub struct KnxConfig {
     /// Start with programming mode active (set via --knx-prog-mode CLI flag).
     #[serde(default)]
     pub start_prog_mode: bool,
-}
-
-fn default_knx_mode() -> String {
-    "client".to_string()
 }
 
 // ── Raw zone/client/radio (user-facing, optional fields) ──────
@@ -810,9 +901,6 @@ impl From<RawRadioConfig> for RadioConfig {
 
 // ── Defaults ──────────────────────────────────────────────────
 
-fn default_log_level() -> String {
-    "info".into()
-}
 fn default_sample_rate() -> u32 {
     48000
 }
@@ -821,9 +909,6 @@ fn default_bit_depth() -> u16 {
 }
 fn default_channels() -> u16 {
     2
-}
-fn default_codec() -> String {
-    "flac".into()
 }
 fn default_http_port() -> u16 {
     5555

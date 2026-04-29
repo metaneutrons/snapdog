@@ -37,14 +37,8 @@ impl EmbeddedBackend {
         config: &AppConfig,
         store: state::SharedState,
     ) -> Result<(Self, EmbeddedEventReceiver)> {
-        // Validate codec
-        match config.audio.codec.as_str() {
-            "flac" | "f32lz4" | "f32lz4e" => {}
-            other => anyhow::bail!("unsupported codec '{other}', expected: flac, f32lz4, f32lz4e"),
-        }
-
         // Resolve f32lz4e → f32lz4 + encryption
-        let (codec, encryption_psk) = if config.audio.codec == "f32lz4e" {
+        let (codec, encryption_psk) = if config.audio.codec == crate::config::AudioCodec::F32lz4e {
             let psk = config
                 .audio
                 .encryption_psk
@@ -53,7 +47,7 @@ impl EmbeddedBackend {
             ("f32lz4".into(), Some(psk))
         } else {
             (
-                config.audio.codec.clone(),
+                config.audio.codec.as_str().to_string(),
                 config.audio.encryption_psk.clone(),
             )
         };

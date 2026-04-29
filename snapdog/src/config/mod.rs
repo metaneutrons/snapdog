@@ -55,20 +55,19 @@ pub fn load_raw(raw: RawConfig) -> Result<AppConfig> {
 
     // ── KNX mode validation ───────────────────────────────────
     if raw.knx.enabled {
-        match raw.knx.mode.as_str() {
-            "client" => {
+        match raw.knx.mode {
+            KnxMode::Client => {
                 anyhow::ensure!(
                     raw.knx.url.is_some(),
                     "KNX client mode requires 'url' (e.g. udp://192.168.1.50:3671)"
                 );
             }
-            "device" => {
+            KnxMode::Device => {
                 anyhow::ensure!(
                     raw.knx.individual_address.is_some(),
                     "KNX device mode requires 'individual_address' (e.g. 1.1.100)"
                 );
             }
-            other => anyhow::bail!("Unknown KNX mode '{other}' — use 'client' or 'device'"),
         }
     }
 
@@ -330,7 +329,7 @@ mod tests {
 
     #[test]
     fn knx_rejects_unknown_mode() {
-        let raw: RawConfig = toml::from_str(
+        let result: Result<RawConfig, _> = toml::from_str(
             r#"
             [knx]
             enabled = true
@@ -343,9 +342,9 @@ mod tests {
             mac = "00:00:00:00:00:00"
             zone = "A"
         "#,
-        )
-        .unwrap();
-        assert!(load_raw(raw).unwrap_err().to_string().contains("bogus"));
+        );
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("bogus"));
     }
 
     #[test]
