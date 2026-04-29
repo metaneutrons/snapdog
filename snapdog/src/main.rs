@@ -31,6 +31,10 @@ struct Cli {
     #[arg(long)]
     knx_device: bool,
 
+    /// KNX individual address (device mode). Example: 1.1.100
+    #[arg(long, requires = "knx_device")]
+    knx_address: Option<String>,
+
     /// Start with KNX programming mode active (requires --knx-device)
     #[arg(long, requires = "knx_device")]
     knx_prog_mode: bool,
@@ -101,9 +105,8 @@ async fn main() -> Result<()> {
     if cli.knx_device {
         app_config.knx.enabled = true;
         app_config.knx.mode = "device".into();
-        if app_config.knx.individual_address.is_none() {
-            app_config.knx.individual_address = Some("15.15.255".into());
-        }
+        app_config.knx.individual_address =
+            Some(cli.knx_address.unwrap_or_else(|| "15.15.255".into()));
     }
 
     // --knx-prog-mode: set flag for BAU task to activate on start
