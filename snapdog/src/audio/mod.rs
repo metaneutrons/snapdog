@@ -513,9 +513,19 @@ impl MediaSource for SyncReader {
 /// - Handles relative URLs in playlists by resolving against the playlist's base URL.
 /// - For HLS master playlists (.m3u8 with #EXT-X-STREAM-INF), extracts the highest bitrate variant.
 /// - For HLS media playlists (segment lists), routes to HLS segment streaming.
-///
-/// TODO: Support nested m3u resolution (m3u pointing to another m3u).
+/// - For nested m3u (m3u pointing to another m3u), resolves recursively (max 3 levels).
 async fn resolve_playlist_url(url: &str) -> Option<ResolvedUrl> {
+    resolve_playlist_recursive(url, MAX_PLAYLIST_DEPTH).await
+}
+
+/// Maximum recursion depth for nested playlist resolution.
+const MAX_PLAYLIST_DEPTH: u8 = 3;
+
+async fn resolve_playlist_recursive(url: &str, depth: u8) -> Option<ResolvedUrl> {
+    if depth == 0 {
+        tracing::warn!(url, "Nested playlist resolution exceeded max depth");
+        return None;
+    }
     let lower = url.to_lowercase();
     let ext_is_playlist =
         lower.ends_with(".m3u") || lower.ends_with(".m3u8") || lower.ends_with(".pls");
@@ -580,7 +590,7 @@ async fn resolve_playlist_url(url: &str) -> Option<ResolvedUrl> {
         if let Some(variant_url) = resolve_hls_master(&base_url, &body) {
             tracing::info!(playlist = url, resolved = %variant_url, "Resolved HLS master playlist");
             // Recursively resolve the variant — it might be a media playlist
-            return Box::pin(resolve_playlist_url(&variant_url)).await;
+            return Box::pin(resolve_playlist_recursive(&variant_url, depth - 1)).await;
         }
         return None;
     } else if body.contains("#EXT-X-TARGETDURATION") || body.contains("#EXT-X-MEDIA-SEQUENCE") {
@@ -593,6 +603,12 @@ async fn resolve_playlist_url(url: &str) -> Option<ResolvedUrl> {
             let line = line.trim();
             if !line.is_empty() && !line.starts_with('#') {
                 let resolved = resolve_relative(&base_url, line);
+                let lower = resolved.to_lowercase();
+                // If the entry itself is a playlist, recurse
+                if lower.ends_with(".m3u") || lower.ends_with(".m3u8") || lower.ends_with(".pls") {
+                    tracing::debug!(playlist = url, nested = %resolved, "Nested playlist — recursing");
+                    return Box::pin(resolve_playlist_recursive(&resolved, depth - 1)).await;
+                }
                 tracing::info!(playlist = url, %resolved, "Resolved M3U playlist");
                 return Some(ResolvedUrl::Direct(resolved));
             }
