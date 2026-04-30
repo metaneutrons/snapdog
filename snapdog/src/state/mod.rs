@@ -86,6 +86,21 @@ pub struct ZoneState {
     pub cover_url: Option<String>,
     /// Snapcast group ID for this zone (set after Snapcast sync).
     pub snapcast_group_id: Option<String>,
+    /// Whether presence is currently detected.
+    #[serde(default)]
+    pub presence: bool,
+    /// Whether presence-triggered playback is enabled.
+    #[serde(default = "default_true")]
+    pub presence_enabled: bool,
+    /// Whether the current playback was started by presence (not manually).
+    #[serde(default)]
+    pub presence_source: bool,
+    /// Auto-off delay in seconds (runtime, may differ from config if changed via KNX/MQTT).
+    #[serde(default = "default_auto_off_delay")]
+    pub auto_off_delay: u16,
+    /// Whether the auto-off timer is currently running.
+    #[serde(default)]
+    pub auto_off_active: bool,
 }
 
 /// Runtime state of a single Snapcast client (speaker/output device).
@@ -105,6 +120,9 @@ pub struct ClientState {
     /// In absolute mode, this equals `volume`.
     #[serde(default = "default_volume")]
     pub base_volume: i32,
+    /// Maximum volume (0–100). Limits how loud this client can go.
+    #[serde(default = "default_max_volume")]
+    pub max_volume: i32,
     /// Whether the client is muted.
     pub muted: bool,
     /// Audio output latency in milliseconds.
@@ -118,9 +136,13 @@ pub struct ClientState {
     pub is_snapdog: bool,
 }
 
+/// Default initial volume for zones and clients.
+pub const DEFAULT_VOLUME: i32 = 50;
+
 fn default_volume() -> i32 {
-    100
+    DEFAULT_VOLUME
 }
+use crate::config::{default_auto_off_delay, default_max_volume, default_true};
 
 /// Zone playback state.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -243,6 +265,14 @@ impl Store {
                         source: SourceType::Idle,
                         cover_url: None,
                         snapcast_group_id: None,
+                        presence: false,
+                        presence_enabled: true,
+                        presence_source: false,
+                        auto_off_delay: z
+                            .presence
+                            .as_ref()
+                            .map_or(crate::config::DEFAULT_AUTO_OFF_DELAY, |p| p.auto_off_delay),
+                        auto_off_active: false,
                     },
                 )
             })
@@ -261,6 +291,7 @@ impl Store {
                         zone_index: c.zone_index,
                         volume: 50,
                         base_volume: 50,
+                        max_volume: c.max_volume,
                         muted: false,
                         latency_ms: 0,
                         connected: false,
@@ -440,6 +471,11 @@ mod tests {
                 source: SourceType::Idle,
                 cover_url: None,
                 snapcast_group_id: None,
+                presence: false,
+                presence_enabled: true,
+                presence_source: false,
+                auto_off_delay: crate::config::DEFAULT_AUTO_OFF_DELAY,
+                auto_off_active: false,
             },
         );
         store.persist().unwrap();

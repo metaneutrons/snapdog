@@ -49,6 +49,9 @@ struct ZoneInfo {
     shuffle: bool,
     repeat: bool,
     track_repeat: bool,
+    presence: bool,
+    presence_enabled: bool,
+    presence_timer_active: bool,
 }
 
 pub fn router(state: SharedState) -> Router {
@@ -112,6 +115,19 @@ pub fn router(state: SharedState) -> Router {
         .route("/{zone_index}/playlist/info", get(get_playlist_info))
         .route("/{zone_index}/playlist/count", get(get_playlist_count))
         .route("/{zone_index}/clients", get(get_clients))
+        .route(
+            "/{zone_index}/presence",
+            get(get_presence).put(set_presence),
+        )
+        .route(
+            "/{zone_index}/presence/enable",
+            get(get_presence_enabled).put(set_presence_enabled),
+        )
+        .route(
+            "/{zone_index}/presence/timeout",
+            get(get_presence_timeout).put(set_presence_timeout),
+        )
+        .route("/{zone_index}/presence/timer", get(get_presence_timer))
         .with_state(state)
 }
 
@@ -154,13 +170,16 @@ async fn get_all(State(state): State<SharedState>) -> Json<Vec<ZoneInfo>> {
                     index: z.index,
                     name: z.name.clone(),
                     icon: z.icon.clone(),
-                    volume: zs.map_or(50, |s| s.volume),
+                    volume: zs.map_or(crate::state::DEFAULT_VOLUME, |s| s.volume),
                     muted: zs.is_some_and(|s| s.muted),
                     playback: zs.map_or("stopped".into(), |s| s.playback.to_string()),
                     source: zs.map_or("idle".into(), |s| s.source.to_string()),
                     shuffle: zs.is_some_and(|s| s.shuffle),
                     repeat: zs.is_some_and(|s| s.repeat),
                     track_repeat: zs.is_some_and(|s| s.track_repeat),
+                    presence: zs.is_some_and(|s| s.presence),
+                    presence_enabled: zs.is_none_or(|s| s.presence_enabled),
+                    presence_timer_active: zs.is_some_and(|s| s.auto_off_active),
                 }
             })
             .collect(),
@@ -175,13 +194,16 @@ async fn get_zone(State(state): State<SharedState>, Path(idx): Path<usize>) -> i
         index: cfg.index,
         name: cfg.name.clone(),
         icon: cfg.icon.clone(),
-        volume: zs.map_or(50, |s| s.volume),
+        volume: zs.map_or(crate::state::DEFAULT_VOLUME, |s| s.volume),
         muted: zs.is_some_and(|s| s.muted),
         playback: zs.map_or("stopped".into(), |s| s.playback.to_string()),
         source: zs.map_or("idle".into(), |s| s.source.to_string()),
         shuffle: zs.is_some_and(|s| s.shuffle),
         repeat: zs.is_some_and(|s| s.repeat),
         track_repeat: zs.is_some_and(|s| s.track_repeat),
+        presence: zs.is_some_and(|s| s.presence),
+        presence_enabled: zs.is_none_or(|s| s.presence_enabled),
+        presence_timer_active: zs.is_some_and(|s| s.auto_off_active),
     }))
 }
 
@@ -199,7 +221,9 @@ async fn set_volume(
     Path(idx): Path<usize>,
     Json(value): Json<VolumeValue>,
 ) -> impl IntoResponse {
-    let current = read_zone(&state, idx).await.map_or(50, |z| z.volume);
+    let current = read_zone(&state, idx)
+        .await
+        .map_or(crate::state::DEFAULT_VOLUME, |z| z.volume);
     let volume = value
         .resolve(current)
         .map_err(|e| ApiError::BadRequest(e.to_string()))?;
@@ -598,4 +622,70 @@ async fn get_clients(State(state): State<SharedState>, Path(idx): Path<usize>) -
             })
             .collect(),
     )
+}
+
+// ── Presence ──────────────────────────────────────────────────
+
+async fn get_presence(
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
+) -> impl IntoResponse {
+    read_zone(&state, idx)
+        .await
+        .map(|z| Json(z.presence))
+        .ok_or(zone_not_found())
+}
+
+async fn set_presence(
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
+    Json(v): Json<bool>,
+) -> impl IntoResponse {
+    send_cmd(&state, idx, ZoneCommand::SetPresence(v)).await
+}
+
+async fn get_presence_enabled(
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
+) -> impl IntoResponse {
+    read_zone(&state, idx)
+        .await
+        .map(|z| Json(z.presence_enabled))
+        .ok_or(zone_not_found())
+}
+
+async fn set_presence_enabled(
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
+    Json(v): Json<bool>,
+) -> impl IntoResponse {
+    send_cmd(&state, idx, ZoneCommand::SetPresenceEnabled(v)).await
+}
+
+async fn get_presence_timeout(
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
+) -> impl IntoResponse {
+    read_zone(&state, idx)
+        .await
+        .map(|z| Json(z.auto_off_delay))
+        .ok_or(zone_not_found())
+}
+
+async fn set_presence_timeout(
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
+    Json(v): Json<u16>,
+) -> impl IntoResponse {
+    send_cmd(&state, idx, ZoneCommand::SetAutoOffDelay(v)).await
+}
+
+async fn get_presence_timer(
+    State(state): State<SharedState>,
+    Path(idx): Path<usize>,
+) -> impl IntoResponse {
+    read_zone(&state, idx)
+        .await
+        .map(|z| Json(z.auto_off_active))
+        .ok_or(zone_not_found())
 }

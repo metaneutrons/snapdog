@@ -9,16 +9,27 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+
 use librespot_connect::{ConnectConfig, Spirc};
+
 use librespot_core::SessionConfig;
+
 use librespot_core::session::Session;
+
 use librespot_discovery::{DeviceType, Discovery};
+
 use librespot_metadata::audio::item::UniqueFields;
+
 use librespot_playback::audio_backend::{Sink, SinkError, SinkResult};
+
 use librespot_playback::config::PlayerConfig;
+
 use librespot_playback::convert::Converter;
+
 use librespot_playback::decoder::AudioPacket;
+
 use librespot_playback::mixer::{MixerConfig, NoOpVolume};
+
 use librespot_playback::player::{Player, PlayerEvent};
 
 use super::{
@@ -28,6 +39,9 @@ use super::{
 use crate::config::SpotifyConfig;
 
 // ── SpotifyReceiver ───────────────────────────────────────────
+
+/// Spotify Connect always outputs 44.1 kHz.
+const SPOTIFY_SAMPLE_RATE: u32 = 44100;
 
 /// Spotify Connect receiver wrapping librespot.
 pub struct SpotifyReceiver {
@@ -172,7 +186,7 @@ async fn run_spotify(
 
         let _ = event_tx.try_send(ReceiverEvent::SessionStarted {
             format: AudioFormat {
-                sample_rate: 44100,
+                sample_rate: SPOTIFY_SAMPLE_RATE,
                 channels: 2,
             },
         });

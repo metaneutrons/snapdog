@@ -24,7 +24,8 @@
   "volume": {
     "label": "Volumen",
     "mute": "Silenciar",
-    "unmute": "Activar sonido"
+    "unmute": "Activar sonido",
+    "maxVolume": "Maximum volume: {max}%"
   },
   "seek": {
     "label": "Buscar"
@@ -38,7 +39,9 @@
     "unknownTitle": "Desconocido",
     "unknownArtist": "Artista desconocido",
     "error": "Algo salió mal",
-    "retry": "Intentar de nuevo"
+    "retry": "Intentar de nuevo",
+    "presenceDetected": "Presencia detectada",
+    "presenceTimerActive": "Temporizador de apagado automático activo"
   },
   "client": {
     "clients": "{count, plural, one {# cliente} other {# clientes}}",
@@ -67,7 +70,8 @@
   "playlist": {
     "loading": "Cargando listas de reproducción…",
     "empty": "No hay listas de reproducción disponibles",
-    "play": "Reproducir {name}"
+    "play": "Reproducir {name}",
+    "tracks": "{count, plural, one {# track} other {# tracks}}"
   },
   "auth": {
     "title": "Autenticación requerida",
@@ -76,6 +80,19 @@
     "submit": "Autenticar",
     "checking": "Verificando…",
     "invalid": "Clave API no válida. Inténtelo de nuevo."
+  },
+  "knx": {
+    "progModeOn": "Activar modo programación",
+    "progModeOff": "Desactivar modo programación",
+    "progActive": "Modo programación activo",
+    "progInactive": "Modo programación inactivo",
+    "confirmOn": "¿Activar modo programación?",
+    "confirmOnDesc": "El dispositivo será detectable por ETS. Active solo durante la programación.",
+    "confirmOff": "¿Desactivar modo programación?",
+    "confirmOffDesc": "ETS ya no podrá detectar este dispositivo mediante el modo programación.",
+    "cancel": "Cancelar",
+    "enable": "Activar",
+    "disable": "Desactivar"
   },
   "connection": {
     "lost": "Conexión perdida",
@@ -86,6 +103,7 @@
     "subsonic_playlist": "Subsonic",
     "subsonic_track": "Subsonic",
     "airplay": "AirPlay",
+    "spotify": "Spotify",
     "url": "URL"
   }
 }

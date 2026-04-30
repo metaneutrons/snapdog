@@ -35,7 +35,10 @@ base_topic = "snapdog/"
 
 [knx]
 enabled = false
-# url = "udp://192.168.1.50:3671"    # Tunnel (unicast) or router (multicast)
+# mode = "client"                         # "client" (default) or "device"
+# url = "udp://192.168.1.50:3671"         # Client mode: tunnel (unicast) or router (multicast)
+# individual_address = "1.1.100"          # Device mode: KNX individual address
+# persist_ets_config = true               # Device mode: persist ETS config across restarts
 
 # ── Zones ──────────────────────────────────────────────────────
 # KNX addresses auto-generated: zone N → N/{1-4}/x
@@ -47,6 +50,13 @@ icon = "🏠"
 # sink = "/snapsinks/zone1"          # Auto-generated, override if needed
 # [zone.knx]                         # Override specific KNX addresses:
 # play = "1/1/1"                     # Only specify what deviates from convention
+# [zone.presence]                    # Presence-triggered playback
+# auto_off_delay = 900               # Auto-off after 15 min without presence
+# default_source = "radio:0"         # Fallback source when no schedule matches
+# [[zone.presence.schedule]]         # Time-based source selection
+# from = "06:00"
+# to = "09:00"
+# source = "radio:0"                 # radio:<index> or playlist:<id> or none
 
 [[zone]]
 name = "1st Floor"
@@ -60,6 +70,7 @@ name = "Living Room"
 mac = "02:42:ac:11:00:10"
 zone = "Ground Floor"                 # Reference by name
 icon = "🛋️"
+# max_volume = 100                    # Volume limit (0-100, default 100)
 
 [[client]]
 name = "Kitchen"

@@ -13,13 +13,25 @@ use rubato::{
     Resampler, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction,
 };
 
+/// Sinc filter length — 256 taps provides excellent stopband attenuation (>100 dB)
+/// while keeping latency acceptable for real-time streaming.
+const SINC_LEN: usize = 256;
+
+/// Oversampling factor for the sinc interpolation lookup table.
+/// 256× oversampling gives sub-sample accuracy without audible interpolation artifacts.
+const OVERSAMPLING_FACTOR: usize = 256;
+
+/// Anti-aliasing filter cutoff as fraction of Nyquist.
+/// 0.95 preserves content up to 95% of Nyquist while preventing aliasing at the transition band.
+const F_CUTOFF: f32 = 0.95;
+
 /// Rubato parameters shared by both resamplers.
 fn sinc_params() -> SincInterpolationParameters {
     SincInterpolationParameters {
-        sinc_len: 256,
-        f_cutoff: 0.95,
+        sinc_len: SINC_LEN,
+        f_cutoff: F_CUTOFF,
         interpolation: SincInterpolationType::Linear,
-        oversampling_factor: 256,
+        oversampling_factor: OVERSAMPLING_FACTOR,
         window: WindowFunction::BlackmanHarris2,
     }
 }

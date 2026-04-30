@@ -26,6 +26,7 @@ pub fn resolve_zone(index: usize, raw: RawZoneConfig, audio: &AudioConfig) -> Re
         airplay_name,
         knx: resolve_zone_knx(n, raw.knx),
         group_volume_mode: raw.group_volume_mode.unwrap_or(audio.group_volume_mode),
+        presence: raw.presence,
     })
 }
 
@@ -52,6 +53,7 @@ pub fn resolve_client(
         mac: raw.mac,
         zone_index,
         icon: raw.icon,
+        max_volume: raw.max_volume.clamp(0, 100),
         knx: resolve_client_knx(index, raw.knx),
     })
 }
@@ -90,6 +92,13 @@ fn resolve_zone_knx(_n: usize, raw: RawZoneKnxConfig) -> ZoneKnxAddresses {
         repeat: raw.repeat,
         repeat_status: raw.repeat_status,
         repeat_toggle: raw.repeat_toggle,
+        presence: raw.presence,
+        presence_enable: raw.presence_enable,
+        presence_enable_status: raw.presence_enable_status,
+        presence_timeout: raw.presence_timeout,
+        presence_timeout_status: raw.presence_timeout_status,
+        presence_timer_status: raw.presence_timer_status,
+        presence_source_override: raw.presence_source_override,
     }
 }
 

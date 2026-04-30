@@ -9,12 +9,18 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+
 use shairplay::RaopServer;
+
 #[cfg(feature = "ap2")]
 use shairplay::{BindConfig, PairingStore};
 
 use super::{AudioFormat, AudioSender, ReceiverEvent, ReceiverEventTx, ReceiverProvider};
+
 use crate::config::AirplayConfig;
+
+/// Base port for AirPlay receivers (each zone gets base + zone_index).
+const AIRPLAY_BASE_PORT: u16 = 7000;
 
 // ── AirPlayReceiver ───────────────────────────────────────────
 
@@ -52,7 +58,7 @@ impl ReceiverProvider for AirPlayReceiver {
         let mut builder = RaopServer::builder()
             .name(&self.airplay_name)
             .hwaddr(hwaddr.to_vec())
-            .port(7000 + self.zone_index as u16)
+            .port(AIRPLAY_BASE_PORT + self.zone_index as u16)
             .max_clients(1);
 
         if let Some(ref pw) = self.config.password {

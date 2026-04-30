@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useCallback, useState, Component, type ReactNode, type DragEvent } from "react";
+import { useEffect, useCallback, useState, Component, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { useAppStore, type ZoneState } from "@/stores/useAppStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { useClientDrop } from "@/hooks/useClientDrop";
 import { api } from "@/lib/api";
 import type { WsNotification } from "@/lib/types";
 import { ApiKeyPrompt } from "@/components/ApiKeyPrompt";
@@ -20,6 +21,7 @@ import { ClientList } from "@/components/ClientList";
 import { Marquee } from "@/components/Marquee";
 import { ConnectionStatus } from "@/components/ConnectionStatus";
 import { LocalePicker } from "@/components/LocalePicker";
+import { ProgrammingMode } from "@/components/ProgrammingMode";
 
 // ── Error Boundary ────────────────────────────────────────────
 
@@ -55,28 +57,15 @@ function ZoneRailItem({ zone, selected, onSelect }: {
   onSelect: () => void;
 }) {
   const [imgError, setImgError] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
+  const { dragOver, dragHandlers } = useClientDrop(zone.index);
   const t = useTranslations();
   const isPlaying = zone.playback === "playing";
   const hasCover = zone.track?.cover_url && zone.source !== "idle" && !imgError;
   return (
     <button
       onClick={onSelect}
-      onDragOver={(e) => {
-        if (e.dataTransfer.types.includes("application/x-snapdog-client")) {
-          e.preventDefault();
-          setDragOver(true);
-        }
-      }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setDragOver(false);
-        const clientIndex = Number(e.dataTransfer.getData("application/x-snapdog-client"));
-        if (!isNaN(clientIndex)) {
-          api.clients.setZone(clientIndex, zone.index).catch(() => {});
-        }
-      }}
+      {...dragHandlers}
+      aria-current={selected ? "true" : undefined}
       className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left transition-colors ${
         dragOver
           ? "bg-primary/20 ring-2 ring-primary"
@@ -118,25 +107,11 @@ function ZoneRailItem({ zone, selected, onSelect }: {
 }
 
 function MobileZoneTab({ zone, selected, onSelect }: { zone: ZoneState; selected: boolean; onSelect: () => void }) {
-  const [dragOver, setDragOver] = useState(false);
+  const { dragOver, dragHandlers } = useClientDrop(zone.index);
   return (
     <button
       onClick={onSelect}
-      onDragOver={(e) => {
-        if (e.dataTransfer.types.includes("application/x-snapdog-client")) {
-          e.preventDefault();
-          setDragOver(true);
-        }
-      }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setDragOver(false);
-        const clientIndex = Number(e.dataTransfer.getData("application/x-snapdog-client"));
-        if (!isNaN(clientIndex)) {
-          api.clients.setZone(clientIndex, zone.index).catch(() => {});
-        }
-      }}
+      {...dragHandlers}
       className={`shrink-0 px-3 py-2 text-sm rounded-t-md transition-colors ${
         dragOver
           ? "bg-primary/20 ring-2 ring-primary"
@@ -159,6 +134,7 @@ const SOURCE_KEYS: Record<string, string> = {
   subsonic_playlist: "subsonic_playlist",
   subsonic_track: "subsonic_track",
   airplay: "airplay",
+  spotify: "spotify",
   url: "url",
 };
 
@@ -168,43 +144,35 @@ function ZoneHeader({ zone }: { zone: ZoneState }) {
   return (
     <div className="flex items-center justify-between gap-2">
       <h2 className="text-sm font-semibold truncate">{zone.name}</h2>
-      {sourceKey ? (
-        <span className="shrink-0 text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
+      <div className="flex items-center gap-1.5 shrink-0">
+        {zone.presence && (
+          <span
+            className="text-[10px] px-1 py-0.5 rounded-full bg-green-500/15 text-green-600"
+            role="status"
+            aria-label={zone.presenceTimerActive ? t("zone.presenceTimerActive") : t("zone.presenceDetected")}
+          >
+            {zone.presenceTimerActive ? "⏱️" : "🟢"}
+          </span>
+        )}
+        {sourceKey ? (
+        <span className="text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
           {t(`source.${sourceKey}`)}
         </span>
       ) : (
-        <span className="shrink-0 text-[10px] text-muted-foreground">{t("zone.idle")}</span>
+        <span className="text-[10px] text-muted-foreground">{t("zone.idle")}</span>
       )}
+      </div>
     </div>
   );
 }
 
 function ZoneDropTarget({ zoneIndex, children }: { zoneIndex: number; children: ReactNode }) {
-  const [dragOver, setDragOver] = useState(false);
-
-  const handleDragOver = (e: DragEvent) => {
-    if (e.dataTransfer.types.includes("application/x-snapdog-client")) {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-      setDragOver(true);
-    }
-  };
-
-  const handleDrop = (e: DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    const clientIndex = Number(e.dataTransfer.getData("application/x-snapdog-client"));
-    if (!isNaN(clientIndex)) {
-      api.clients.setZone(clientIndex, zoneIndex).catch(() => {});
-    }
-  };
+  const { dragOver, dragHandlers } = useClientDrop(zoneIndex);
 
   return (
     <div
       className={`border rounded-xl bg-card overflow-hidden transition-colors ${dragOver ? "border-primary border-2" : "border-border"}`}
-      onDragOver={handleDragOver}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={handleDrop}
+      {...dragHandlers}
     >
       {children}
     </div>
@@ -227,6 +195,7 @@ function TrackInfo({ zone }: { zone: ZoneState }) {
 
 function ZoneDetail({ zone }: { zone: ZoneState }) {
   const [showEq, setShowEq] = useState(false);
+  const t = useTranslations();
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       <div className="w-full max-w-[calc(100%-2rem)] mx-auto sm:max-w-[600px] space-y-3 px-4 py-4 sm:px-5 sm:py-4">
@@ -241,15 +210,15 @@ function ZoneDetail({ zone }: { zone: ZoneState }) {
             <SeekBar zone={zone} />
             <div className="flex items-center gap-2">
               <div className="flex-1"><TransportControls zone={zone} /></div>
-              <Button variant="ghost" size="sm" onClick={() => setShowEq(true)} className="text-xs px-2">EQ</Button>
+              <Button variant="ghost" size="sm" onClick={() => setShowEq(true)} className="text-xs px-2" aria-label={t("eq.title", { zone: zone.name })}>EQ</Button>
             </div>
             <ShuffleRepeat zone={zone} />
             <VolumeSlider
               volume={zone.volume}
               muted={zone.muted}
-              onVolumeChange={(v) => api.zones.setVolume(zone.index, v).catch(() => {})}
-              onMuteToggle={() => api.zones.toggleMute(zone.index).catch(() => {})}
-              onUnmute={() => api.zones.setMute(zone.index, false).catch(() => {})}
+              onVolumeChange={(v) => api.zones.setVolume(zone.index, v).catch((e: unknown) => console.error("API error", e))}
+              onMuteToggle={() => api.zones.toggleMute(zone.index).catch((e: unknown) => console.error("API error", e))}
+              onUnmute={() => api.zones.setMute(zone.index, false).catch((e: unknown) => console.error("API error", e))}
             />
           </div>
         </div>
@@ -276,6 +245,7 @@ export default function Home() {
     updateZone,
     updateZoneTrack,
     updateZoneProgress,
+    updateZonePresence,
     updateClient,
   } = useAppStore();
 
@@ -307,9 +277,15 @@ export default function Home() {
             zone_index: n.zone,
           });
           break;
+        case "zone_presence_changed":
+          updateZonePresence(n.zone, n.presence, n.enabled, n.timer_active);
+          break;
+        case "zone_eq_changed":
+          // EqOverlay manages its own state; this ensures exhaustive switch coverage
+          break;
       }
     },
-    [updateZone, updateZoneTrack, updateZoneProgress, updateClient],
+    [updateZone, updateZoneTrack, updateZoneProgress, updateZonePresence, updateClient],
   );
 
   const { isConnected: wsConnected } = useWebSocket(handleNotification);
@@ -365,7 +341,7 @@ export default function Home() {
       <aside className="hidden lg:flex xl:hidden flex-col border-r border-border bg-card lg:w-56 shrink-0" aria-label={t("zone.navigation")}>
         <div className="px-4 py-4 border-b border-border flex items-center justify-between">
           <h1 className="text-base font-semibold">SnapDog</h1>
-          <LocalePicker />
+          <ProgrammingMode /><LocalePicker />
         </div>
         <nav className="flex-1 overflow-y-auto p-2 space-y-0.5" aria-label={t("zone.zones")}>
           {zoneList.map((z) => (
@@ -384,13 +360,13 @@ export default function Home() {
         {/* Header (mobile + compact + wide — hidden when sidebar visible at lg–xl) */}
         <header className="flex lg:hidden items-center justify-between px-4 py-3 border-b border-border">
           <h1 className="text-base font-semibold">SnapDog</h1>
-          <LocalePicker />
+          <ProgrammingMode /><LocalePicker />
         </header>
 
         {/* Wide header (xl+) */}
         <header className="hidden xl:flex items-center justify-between px-6 py-3 border-b border-border">
           <h1 className="text-base font-semibold">SnapDog</h1>
-          <LocalePicker />
+          <ProgrammingMode /><LocalePicker />
         </header>
 
         {/* Zone tabs (mobile + compact + normal without sidebar visible) */}

@@ -53,6 +53,83 @@ pub fn load_raw(raw: RawConfig) -> Result<AppConfig> {
 
     let radios: Vec<RadioConfig> = raw.radio.into_iter().map(Into::into).collect();
 
+    // ── KNX mode validation ───────────────────────────────────
+    if raw.knx.enabled {
+        match raw.knx.mode {
+            KnxMode::Client => {
+                anyhow::ensure!(
+                    raw.knx.url.is_some(),
+                    "KNX client mode requires 'url' (e.g. udp://192.168.1.50:3671)"
+                );
+            }
+            KnxMode::Device => {
+                anyhow::ensure!(
+                    raw.knx.individual_address.is_some(),
+                    "KNX device mode requires 'individual_address' (e.g. 1.1.100)"
+                );
+            }
+        }
+    }
+
+    // ── Presence validation ───────────────────────────────────
+    for zone in &zones {
+        if let Some(ref presence) = zone.presence {
+            let mut intervals: Vec<(u16, u16, usize)> = Vec::new();
+            for (i, entry) in presence.schedule.iter().enumerate() {
+                let from = types::parse_time(&entry.from).with_context(|| {
+                    format!(
+                        "Zone '{}' presence schedule[{i}]: invalid 'from' time '{}'",
+                        zone.name, entry.from
+                    )
+                })?;
+                let to = types::parse_time(&entry.to).with_context(|| {
+                    format!(
+                        "Zone '{}' presence schedule[{i}]: invalid 'to' time '{}'",
+                        zone.name, entry.to
+                    )
+                })?;
+                anyhow::ensure!(
+                    from < to,
+                    "Zone '{}' presence schedule[{i}]: 'from' ({}) must be before 'to' ({}). For overnight, use two entries.",
+                    zone.name,
+                    entry.from,
+                    entry.to
+                );
+                for &(pf, pt, j) in &intervals {
+                    anyhow::ensure!(
+                        to <= pf || from >= pt,
+                        "Zone '{}' presence schedule[{i}] ({}-{}) overlaps with schedule[{j}] ({:02}:{:02}-{:02}:{:02})",
+                        zone.name,
+                        entry.from,
+                        entry.to,
+                        pf / 60,
+                        pf % 60,
+                        pt / 60,
+                        pt % 60
+                    );
+                }
+                intervals.push((from, to, i));
+
+                if let types::PresenceSource::Radio(idx) = &entry.source {
+                    anyhow::ensure!(
+                        *idx < radios.len(),
+                        "Zone '{}' presence schedule[{i}]: radio index {idx} out of range (have {} stations)",
+                        zone.name,
+                        radios.len()
+                    );
+                }
+            }
+            if let Some(types::PresenceSource::Radio(idx)) = &presence.default_source {
+                anyhow::ensure!(
+                    *idx < radios.len(),
+                    "Zone '{}' presence default_source: radio index {idx} out of range (have {} stations)",
+                    zone.name,
+                    radios.len()
+                );
+            }
+        }
+    }
+
     Ok(AppConfig {
         system: raw.system,
         audio: raw.audio,
@@ -203,5 +280,242 @@ mod tests {
         assert_eq!(config.zones[1].tcp_source_port, 4954);
         assert_eq!(config.zones[1].knx.play, None);
         assert_eq!(config.clients[0].zone_index, 2);
+    }
+
+    #[test]
+    fn knx_client_mode_requires_url() {
+        let raw: RawConfig = toml::from_str(
+            r#"
+            [knx]
+            enabled = true
+            mode = "client"
+
+            [[zone]]
+            name = "A"
+            [[client]]
+            name = "X"
+            mac = "00:00:00:00:00:00"
+            zone = "A"
+        "#,
+        )
+        .unwrap();
+        assert!(load_raw(raw).unwrap_err().to_string().contains("url"));
+    }
+
+    #[test]
+    fn knx_device_mode_requires_individual_address() {
+        let raw: RawConfig = toml::from_str(
+            r#"
+            [knx]
+            enabled = true
+            mode = "device"
+
+            [[zone]]
+            name = "A"
+            [[client]]
+            name = "X"
+            mac = "00:00:00:00:00:00"
+            zone = "A"
+        "#,
+        )
+        .unwrap();
+        assert!(
+            load_raw(raw)
+                .unwrap_err()
+                .to_string()
+                .contains("individual_address")
+        );
+    }
+
+    #[test]
+    fn knx_rejects_unknown_mode() {
+        let result: Result<RawConfig, _> = toml::from_str(
+            r#"
+            [knx]
+            enabled = true
+            mode = "bogus"
+
+            [[zone]]
+            name = "A"
+            [[client]]
+            name = "X"
+            mac = "00:00:00:00:00:00"
+            zone = "A"
+        "#,
+        );
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("bogus"));
+    }
+
+    #[test]
+    fn knx_disabled_skips_validation() {
+        let raw: RawConfig = toml::from_str(
+            r#"
+            [knx]
+            enabled = false
+
+            [[zone]]
+            name = "A"
+            [[client]]
+            name = "X"
+            mac = "00:00:00:00:00:00"
+            zone = "A"
+        "#,
+        )
+        .unwrap();
+        assert!(load_raw(raw).is_ok());
+    }
+
+    #[test]
+    fn presence_valid_schedule() {
+        let raw: RawConfig = toml::from_str(
+            r#"
+            [[zone]]
+            name = "A"
+            [zone.presence]
+            auto_off_delay = 900
+            default_source = "radio:0"
+            [[zone.presence.schedule]]
+            from = "06:00"
+            to = "09:00"
+            source = "radio:0"
+            [[zone.presence.schedule]]
+            from = "09:00"
+            to = "22:00"
+            source = "playlist:abc123"
+
+            [[radio]]
+            name = "Test"
+            url = "http://example.com/stream"
+
+            [[client]]
+            name = "X"
+            mac = "00:00:00:00:00:00"
+            zone = "A"
+        "#,
+        )
+        .unwrap();
+        assert!(load_raw(raw).is_ok());
+    }
+
+    #[test]
+    fn presence_rejects_invalid_time() {
+        let raw: RawConfig = toml::from_str(
+            r#"
+            [[zone]]
+            name = "A"
+            [zone.presence]
+            [[zone.presence.schedule]]
+            from = "25:00"
+            to = "23:00"
+            source = "none"
+            [[client]]
+            name = "X"
+            mac = "00:00:00:00:00:00"
+            zone = "A"
+        "#,
+        )
+        .unwrap();
+        let err = load_raw(raw).unwrap_err().to_string();
+        assert!(
+            err.contains("hour") || err.contains("25"),
+            "expected hour error, got: {err}"
+        );
+    }
+
+    #[test]
+    fn presence_rejects_from_after_to() {
+        let raw: RawConfig = toml::from_str(
+            r#"
+            [[zone]]
+            name = "A"
+            [zone.presence]
+            [[zone.presence.schedule]]
+            from = "18:00"
+            to = "06:00"
+            source = "none"
+            [[client]]
+            name = "X"
+            mac = "00:00:00:00:00:00"
+            zone = "A"
+        "#,
+        )
+        .unwrap();
+        assert!(
+            load_raw(raw)
+                .unwrap_err()
+                .to_string()
+                .contains("must be before")
+        );
+    }
+
+    #[test]
+    fn presence_rejects_overlapping_schedule() {
+        let raw: RawConfig = toml::from_str(
+            r#"
+            [[zone]]
+            name = "A"
+            [zone.presence]
+            [[zone.presence.schedule]]
+            from = "06:00"
+            to = "12:00"
+            source = "none"
+            [[zone.presence.schedule]]
+            from = "10:00"
+            to = "18:00"
+            source = "none"
+            [[client]]
+            name = "X"
+            mac = "00:00:00:00:00:00"
+            zone = "A"
+        "#,
+        )
+        .unwrap();
+        assert!(load_raw(raw).unwrap_err().to_string().contains("overlaps"));
+    }
+
+    #[test]
+    fn presence_rejects_invalid_radio_index() {
+        let raw: RawConfig = toml::from_str(
+            r#"
+            [[zone]]
+            name = "A"
+            [zone.presence]
+            default_source = "radio:5"
+            [[client]]
+            name = "X"
+            mac = "00:00:00:00:00:00"
+            zone = "A"
+        "#,
+        )
+        .unwrap();
+        assert!(
+            load_raw(raw)
+                .unwrap_err()
+                .to_string()
+                .contains("out of range")
+        );
+    }
+
+    #[test]
+    fn presence_rejects_invalid_source_format() {
+        let result: Result<RawConfig, _> = toml::from_str(
+            r#"
+            [[zone]]
+            name = "A"
+            [zone.presence]
+            default_source = "spotify:abc"
+            [[client]]
+            name = "X"
+            mac = "00:00:00:00:00:00"
+            zone = "A"
+        "#,
+        );
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("invalid presence source")
+        );
     }
 }

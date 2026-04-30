@@ -66,7 +66,7 @@ export function SeekBar({ zone }: { zone: ZoneState }) {
       if (!canSeek) return;
       setDragging(false);
       lastServerRef.current = value[0];
-      api.zones.seekPosition(zone.index, value[0]).catch(() => {});
+      api.zones.seekPosition(zone.index, value[0]).catch((e: unknown) => console.error("API error", e));
     },
     [zone.index, canSeek],
   );

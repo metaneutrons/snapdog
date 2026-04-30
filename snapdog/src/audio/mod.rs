@@ -65,11 +65,15 @@ const HTTP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 const MAX_RETRIES: u32 = 3;
 /// Base delay between retries (doubles each attempt).
 const RETRY_BASE_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
+/// Pipe buffer size: ~4s of audio at 128kbps. Provides smooth playback during brief network hiccups.
+const PIPE_BUFFER_SIZE: usize = 64 * 1024;
+/// Maximum consecutive HLS segment failures before giving up.
+const MAX_HLS_FAILURES: u32 = 5;
 
 /// Build a reqwest client with User-Agent and timeout.
 fn http_client() -> Result<reqwest::Client> {
     reqwest::Client::builder()
-        .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+        .user_agent(crate::USER_AGENT)
         .timeout(HTTP_TIMEOUT)
         .build()
         .context("Failed to build HTTP client")
@@ -163,9 +167,8 @@ pub async fn decode_http_stream(
         return Ok(());
     }
 
-    // Pipe buffer: ~4s of audio at 128kbps = 64KB.
-    // Provides smooth playback during brief network hiccups.
-    let (mut pipe_tx, pipe_rx) = tokio::io::duplex(64 * 1024);
+    // Pipe buffer: provides smooth playback during brief network hiccups.
+    let (mut pipe_tx, pipe_rx) = tokio::io::duplex(PIPE_BUFFER_SIZE);
 
     // Task: read HTTP chunks, strip ICY metadata, write audio to pipe
     let url_clone = url.clone();
@@ -228,7 +231,7 @@ async fn decode_hls_stream(
     let base_url = url::Url::parse(&playlist_url).context("Failed to parse HLS playlist URL")?;
     let content_type = "audio/aac".to_string();
 
-    let (mut pipe_tx, pipe_rx) = tokio::io::duplex(64 * 1024);
+    let (mut pipe_tx, pipe_rx) = tokio::io::duplex(PIPE_BUFFER_SIZE);
 
     let hls_task = tokio::spawn(async move {
         use tokio::io::AsyncWriteExt;
@@ -330,7 +333,7 @@ async fn decode_hls_stream(
                     Err(e) => {
                         consecutive_failures += 1;
                         tracing::warn!(error = %e, consecutive_failures, "HLS segment failed after retries");
-                        if consecutive_failures >= 5 {
+                        if consecutive_failures >= MAX_HLS_FAILURES {
                             tracing::error!("Too many consecutive HLS failures");
                             break;
                         }
@@ -510,9 +513,19 @@ impl MediaSource for SyncReader {
 /// - Handles relative URLs in playlists by resolving against the playlist's base URL.
 /// - For HLS master playlists (.m3u8 with #EXT-X-STREAM-INF), extracts the highest bitrate variant.
 /// - For HLS media playlists (segment lists), routes to HLS segment streaming.
-///
-/// TODO: Support nested m3u resolution (m3u pointing to another m3u).
+/// - For nested m3u (m3u pointing to another m3u), resolves recursively (max 3 levels).
 async fn resolve_playlist_url(url: &str) -> Option<ResolvedUrl> {
+    resolve_playlist_recursive(url, MAX_PLAYLIST_DEPTH).await
+}
+
+/// Maximum recursion depth for nested playlist resolution.
+const MAX_PLAYLIST_DEPTH: u8 = 3;
+
+async fn resolve_playlist_recursive(url: &str, depth: u8) -> Option<ResolvedUrl> {
+    if depth == 0 {
+        tracing::warn!(url, "Nested playlist resolution exceeded max depth");
+        return None;
+    }
     let lower = url.to_lowercase();
     let ext_is_playlist =
         lower.ends_with(".m3u") || lower.ends_with(".m3u8") || lower.ends_with(".pls");
@@ -577,7 +590,7 @@ async fn resolve_playlist_url(url: &str) -> Option<ResolvedUrl> {
         if let Some(variant_url) = resolve_hls_master(&base_url, &body) {
             tracing::info!(playlist = url, resolved = %variant_url, "Resolved HLS master playlist");
             // Recursively resolve the variant — it might be a media playlist
-            return Box::pin(resolve_playlist_url(&variant_url)).await;
+            return Box::pin(resolve_playlist_recursive(&variant_url, depth - 1)).await;
         }
         return None;
     } else if body.contains("#EXT-X-TARGETDURATION") || body.contains("#EXT-X-MEDIA-SEQUENCE") {
@@ -590,6 +603,12 @@ async fn resolve_playlist_url(url: &str) -> Option<ResolvedUrl> {
             let line = line.trim();
             if !line.is_empty() && !line.starts_with('#') {
                 let resolved = resolve_relative(&base_url, line);
+                let lower = resolved.to_lowercase();
+                // If the entry itself is a playlist, recurse
+                if lower.ends_with(".m3u") || lower.ends_with(".m3u8") || lower.ends_with(".pls") {
+                    tracing::debug!(playlist = url, nested = %resolved, "Nested playlist — recursing");
+                    return Box::pin(resolve_playlist_recursive(&resolved, depth - 1)).await;
+                }
                 tracing::info!(playlist = url, %resolved, "Resolved M3U playlist");
                 return Some(ResolvedUrl::Direct(resolved));
             }

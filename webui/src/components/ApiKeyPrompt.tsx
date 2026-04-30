@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { setApiKey } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 
@@ -9,6 +10,7 @@ interface ApiKeyPromptProps {
 
 export function ApiKeyPrompt({ onAuthenticated }: ApiKeyPromptProps) {
   const t = useTranslations("auth");
+  const trapRef = useFocusTrap<HTMLDivElement>();
   const [key, setKey] = useState("");
   const [error, setError] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -37,7 +39,7 @@ export function ApiKeyPrompt({ onAuthenticated }: ApiKeyPromptProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label={t("title")}>
       <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" role="presentation" />
-      <div className="relative z-10 w-full max-w-sm mx-4 rounded-2xl border border-border bg-card p-6 shadow-xl space-y-4">
+      <div ref={trapRef} className="relative z-10 w-full max-w-sm mx-4 rounded-2xl border border-border bg-card p-6 shadow-xl space-y-4">
         <div className="space-y-1">
           <h2 className="text-lg font-semibold">{t("title")}</h2>
           <p className="text-sm text-muted-foreground">

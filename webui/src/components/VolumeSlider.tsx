@@ -17,6 +17,8 @@ interface VolumeSliderProps {
   onVolumeChange: (volume: number) => void;
   onMuteToggle: () => void;
   onUnmute: () => void;
+  /** Maximum volume limit (0–100). Shows a red marker and caps the slider. */
+  max?: number;
   /** Compact mode for client chips (smaller controls, no value display) */
   compact?: boolean;
 }
@@ -27,12 +29,16 @@ export function VolumeSlider({
   onVolumeChange,
   onMuteToggle,
   onUnmute,
+  max = 100,
   compact = false,
 }: VolumeSliderProps) {
   const [localVolume, setLocalVolume] = useState(volume);
   const t = useTranslations("volume");
   const [dragging, setDragging] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // Clean up debounce timer on unmount
+  useEffect(() => () => clearTimeout(timerRef.current), []);
 
   useEffect(() => {
     if (!dragging) setLocalVolume(volume);
@@ -82,16 +88,29 @@ export function VolumeSlider({
       >
         <HugeiconsIcon icon={volumeIcon} size={iconSize} />
       </Button>
-      <Slider
-        value={[muted ? 0 : localVolume]}
-        max={100}
-        step={1}
-        onValueChange={handleChange}
-        onValueCommit={handleCommit}
-        onDragStart={(e: React.DragEvent) => e.preventDefault()}
-        className="flex-1 min-w-0"
-        aria-label={t("label")}
-      />
+      <div className="relative flex-1 min-w-0">
+        <Slider
+          value={[muted ? 0 : localVolume]}
+          max={max}
+          step={1}
+          onValueChange={handleChange}
+          onValueCommit={handleCommit}
+          onDragStart={(e: React.DragEvent) => e.preventDefault()}
+          className="flex-1 min-w-0"
+          aria-label={t("label")}
+        />
+        {max < 100 && (
+          <>
+            <div
+              className="absolute top-0 h-full w-0.5 bg-red-500/70 rounded-full pointer-events-none"
+              style={{ left: `${max}%` }}
+              role="presentation"
+              aria-hidden="true"
+            />
+            <span className="sr-only">{t("maxVolume", { max })}</span>
+          </>
+        )}
+      </div>
       <span className={`text-muted-foreground tabular-nums text-right ${compact ? "text-[10px] w-5" : "text-xs w-7"}`}>
         {localVolume}
       </span>

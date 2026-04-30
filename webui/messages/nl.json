@@ -24,7 +24,8 @@
   "volume": {
     "label": "Volume",
     "mute": "Dempen",
-    "unmute": "Dempen opheffen"
+    "unmute": "Dempen opheffen",
+    "maxVolume": "Maximum volume: {max}%"
   },
   "seek": {
     "label": "Zoeken"
@@ -38,7 +39,9 @@
     "unknownTitle": "Onbekend",
     "unknownArtist": "Onbekende artiest",
     "error": "Er is iets misgegaan",
-    "retry": "Opnieuw proberen"
+    "retry": "Opnieuw proberen",
+    "presenceDetected": "Aanwezigheid gedetecteerd",
+    "presenceTimerActive": "Automatische uitschakeltimer actief"
   },
   "client": {
     "clients": "{count, plural, one {# client} other {# clients}}",
@@ -67,7 +70,8 @@
   "playlist": {
     "loading": "Afspeellijsten laden…",
     "empty": "Geen afspeellijsten beschikbaar",
-    "play": "{name} afspelen"
+    "play": "{name} afspelen",
+    "tracks": "{count, plural, one {# track} other {# tracks}}"
   },
   "auth": {
     "title": "Authenticatie vereist",
@@ -76,6 +80,19 @@
     "submit": "Authenticeren",
     "checking": "Controleren…",
     "invalid": "Ongeldige API-sleutel. Probeer het opnieuw."
+  },
+  "knx": {
+    "progModeOn": "Programmeermodus activeren",
+    "progModeOff": "Programmeermodus deactiveren",
+    "progActive": "Programmeermodus actief",
+    "progInactive": "Programmeermodus inactief",
+    "confirmOn": "Programmeermodus activeren?",
+    "confirmOnDesc": "Het apparaat wordt zichtbaar voor ETS. Activeer alleen tijdens het programmeren.",
+    "confirmOff": "Programmeermodus deactiveren?",
+    "confirmOffDesc": "ETS kan dit apparaat niet meer detecteren via de programmeermodus.",
+    "cancel": "Annuleren",
+    "enable": "Activeren",
+    "disable": "Deactiveren"
   },
   "connection": {
     "lost": "Verbinding verbroken",
@@ -86,6 +103,7 @@
     "subsonic_playlist": "Subsonic",
     "subsonic_track": "Subsonic",
     "airplay": "AirPlay",
+    "spotify": "Spotify",
     "url": "URL"
   }
 }
