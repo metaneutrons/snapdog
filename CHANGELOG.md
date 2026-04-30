@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.0](https://github.com/metaneutrons/snapdog/compare/v0.5.0...v0.6.0) (2026-04-30)
+
+
+### Features
+
+* **knx:** complete KNX overhaul — knx-rs, ETS device mode, presence ([#12](https://github.com/metaneutrons/snapdog/issues/12)) ([b945394](https://github.com/metaneutrons/snapdog/commit/b94539486207dc59ce7a3db4e7d24f048f50d612))
+
+
+### Bug Fixes
+
+* **webui:** restore EQ enabled state when closing with A/B bypass active ([4c5af55](https://github.com/metaneutrons/snapdog/commit/4c5af5584256b3b792928ad9fb712dcfb689b0a7))
+
 ## [0.5.0](https://github.com/metaneutrons/snapdog/compare/v0.4.1...v0.5.0) (2026-04-18)
 
 
