@@ -15,6 +15,11 @@ use crate::config::MqttConfig;
 use crate::player::{ClientAction, SnapcastCmd, ZoneCommand, ZoneCommandSender};
 use crate::state;
 
+/// MQTT keep-alive interval.
+const MQTT_KEEP_ALIVE: std::time::Duration = std::time::Duration::from_secs(60);
+/// Delay before MQTT reconnection attempt.
+const MQTT_RECONNECT_DELAY: std::time::Duration = std::time::Duration::from_secs(5);
+
 /// MQTT bridge: receives commands, publishes status.
 pub struct MqttBridge {
     client: AsyncClient,
@@ -31,7 +36,7 @@ impl MqttBridge {
             parse_host(&config.broker),
             parse_port(&config.broker)?,
         );
-        opts.set_keep_alive(std::time::Duration::from_secs(60));
+        opts.set_keep_alive(MQTT_KEEP_ALIVE);
         if !config.username.is_empty() {
             opts.set_credentials(&config.username, &config.password);
         }
@@ -208,7 +213,7 @@ impl MqttBridge {
             Ok(_) => {}
             Err(e) => {
                 tracing::warn!(error = %e, "MQTT connection error, retrying");
-                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                tokio::time::sleep(MQTT_RECONNECT_DELAY).await;
             }
         }
     }

@@ -11,6 +11,11 @@ use serde::Deserialize;
 
 use crate::config::SubsonicConfig;
 
+/// HTTP request timeout for Subsonic API calls.
+const HTTP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+/// TCP connect timeout for Subsonic API.
+const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
 const API_VERSION: &str = "1.16.1";
 const CLIENT_NAME: &str = "snapdog";
 
@@ -32,8 +37,8 @@ impl SubsonicClient {
             password: config.password.clone(),
             format: config.format,
             http: reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(10))
-                .connect_timeout(std::time::Duration::from_secs(5))
+                .timeout(HTTP_TIMEOUT)
+                .connect_timeout(CONNECT_TIMEOUT)
                 .danger_accept_invalid_certs(config.tls_skip_verify)
                 .build()
                 .unwrap_or_default(),
