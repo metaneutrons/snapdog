@@ -418,6 +418,7 @@ async fn bau_task_loop(
     let persist_timer = tokio::time::sleep(ETS_PERSIST_DEBOUNCE);
     tokio::pin!(persist_timer);
     let mut persist_armed = false;
+    let mut tunnel_active = false;
 
     loop {
         tokio::select! {
@@ -427,6 +428,16 @@ async fn bau_task_loop(
                 let frame = match event {
                     ServerEvent::TunnelFrame(f) | ServerEvent::RoutingFrame(f) => f,
                 };
+
+                // Log tunnel client connections
+                if is_tunnel && !tunnel_active {
+                    tunnel_active = true;
+                    tracing::info!(
+                        source = %frame.source_address(),
+                        "KNX tunnel client connected (ETS programming session)"
+                    );
+                }
+
                 bau.process_frame(&frame, now_ms());
                 bau.poll(now_ms());
 
@@ -464,6 +475,7 @@ async fn bau_task_loop(
             _ = &mut persist_timer, if persist_armed => {
                 persist_armed = false;
                 memory_dirty = false;
+                tunnel_active = false;
                 if let Some(ref path) = persist_path {
                     let state = bau.save();
                     let path = path.clone();
@@ -471,7 +483,7 @@ async fn bau_task_loop(
                         if let Err(e) = persist_memory(&path, &state) {
                             tracing::warn!(error = %e, "Failed to persist ETS state");
                         } else {
-                            tracing::debug!(path = %path.display(), bytes = state.len(), "ETS state persisted");
+                            tracing::info!(path = %path.display(), bytes = state.len(), "ETS programming session complete — state persisted");
                         }
                     });
                 }
