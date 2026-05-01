@@ -42,10 +42,57 @@ SnapDog turns a Linux box (or Mac) into a synchronized multi-room audio system w
 
 ```bash
 docker run -d --name snapdog \
-  -v ./snapdog.toml:/etc/snapdog/snapdog.toml \
-  -p 5555:5555 -p 1704:1704 \
+  -v snapdog-data:/var/lib/snapdog \
+  -v ./snapdog.toml:/etc/snapdog/snapdog.toml:ro \
+  -p 5555:5555 -p 1704:1704 -p 3671:3671/udp \
   ghcr.io/metaneutrons/snapdog:latest
 ```
+
+<details>
+<summary><strong>Docker Compose (Production)</strong></summary>
+
+```yaml
+services:
+  snapdog:
+    image: ghcr.io/metaneutrons/snapdog:latest
+    restart: unless-stopped
+    volumes:
+      - snapdog-data:/var/lib/snapdog
+      - ./snapdog.toml:/etc/snapdog/snapdog.toml:ro
+    ports:
+      - "5555:5555"      # WebUI + REST API
+      - "1704:1704"      # Snapcast streaming
+      - "3671:3671/udp"  # KNX/IP device
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:5555/api/v1/system/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  snapdog-client:
+    image: ghcr.io/metaneutrons/snapdog-client:latest
+    restart: unless-stopped
+    devices:
+      - /dev/snd
+    command: ["--server", "snapdog"]
+
+volumes:
+  snapdog-data:  # Persists KNX programming, state, EQ config
+```
+
+</details>
+
+### KNX Device Mode (no config file needed)
+
+```bash
+# First run — ETS can discover and program the device
+snapdog --knx-device --knx-address 1.1.100 --knx-prog-mode
+
+# After ETS programming — normal operation
+snapdog --knx-device --knx-address 1.1.100
+```
+
+The `.knxprod` file for ETS import is available from [Releases](https://github.com/metaneutrons/snapdog/releases/latest).
 
 ### Binary
 
@@ -136,7 +183,7 @@ SnapDog builds on a family of Rust crates:
 |-------|-------------|
 | [snapcast-server](https://github.com/metaneutrons/snapcast-rs) | Embeddable Snapcast server with per-stream codecs, custom protocol, encryption |
 | [shairplay-rust](https://github.com/metaneutrons/shairplay-rust) | AirPlay 1 + 2 receiver library (RAOP/AirTunes) |
-| [knxkit](https://github.com/metaneutrons/knxkit) | KNX/IP tunnel + router with typed DPT encoding |
+| [knx-rs](https://github.com/metaneutrons/knx-rs) | KNX protocol stack — core types, KNXnet/IP, device stack, TP-UART, .knxprod generator |
 
 ### snapdog-client
 
