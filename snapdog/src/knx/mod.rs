@@ -51,12 +51,12 @@ pub async fn start(
     zone_commands: HashMap<usize, ZoneCommandSender>,
     snap_tx: tokio::sync::mpsc::Sender<SnapcastCmd>,
 ) -> Result<Option<DeviceControlHandle>> {
-    match config.knx.mode {
-        crate::config::KnxMode::Client => {
+    match config.knx.role {
+        crate::config::KnxRole::Client => {
             start_client(config, store, notify_rx, zone_commands, snap_tx).await?;
             Ok(None)
         }
-        crate::config::KnxMode::Device => {
+        crate::config::KnxRole::Device => {
             let handle = start_device(config, store, notify_rx, zone_commands, snap_tx).await?;
             Ok(Some(handle))
         }

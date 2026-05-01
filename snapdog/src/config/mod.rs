@@ -55,14 +55,14 @@ pub fn load_raw(raw: RawConfig) -> Result<AppConfig> {
 
     // ── KNX mode validation ───────────────────────────────────
     if raw.knx.enabled {
-        match raw.knx.mode {
-            KnxMode::Client => {
+        match raw.knx.role {
+            KnxRole::Client => {
                 anyhow::ensure!(
                     raw.knx.url.is_some(),
                     "KNX client mode requires 'url' (e.g. udp://192.168.1.50:3671)"
                 );
             }
-            KnxMode::Device => {
+            KnxRole::Device => {
                 anyhow::ensure!(
                     raw.knx.individual_address.is_some(),
                     "KNX device mode requires 'individual_address' (e.g. 1.1.100)"

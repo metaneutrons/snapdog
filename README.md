@@ -138,10 +138,11 @@ password = "pass"
 
 [knx]
 enabled = true
-# mode = "client"                     # Connect to a KNX/IP gateway
+# role = "client"                     # Connect to a KNX/IP gateway
 url = "udp://192.168.1.50:3671"
-# mode = "device"                     # Run as ETS-programmable KNX/IP device
+# role = "device"                     # Run as ETS-programmable KNX/IP device
 # individual_address = "1.1.100"
+# url = "udp://192.168.1.50:3671"    # Optional: tunnel to gateway for GA traffic
 
 [[zone]]
 name = "Living Room"

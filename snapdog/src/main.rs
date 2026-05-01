@@ -144,7 +144,7 @@ async fn main() -> Result<()> {
     // --knx-device enables device mode
     if cli.knx_device {
         app_config.knx.enabled = true;
-        app_config.knx.mode = config::KnxMode::Device;
+        app_config.knx.role = config::KnxRole::Device;
         app_config.knx.individual_address =
             Some(cli.knx_address.unwrap_or_else(|| "15.15.255".into()));
     }

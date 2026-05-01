@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 /// KNX operating mode.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum KnxMode {
+pub enum KnxRole {
     /// Connect to a KNX/IP gateway.
     #[default]
     Client,
@@ -18,7 +18,7 @@ pub enum KnxMode {
     Device,
 }
 
-impl KnxMode {
+impl KnxRole {
     /// String representation for matching and display.
     pub fn as_str(self) -> &'static str {
         match self {
@@ -472,17 +472,16 @@ pub struct KnxConfig {
     /// Enable KNX integration.
     #[serde(default)]
     pub enabled: bool,
-    /// Operating mode: `client` (default) connects to a gateway,
-    /// `device` runs as ETS-programmable KNX/IP device on port 3671.
-    #[serde(default)]
-    pub mode: KnxMode,
-    /// KNX connection URL (client mode only). Unicast = tunnel, multicast = router.
-    /// Examples: `udp://192.168.1.50:3671`, `udp://224.0.23.12:3671`
+    /// Device role: `client` (default) or `device` (ETS-programmable).
+    #[serde(default, alias = "mode")]
+    pub role: KnxRole,
+    /// KNX/IP gateway URL for tunnel/routing.
+    /// Required for client role. Optional for device role (enables GA reception via tunnel).
+    /// Examples: `udp://192.168.1.50:3671` (tunnel), `udp://224.0.23.12:3671` (routing)
     pub url: Option<String>,
-    /// KNX individual address (device mode only). Example: `"1.1.100"`
+    /// KNX individual address (device role). Example: `"1.1.100"`
     pub individual_address: Option<String>,
-    /// Persist ETS-programmed configuration across restarts (device mode only).
-    /// Defaults to `true` when mode is `"device"`.
+    /// Persist ETS-programmed configuration across restarts (device role).
     pub persist_ets_config: Option<bool>,
     /// Start with programming mode active (set via --knx-prog-mode CLI flag).
     #[serde(default)]
