@@ -6,4 +6,4 @@ publish = false
 
 [dependencies]
 snapdog = { path = "../snapdog", default-features = false }
-knx-rs-prod = "0.1.0"
+knx-rs-prod = "0.1.1"
