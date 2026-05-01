@@ -350,6 +350,19 @@ impl Default for HttpConfig {
     }
 }
 
+/// Policy for handling clients not defined in the configuration.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UnknownClientPolicy {
+    /// Accept unknown clients, show in WebUI, assign to default zone.
+    #[default]
+    Accept,
+    /// Accept connection but don't show in WebUI or assign a zone.
+    Ignore,
+    /// Reject connection immediately after Hello.
+    Reject,
+}
+
 /// Snapcast server connection and management.
 #[derive(Debug, Deserialize, Clone)]
 pub struct SnapcastConfig {
@@ -368,6 +381,12 @@ pub struct SnapcastConfig {
     /// Show snapserver console output.
     #[serde(default)]
     pub verbose: bool,
+    /// Policy for clients not in the config. Default: `accept`.
+    #[serde(default)]
+    pub unknown_clients: UnknownClientPolicy,
+    /// Default zone for unknown clients (when policy is `accept`).
+    /// If not set, uses the first configured zone.
+    pub default_zone: Option<String>,
     /// mDNS service type (default: "_snapdog._tcp.local.").
     #[serde(default = "default_mdns_service_type")]
     pub mdns_service_type: String,
@@ -384,6 +403,8 @@ impl Default for SnapcastConfig {
             streaming_port: default_streaming_port(),
             managed: true,
             verbose: false,
+            unknown_clients: UnknownClientPolicy::default(),
+            default_zone: None,
             mdns_service_type: default_mdns_service_type(),
             mdns_name: default_mdns_name(),
         }

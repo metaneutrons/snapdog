@@ -74,7 +74,46 @@ async fn handle_event(
                         client_name = %hello.client_name, version = %hello.version,
                         "Unknown client connected (not in config)"
                     );
-                    None
+                    // Handle based on unknown_clients policy
+                    if config.snapcast.unknown_clients == crate::config::UnknownClientPolicy::Accept
+                    {
+                        let zone_index = config
+                            .snapcast
+                            .default_zone
+                            .as_ref()
+                            .and_then(|name| config.zones.iter().find(|z| z.name == *name))
+                            .map(|z| z.index)
+                            .unwrap_or_else(|| config.zones.first().map(|z| z.index).unwrap_or(1));
+                        let client_index = {
+                            let mut s = store.write().await;
+                            let next_idx = s.clients.keys().max().copied().unwrap_or(0) + 1;
+                            s.clients.insert(
+                                next_idx,
+                                crate::state::ClientState {
+                                    name: hello.host_name.clone(),
+                                    icon: String::new(),
+                                    mac: hello.mac.clone(),
+                                    zone_index,
+                                    volume: crate::state::DEFAULT_VOLUME,
+                                    base_volume: crate::state::DEFAULT_VOLUME,
+                                    muted: false,
+                                    latency_ms: 0,
+                                    connected: true,
+                                    snapcast_id: Some(id.clone()),
+                                    max_volume: 100,
+                                    is_snapdog,
+                                },
+                            );
+                            next_idx
+                        };
+                        tracing::info!(
+                            client = %hello.host_name, zone = zone_index,
+                            "Unknown client accepted and assigned to zone"
+                        );
+                        Some((zone_index, client_index))
+                    } else {
+                        None
+                    }
                 }
             };
             broadcast_all_clients(store, notify).await;

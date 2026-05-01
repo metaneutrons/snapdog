@@ -65,8 +65,8 @@ thiserror = "2"
 anyhow = "1"
 
 # Snapcast
-snapcast-server = { version = "0.7", features = ["flac", "encryption", "mdns", "custom-protocol"] }
-snapcast-proto = "0.7"
+snapcast-server = { version = "0.8", features = ["flac", "encryption", "mdns", "custom-protocol"] }
+snapcast-proto = "0.8"
 
 # Utilities
 md5 = "0.7"

@@ -52,12 +52,32 @@ impl EmbeddedBackend {
             )
         };
 
+        // Build client filter based on unknown_clients policy
+        let client_filter: Option<std::sync::Arc<dyn snapcast_server::auth::ClientFilter>> =
+            if config.snapcast.unknown_clients == crate::config::UnknownClientPolicy::Reject {
+                let allowed_macs: Vec<String> = config
+                    .clients
+                    .iter()
+                    .map(|c| c.mac.to_lowercase())
+                    .collect();
+                struct MacAllowlist(Vec<String>);
+                impl snapcast_server::auth::ClientFilter for MacAllowlist {
+                    fn accept(&self, hello: &snapcast_server::Hello) -> bool {
+                        self.0.iter().any(|m| m == &hello.mac.to_lowercase())
+                    }
+                }
+                Some(std::sync::Arc::new(MacAllowlist(allowed_macs)))
+            } else {
+                None
+            };
+
         let server_config = ServerConfig {
             stream_port: config.snapcast.streaming_port,
             buffer_ms: DEFAULT_BUFFER_MS,
             codec,
             sample_format: config.audio.sample_format(),
             encryption_psk,
+            client_filter,
             state_file: Some("snapcast-state.json".into()),
             mdns_service_type: config.snapcast.mdns_service_type.clone(),
             mdns_name: config.snapcast.mdns_name.clone(),
