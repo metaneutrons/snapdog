@@ -62,11 +62,18 @@ async fn handle_event(
                     client.is_snapdog = is_snapdog;
                     tracing::info!(
                         client = %client.name, id = %id,
-                        client_name = hello.client_name, version = hello.version,
+                        mac = %hello.mac, host = %hello.host_name,
+                        client_name = %hello.client_name, version = %hello.version,
                         "Client connected"
                     );
                     Some((client.zone_index, client_index))
                 } else {
+                    tracing::info!(
+                        id = %id,
+                        mac = %hello.mac, host = %hello.host_name,
+                        client_name = %hello.client_name, version = %hello.version,
+                        "Unknown client connected (not in config)"
+                    );
                     None
                 }
             };
