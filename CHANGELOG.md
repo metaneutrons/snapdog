@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.2](https://github.com/metaneutrons/snapdog/compare/v0.6.1...v0.6.2) (2026-05-01)
+
+
+### Bug Fixes
+
+* **docker:** enterprise-grade Dockerfiles with persistence volume ([f308442](https://github.com/metaneutrons/snapdog/commit/f308442e84bfae6a67f6f1639ecdaa8252ba9f10))
+
 ## [0.6.1](https://github.com/metaneutrons/snapdog/compare/v0.6.0...v0.6.1) (2026-04-30)
 
 
