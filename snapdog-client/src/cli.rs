@@ -26,8 +26,8 @@ pub struct Cli {
     pub instance: u32,
 
     /// Unique host id (default: MAC address)
-    #[arg(long = "hostID", default_value = "")]
-    pub host_id: String,
+    #[arg(long = "hostID")]
+    pub host_id: Option<String>,
 
     /// Client certificate file (PEM format)
     #[arg(long = "cert")]
@@ -160,7 +160,7 @@ impl Cli {
 
         Ok(ClientSettings {
             instance: self.instance,
-            host_id: self.host_id,
+            host_id: self.host_id.unwrap_or_default(),
             server,
             player: config::PlayerSettings {
                 player_name,
