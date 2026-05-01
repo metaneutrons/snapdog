@@ -214,18 +214,22 @@ jobs:
           - image: snapdog
             file: Dockerfile
             platform: linux/amd64
+            suffix: amd64
             runner: ubuntu-latest
           - image: snapdog
             file: Dockerfile
             platform: linux/arm64
+            suffix: arm64
             runner: ubuntu-24.04-arm
           - image: snapdog-client
             file: devcontainer/snapdog-client/Dockerfile
             platform: linux/amd64
+            suffix: amd64
             runner: ubuntu-latest
           - image: snapdog-client
             file: devcontainer/snapdog-client/Dockerfile
             platform: linux/arm64
+            suffix: arm64
             runner: ubuntu-24.04-arm
     permissions:
       contents: read
@@ -238,24 +242,15 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push by digest
-        id: build
+      - name: Build and push platform image
         uses: docker/build-push-action@v7
         with:
           context: .
           file: ${{ matrix.file }}
           platforms: ${{ matrix.platform }}
-          outputs: type=image,name=ghcr.io/${{ github.repository }}${{ matrix.image == 'snapdog-client' && '-client' || '' }},push-by-digest=true,name-canonical=true,push=true
+          push: true
           provenance: false
-      - name: Export digest
-        run: |
-          mkdir -p /tmp/digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "/tmp/digests/${digest#sha256:}"
-      - uses: actions/upload-artifact@v7
-        with:
-          name: digest-${{ matrix.image }}-${{ matrix.runner }}
-          path: /tmp/digests/*
+          tags: ghcr.io/${{ github.repository }}${{ matrix.image == 'snapdog-client' && '-client' || '' }}:${{ github.ref_name }}-${{ matrix.suffix }}
 
   docker-manifest:
     name: Docker Manifest (${{ matrix.image }})
@@ -276,14 +271,11 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: digest-${{ matrix.image }}-*
-          merge-multiple: true
-          path: /tmp/digests
       - uses: docker/setup-buildx-action@v4
-      - name: Create and push manifest
+      - name: Create and push multi-arch manifest
         run: |
-          TAGS="${{ matrix.repo }}:${{ github.ref_name }} ${{ matrix.repo }}:latest"
-          DIGESTS=$(printf '${{ matrix.repo }}@sha256:%s ' $(ls /tmp/digests/))
-          docker buildx imagetools create $(printf -- '-t %s ' $TAGS) $DIGESTS
+          docker buildx imagetools create \
+            -t ${{ matrix.repo }}:${{ github.ref_name }} \
+            -t ${{ matrix.repo }}:latest \
+            ${{ matrix.repo }}:${{ github.ref_name }}-amd64 \
+            ${{ matrix.repo }}:${{ github.ref_name }}-arm64
