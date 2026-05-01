@@ -222,12 +222,12 @@ jobs:
             suffix: arm64
             runner: ubuntu-24.04-arm
           - image: snapdog-client
-            file: devcontainer/snapdog-client/Dockerfile
+            file: Dockerfile.client
             platform: linux/amd64
             suffix: amd64
             runner: ubuntu-latest
           - image: snapdog-client
-            file: devcontainer/snapdog-client/Dockerfile
+            file: Dockerfile.client
             platform: linux/arm64
             suffix: arm64
             runner: ubuntu-24.04-arm

@@ -10,7 +10,7 @@ RUN npm run build
 # ── Rust build stage ──────────────────────────────────────────
 FROM rust:1-bookworm AS builder
 
-RUN apt-get update && apt-get install -y cmake pkg-config && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y cmake pkg-config libasound2-dev && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
@@ -23,20 +23,31 @@ RUN cargo build --release -p snapdog
 # ── Runtime stage ─────────────────────────────────────────────
 FROM debian:bookworm-slim
 
+LABEL org.opencontainers.image.source="https://github.com/metaneutrons/snapdog"
+LABEL org.opencontainers.image.description="Multi-room audio system with KNX integration"
+LABEL org.opencontainers.image.licenses="GPL-3.0-only"
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libasound2 ca-certificates dumb-init \
+    libasound2 ca-certificates dumb-init curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /build/target/release/snapdog /usr/local/bin/
 
 RUN useradd -r -s /bin/false snapdog && \
-    mkdir -p /var/lib/snapdog /snapsinks && \
-    chown snapdog:snapdog /var/lib/snapdog /snapsinks
+    mkdir -p /var/lib/snapdog /etc/snapdog && \
+    chown snapdog:snapdog /var/lib/snapdog
 
 USER snapdog
 WORKDIR /var/lib/snapdog
 
-EXPOSE 5555 1704
+# Persist ETS programming (knx-memory.bin), state, and EQ config across restarts
+VOLUME /var/lib/snapdog
+
+# HTTP API, Snapcast streaming, KNX/IP device
+EXPOSE 5555 1704 3671/udp
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -sf http://localhost:5555/api/v1/system/health || exit 1
 
 ENTRYPOINT ["dumb-init", "snapdog"]
 CMD ["--config", "/etc/snapdog/snapdog.toml"]

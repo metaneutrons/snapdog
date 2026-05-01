@@ -1,0 +1,33 @@
+# ── Build stage ────────────────────────────────────────────────
+FROM rust:1-bookworm AS builder
+
+RUN apt-get update && apt-get install -y libasound2-dev pkg-config && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+COPY Cargo.toml Cargo.lock ./
+COPY snapdog/ snapdog/
+COPY snapdog-client/ snapdog-client/
+COPY xtask/ xtask/
+# WebUI not needed for client, but workspace requires the directory
+RUN mkdir -p webui/out && cargo build --release -p snapdog-client
+
+# ── Runtime stage ─────────────────────────────────────────────
+FROM debian:bookworm-slim
+
+LABEL org.opencontainers.image.source="https://github.com/metaneutrons/snapdog"
+LABEL org.opencontainers.image.description="SnapDog audio client — receives and plays audio from a SnapDog server"
+LABEL org.opencontainers.image.licenses="GPL-3.0-only"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libasound2 ca-certificates dumb-init \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /build/target/release/snapdog-client /usr/local/bin/
+
+RUN useradd -r -s /bin/false -G audio snapdog
+
+USER snapdog
+WORKDIR /tmp
+
+ENTRYPOINT ["dumb-init", "snapdog-client"]
+CMD ["--server", "snapdog"]
