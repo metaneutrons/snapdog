@@ -443,5 +443,7 @@ async fn main() -> Result<()> {
     }
     #[cfg(feature = "snapcast-process")]
     snapserver.stop().await?;
-    Ok(())
+
+    // Force exit — background threads (mDNS, AirPlay) don't respond to tokio shutdown
+    std::process::exit(0);
 }
