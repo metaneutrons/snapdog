@@ -3934,9 +3934,9 @@ dependencies = [
 
 [[package]]
 name = "snapcast-proto"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6818c91c5ff7fdea4088555b4731ffca7cbe99cfaf0c1d7ec08a3b2bb66e6fe"
+checksum = "d907a9a2865964245d70036296a157ed4143b58fe612b66ad6cf4036eaa2fcff"
 dependencies = [
  "byteorder",
  "serde",
@@ -3946,9 +3946,9 @@ dependencies = [
 
 [[package]]
 name = "snapcast-server"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79deec4b0afeb862f31a41dfee196855a3cef9d672cc10c325c48e820f170387"
+checksum = "262f3aea9f9904d971e67b1d7ddc38b11b529ad1c5ac9b891898cc0e721fb501"
 dependencies = [
  "anyhow",
  "base64",
@@ -3963,7 +3963,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "snapcast-proto 0.8.0",
+ "snapcast-proto 0.9.0",
  "socket2 0.5.10",
  "subtle",
  "tokio",
@@ -4003,7 +4003,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shairplay",
- "snapcast-proto 0.8.0",
+ "snapcast-proto 0.9.0",
  "snapcast-server",
  "symphonia",
  "tempfile",
