@@ -109,11 +109,10 @@ function ClientCard({ client }: { client: ClientInfo }) {
           {client.is_snapdog && (
             <button
               onClick={() => setShowEq(true)}
-              className={`relative text-[10px] transition-colors px-1 ${eqEnabled ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
+              className={`text-[10px] transition-colors px-1 ${eqEnabled ? "text-orange-500 font-bold" : "text-muted-foreground hover:text-foreground"}`}
               aria-label={`EQ ${client.name}`}
             >
               EQ
-              {eqEnabled && <span className="absolute -top-0.5 -right-0.5 size-1 rounded-full bg-primary" aria-hidden="true" />}
             </button>
           )}
         </div>

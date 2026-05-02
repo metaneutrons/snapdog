@@ -215,9 +215,8 @@ function ZoneDetail({ zone }: { zone: ZoneState }) {
             <SeekBar zone={zone} />
             <div className="flex items-center gap-2">
               <div className="flex-1"><TransportControls zone={zone} /></div>
-              <Button variant="ghost" size="sm" onClick={() => setShowEq(true)} className={`relative text-xs px-2 ${eqEnabled ? "text-primary" : ""}`} aria-label={t("eq.title", { zone: zone.name })}>
+              <Button variant="ghost" size="sm" onClick={() => setShowEq(true)} className={`text-xs px-2 ${eqEnabled ? "text-orange-500 font-bold" : ""}`} aria-label={t("eq.title", { zone: zone.name })}>
                 EQ
-                {eqEnabled && <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-primary" aria-hidden="true" />}
               </Button>
             </div>
             <ShuffleRepeat zone={zone} />
