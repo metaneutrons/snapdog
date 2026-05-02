@@ -232,7 +232,7 @@ function ZoneDetail({ zone }: { zone: ZoneState }) {
         <ClientList zone={zone} />
         <PlaylistBrowser zone={zone} />
       </div>
-      {showEq && <EqOverlay zoneId={zone.index} label={zone.name} onClose={() => { setShowEq(false); api.eq.get(zone.index).then((c) => setEqEnabled(c.enabled)).catch(() => {}); }} />}
+      {showEq && <EqOverlay zoneId={zone.index} label={zone.name} onClose={(enabled) => { setShowEq(false); setEqEnabled(enabled); }} />}
     </div>
   );
 }

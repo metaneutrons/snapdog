@@ -28,7 +28,7 @@ interface EqOverlayProps {
   zoneId?: number;
   clientId?: number;
   label: string;
-  onClose: () => void;
+  onClose: (enabled: boolean) => void;
 }
 
 const DEFAULT_BAND: EqBand = { freq: 1000, gain: 0, q: 1.0, type: "peaking" };
@@ -112,10 +112,9 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
 
   const handleClose = () => {
     if (abBypass) {
-      // Restore EQ on close
       pushConfig({ ...config, enabled: true });
     }
-    onClose();
+    onClose(config.enabled);
   };
 
   // Frequency response curve

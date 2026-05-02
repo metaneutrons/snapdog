@@ -117,7 +117,7 @@ function ClientCard({ client }: { client: ClientInfo }) {
           )}
         </div>
       </div>
-      {showEq && <EqOverlay clientId={client.index} label={client.name} onClose={() => { setShowEq(false); api.clientEq.get(client.index).then((c) => setEqEnabled(c.enabled)).catch(() => {}); }} />}
+      {showEq && <EqOverlay clientId={client.index} label={client.name} onClose={(enabled) => { setShowEq(false); setEqEnabled(enabled); }} />}
     </div>
   );
 }
