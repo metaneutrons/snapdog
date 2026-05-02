@@ -131,6 +131,17 @@ sample_rate = 48000
 bit_depth = 16
 channels = 2
 
+[snapcast]
+streaming_port = 1704
+unknown_clients = "accept"           # accept | ignore | reject
+default_zone = "Living Room"         # Zone for unknown clients (accept only)
+
+[mqtt]
+broker = "192.168.1.10:1883"
+# username = "user"
+# password = "pass"
+base_topic = "snapdog/"
+
 [subsonic]
 url = "https://music.example.com"
 username = "user"
