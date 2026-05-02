@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   VolumeHighIcon,
@@ -10,6 +10,7 @@ import {
 import { useTranslations } from "next-intl";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
+import { useOptimisticValue } from "@/hooks/useOptimisticValue";
 
 interface VolumeSliderProps {
   volume: number;
@@ -32,22 +33,12 @@ export function VolumeSlider({
   max = 100,
   compact = false,
 }: VolumeSliderProps) {
-  const [localVolume, setLocalVolume] = useState(volume);
   const t = useTranslations("volume");
-  const [dragging, setDragging] = useState(false);
+  const { value: localVolume, setOptimistic, commit } = useOptimisticValue(volume);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Clean up debounce timer on unmount
   useEffect(() => () => clearTimeout(timerRef.current), []);
-
-  useEffect(() => {
-    if (!dragging) {
-      setLocalVolume(volume);
-    } else if (volume === localVolume) {
-      // Server confirmed our value — safe to release
-      setDragging(false);
-    }
-  }, [volume, dragging, localVolume]);
 
   const volumeIcon = muted
     ? VolumeMute02Icon
@@ -58,22 +49,19 @@ export function VolumeSlider({
   const handleChange = useCallback(
     (value: number[]) => {
       const v = value[0];
-      setLocalVolume(v);
-      setDragging(true);
+      setOptimistic(v);
       if (muted) onUnmute();
       clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => onVolumeChange(v), 50);
     },
-    [muted, onVolumeChange, onUnmute],
+    [muted, onVolumeChange, onUnmute, setOptimistic],
   );
 
   const handleCommit = useCallback(
     (value: number[]) => {
       clearTimeout(timerRef.current);
+      commit(value[0]);
       onVolumeChange(value[0]);
-      // Keep localVolume at the committed value — don't reset to old prop.
-      // dragging stays true until the prop updates to match.
-      setLocalVolume(value[0]);
     },
     [onVolumeChange],
   );
