@@ -92,13 +92,14 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
   };
 
   // Off: send enabled:false (bands stay persisted on server), clear UI bands
-  // On: reload full config from API
+  // On: send enabled:true, reload full config from API
   const toggleEnabled = (on: boolean) => {
-    if (on && !config.enabled) {
-      eqApi.get().then(setConfig).catch((e: unknown) => console.error("API error", e));
-    } else if (!on && config.enabled) {
+    if (on) {
+      pushConfig({ ...config, enabled: true });
+      eqApi.get().then((c) => setConfig({ ...c, enabled: true })).catch((e: unknown) => console.error("API error", e));
+    } else {
       pushConfig({ ...config, enabled: false });
-      setConfig((prev) => ({ ...prev, enabled: false, bands: [] }));
+      setConfig((prev) => ({ ...prev, enabled: false }));
     }
   };
 
@@ -125,8 +126,7 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
 
   if (loading) return null;
 
-  const dimmed = !config.enabled && !abBypass; // Off: hide bands completely
-  const bypassed = abBypass; // A/B: dim but show bands
+  const bypassed = abBypass;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label={t("title", { zone: label })} onKeyDown={(e) => { if (e.key === "Escape") handleClose(); }}>
@@ -149,47 +149,49 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
           </div>
         </div>
 
-        {/* Everything below dims when EQ is off */}
-        <div className={`space-y-5 transition-opacity ${dimmed ? 'opacity-40 pointer-events-none' : bypassed ? 'opacity-50 pointer-events-none' : ''}`}>
-          {/* 3. Preset chips */}
-          <div className="flex gap-1.5 overflow-x-auto scrollbar-none py-1 -mx-1 px-1">
-            {PRESETS.map((p) => (
-              <button
-                key={p}
-                onClick={() => applyPreset(p)}
-                className={`shrink-0 px-3 py-1 text-xs rounded-full transition-colors ${
-                  config.preset === p
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted hover:bg-muted/80 text-foreground'
-                }`}
-              >
-                {PRESET_LABELS[p] || p}
-              </button>
-            ))}
+        {/* Curve + Presets + Bands — curve always visible, rest hidden when off, all dimmed when A/B */}
+        {config.enabled ? (
+          <div className={`space-y-5 transition-opacity ${bypassed ? 'opacity-50 pointer-events-none' : ''}`}>
+            <FrequencyResponseCurve response={response} curveLabel={t("curve")} />
+            {/* Preset chips */}
+            <div className="flex gap-1.5 overflow-x-auto scrollbar-none py-1 -mx-1 px-1">
+              {PRESETS.map((p) => (
+                <button
+                  key={p}
+                  onClick={() => applyPreset(p)}
+                  className={`shrink-0 px-3 py-1 text-xs rounded-full transition-colors ${
+                    config.preset === p
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted hover:bg-muted/80 text-foreground'
+                  }`}
+                >
+                  {PRESET_LABELS[p] || p}
+                </button>
+              ))}
+            </div>
+
+            {/* Band rows */}
+            <div className="space-y-3">
+              {config.bands.map((band, idx) => (
+                <BandRow
+                  key={idx}
+                  band={band}
+                  index={idx}
+                  onChange={(patch) => updateBand(idx, patch)}
+                  onRemove={() => removeBand(idx)}
+                />
+              ))}
+            </div>
+
+            {config.bands.length < 10 && (
+              <Button variant="ghost" size="sm" onClick={addBand} className="w-full">
+                {t("addBand")}
+              </Button>
+            )}
           </div>
-
-          {/* 4. Frequency Response Curve */}
-          <FrequencyResponseCurve response={response} curveLabel={t("curve")} />
-
-          {/* 5. Band rows */}
-          <div className="space-y-3">
-            {config.bands.map((band, idx) => (
-              <BandRow
-                key={idx}
-                band={band}
-                index={idx}
-                onChange={(patch) => updateBand(idx, patch)}
-                onRemove={() => removeBand(idx)}
-              />
-            ))}
-          </div>
-
-          {config.bands.length < 10 && (
-            <Button variant="ghost" size="sm" onClick={addBand} className="w-full">
-              {t("addBand")}
-            </Button>
-          )}
-        </div>
+        ) : (
+          <FrequencyResponseCurve response={[]} curveLabel={t("curve")} />
+        )}
       </div>
     </div>
   );

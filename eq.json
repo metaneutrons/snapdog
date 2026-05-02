@@ -13,12 +13,19 @@
     }
   },
   "clients": {
-    "2": {
-      "enabled": false,
-      "bands": []
-    },
     "1": {
       "enabled": true,
+      "bands": [
+        {
+          "freq": 110.0,
+          "gain": 6.0,
+          "q": 0.7,
+          "type": "low_shelf"
+        }
+      ]
+    },
+    "2": {
+      "enabled": false,
       "bands": []
     }
   }
