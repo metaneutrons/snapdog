@@ -1,7 +1,6 @@
 # Configuration for snapdog-client systemd service.
 # Edit this file, then: systemctl restart snapdog-client
 
-# Server URL (required). Examples:
-#   tcp://192.168.1.10:1704
-#   tcp://snapdog.local:1704
-SNAPDOG_CLIENT_ARGS="tcp://localhost:1704"
+# Server URL. Leave empty for automatic mDNS discovery (_snapdog._tcp).
+# Examples: tcp://192.168.1.10:1704, tcp://snapdog.local:1704
+SNAPDOG_CLIENT_ARGS=""
