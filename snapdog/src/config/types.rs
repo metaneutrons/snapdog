@@ -165,6 +165,14 @@ pub struct SystemConfig {
     pub log_level: LogLevel,
     /// Optional log file path (daily rotation).
     pub log_file: Option<String>,
+    /// External base URL (e.g., `http://192.168.2.20:3000` or `https://music.example.com`).
+    /// Used for absolute URLs in MQTT cover art. Defaults to `http://localhost:3000`.
+    #[serde(default = "default_base_url")]
+    pub base_url: String,
+}
+
+fn default_base_url() -> String {
+    "http://localhost:3000".into()
 }
 
 /// How zone (group) volume changes affect individual client volumes.

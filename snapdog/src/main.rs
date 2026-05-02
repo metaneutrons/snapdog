@@ -350,7 +350,10 @@ async fn main() -> Result<()> {
                 // Publish initial state for all zones and clients
                 let snap = store.read().await;
                 for (&idx, zone) in &snap.zones {
-                    if let Err(e) = bridge.publish_zone_state(idx, zone).await {
+                    if let Err(e) = bridge
+                        .publish_zone_state(idx, zone, &config.system.base_url)
+                        .await
+                    {
                         tracing::warn!(zone = idx, error = %e, "MQTT initial zone publish failed");
                     }
                 }
