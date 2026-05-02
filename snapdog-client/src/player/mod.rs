@@ -66,10 +66,22 @@ impl Mixer {
             #[cfg(target_os = "linux")]
             "hardware" => {
                 let control = if param.is_empty() {
-                    "Master".to_string()
+                    // Auto-detect: try Master, then first available control
+                    detect_alsa_control().unwrap_or_else(|| "Master".to_string())
                 } else {
                     param.to_string()
                 };
+                // Validate the control exists at startup
+                if !validate_alsa_control(&control) {
+                    tracing::warn!(
+                        control,
+                        "ALSA mixer control not found — volume changes will fail. \
+                         Available controls: {}",
+                        list_alsa_controls().unwrap_or_else(|| "none".into())
+                    );
+                } else {
+                    tracing::info!(control, "Hardware mixer initialized");
+                }
                 Mixer::Hardware { control, volume }
             }
             #[cfg(not(target_os = "linux"))]
@@ -210,6 +222,53 @@ fn set_alsa_volume(control: &str, percent: u8, muted: bool) {
         Err(e) => tracing::warn!(control, error = %e, "Failed to run amixer"),
         _ => tracing::debug!(control, percent, muted, "Hardware volume set"),
     }
+}
+
+/// Check if an ALSA mixer control exists.
+#[cfg(target_os = "linux")]
+fn validate_alsa_control(control: &str) -> bool {
+    use std::process::Command;
+    Command::new("amixer")
+        .args(["sget", control])
+        .output()
+        .is_ok_and(|o| o.status.success())
+}
+
+/// List available ALSA mixer controls (for error messages).
+#[cfg(target_os = "linux")]
+fn list_alsa_controls() -> Option<String> {
+    use std::process::Command;
+    let output = Command::new("amixer").arg("scontrols").output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let names: Vec<&str> = std::str::from_utf8(&output.stdout)
+        .ok()?
+        .lines()
+        .filter_map(|l| l.split('\'').nth(1))
+        .collect();
+    Some(names.join(", "))
+}
+
+/// Auto-detect the best ALSA mixer control.
+/// Prefers "Master", falls back to "Digital", then first available.
+#[cfg(target_os = "linux")]
+fn detect_alsa_control() -> Option<String> {
+    for candidate in ["Master", "Digital", "PCM", "Speaker"] {
+        if validate_alsa_control(candidate) {
+            return Some(candidate.to_string());
+        }
+    }
+    // Fall back to first available
+    use std::process::Command;
+    let output = Command::new("amixer").arg("scontrols").output().ok()?;
+    std::str::from_utf8(&output.stdout)
+        .ok()?
+        .lines()
+        .next()?
+        .split('\'')
+        .nth(1)
+        .map(String::from)
 }
 
 /// Start audio output. Waits for the Stream to have audio, then starts cpal.
