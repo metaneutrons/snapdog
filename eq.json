@@ -1,5 +1,17 @@
 {
-  "zones": {},
+  "zones": {
+    "1": {
+      "enabled": true,
+      "bands": [
+        {
+          "freq": 100.0,
+          "gain": 6.0,
+          "q": 0.7,
+          "type": "low_shelf"
+        }
+      ]
+    }
+  },
   "clients": {
     "2": {
       "enabled": false,

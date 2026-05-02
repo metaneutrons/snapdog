@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { Button } from "@/components/ui/button";
@@ -39,7 +39,6 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
   const [config, setConfig] = useState<EqConfig>({ enabled: false, bands: [], preset: "flat" });
   const [abBypass, setAbBypass] = useState(false);
   const [loading, setLoading] = useState(true);
-  const enabledBeforeBypass = useRef(false);
 
   const eqApi = clientId
     ? { get: () => api.clientEq.get(clientId), set: (c: EqConfig) => api.clientEq.set(clientId, c), applyPreset: (n: string) => api.clientEq.applyPreset(clientId, n) }
@@ -94,17 +93,16 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
 
   const toggleAB = () => {
     const next = !abBypass;
-    if (next) enabledBeforeBypass.current = config.enabled;
     setAbBypass(next);
-    const c = { ...config, enabled: next ? false : enabledBeforeBypass.current };
-    setConfig(c);
+    // A/B temporarily disables EQ on server without changing local state
+    const c = { ...config, enabled: next ? false : config.enabled };
     pushConfig(c);
   };
 
   const handleClose = () => {
     if (abBypass) {
-      const c = { ...config, enabled: enabledBeforeBypass.current };
-      pushConfig(c);
+      // Restore actual state on close
+      pushConfig(config);
     }
     onClose();
   };
@@ -117,31 +115,32 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
 
   if (loading) return null;
 
-  const dimmed = !config.enabled || abBypass;
+  const dimmed = !config.enabled;
+  const bypassed = abBypass && config.enabled;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label={t("title", { zone: label })} onKeyDown={(e) => { if (e.key === "Escape") handleClose(); }}>
       <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={handleClose} role="presentation" />
       <div className="relative z-10 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-xl space-y-5" ref={trapRef}>
-        {/* 1. Header */}
+        {/* Header: title + On/Off toggle (left), A/B + close (right) */}
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{t("title", { zone: label })}</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-lg font-semibold">{t("title", { zone: label })}</h2>
+            <div className="inline-flex rounded-lg bg-muted p-0.5">
+              <button className={`px-3 py-1 text-xs rounded-md transition-colors ${!config.enabled ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`} onClick={() => { if (abBypass) return; update({ enabled: false }); }}>Off</button>
+              <button className={`px-3 py-1 text-xs rounded-md transition-colors ${config.enabled ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`} onClick={() => { if (abBypass) return; update({ enabled: true }); }}>On</button>
+            </div>
+          </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={toggleAB} disabled={!config.enabled} className={abBypass ? "text-muted-foreground" : config.enabled ? "text-primary font-semibold" : "text-muted-foreground"}>
+            <Button variant="ghost" size="sm" onClick={toggleAB} className={abBypass ? "text-primary font-semibold" : "text-muted-foreground"}>
               A/B
             </Button>
             <Button variant="ghost" size="sm" onClick={handleClose} aria-label={t("close")}>✕</Button>
           </div>
         </div>
 
-        {/* 2. Segmented On/Off toggle */}
-        <div className="inline-flex rounded-lg bg-muted p-0.5">
-          <button className={`px-3 py-1 text-xs rounded-md transition-colors ${!config.enabled ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`} onClick={() => update({ enabled: false })}>Off</button>
-          <button className={`px-3 py-1 text-xs rounded-md transition-colors ${config.enabled ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`} onClick={() => update({ enabled: true })}>On</button>
-        </div>
-
         {/* Everything below dims when EQ is off */}
-        <div className={`space-y-5 transition-opacity ${dimmed ? 'opacity-40 pointer-events-none' : ''}`}>
+        <div className={`space-y-5 transition-opacity ${dimmed ? 'opacity-40 pointer-events-none' : bypassed ? 'opacity-50' : ''}`}>
           {/* 3. Preset chips */}
           <div className="flex gap-1.5 overflow-x-auto scrollbar-none py-1 -mx-1 px-1">
             {PRESETS.map((p) => (
