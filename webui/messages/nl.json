@@ -57,7 +57,7 @@
   "eq": {
     "title": "EQ — {zone}",
     "close": "Equalizer sluiten",
-    "preset": "EQ-voorinstelling",
+    "preset": "Presets",
     "enabled": "Ingeschakeld",
     "addBand": "+ Band toevoegen",
     "removeBand": "Band verwijderen",

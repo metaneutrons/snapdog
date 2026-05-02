@@ -136,7 +136,7 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
             className="text-sm bg-muted border border-border rounded px-2 py-1"
             aria-label={t("preset")}
           >
-            <option value="" disabled>{t("preset")}…</option>
+            <option value="" disabled>{t("preset")}</option>
             {PRESETS.map((p) => (
               <option key={p} value={p}>{p.replace("_", " ")}</option>
             ))}

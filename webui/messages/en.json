@@ -57,7 +57,7 @@
   "eq": {
     "title": "EQ — {zone}",
     "close": "Close equalizer",
-    "preset": "EQ preset",
+    "preset": "Presets",
     "enabled": "Enabled",
     "addBand": "+ Add Band",
     "removeBand": "Remove band",

@@ -1,0 +1,9 @@
+{
+  "zones": {},
+  "clients": {
+    "1": {
+      "enabled": false,
+      "bands": []
+    }
+  }
+}
