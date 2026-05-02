@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.7.0](https://github.com/metaneutrons/snapdog/compare/v0.6.2...v0.7.0) (2026-05-02)
+
+
+### Features
+
+* **knx:** enterprise logging for device connections and ETS sessions ([d91aa6f](https://github.com/metaneutrons/snapdog/commit/d91aa6f8ea09c894a18673cd441d99fdf75c6ab8))
+* **snapcast:** configurable unknown client policy (accept/ignore/reject) ([bd19a3d](https://github.com/metaneutrons/snapdog/commit/bd19a3dceb202e7ed540ae3bd6a2f180ace198e0))
+* **snapdog-client:** ALSA mixer auto-detection and startup validation ([cabe48a](https://github.com/metaneutrons/snapdog/commit/cabe48ae869d36c13764b939d1956a9207587595))
+* **webui:** EQ enabled indicator on zone and client buttons ([c6b2f8b](https://github.com/metaneutrons/snapdog/commit/c6b2f8bb4dcce954ac7351192a70ad4f9020087e))
+
+
+### Bug Fixes
+
+* **aur:** install /etc/default/ files for both packages ([b0405bb](https://github.com/metaneutrons/snapdog/commit/b0405bb3fcefb9c8401ebd86ad38c969f4e304bf))
+* **deb:** client auto-starts with mDNS discovery (no config needed) ([5436263](https://github.com/metaneutrons/snapdog/commit/5436263775e970bdd39e522ddf2126687a827dab))
+* **deb:** enterprise-grade systemd units and packaging ([01eb14a](https://github.com/metaneutrons/snapdog/commit/01eb14abcf9ea0bc55b3fdfda9aec3aaaf6ac97e))
+* **deb:** snapdog server uses EnvironmentFile for flexible startup ([e4bc24f](https://github.com/metaneutrons/snapdog/commit/e4bc24faa9464c0b676086f9050b50ca6f807f09))
+* **snapcast:** log ALL client connections, including unknown clients ([c279de6](https://github.com/metaneutrons/snapdog/commit/c279de6295fc0a2ff736b247f1eee3233f6e0b9b))
+* **snapdog-client:** hostID CLI — remove misleading [default: ""] ([6bffe72](https://github.com/metaneutrons/snapdog/commit/6bffe72171956e4d650a5c814a1ae552eba53405))
+* **ws:** client volume notification sends base_volume, not effective ([1b8b1bc](https://github.com/metaneutrons/snapdog/commit/1b8b1bc9e8bf04f5aeef591cab8897005e7e4637))
+
 ## [0.6.2](https://github.com/metaneutrons/snapdog/compare/v0.6.1...v0.6.2) (2026-05-01)
 
 
