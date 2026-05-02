@@ -214,6 +214,18 @@ pub async fn handle_next(ds: &mut DecodeState<'_>, ctx: &PlaybackCtx<'_>) {
 }
 
 pub async fn handle_previous(ds: &mut DecodeState<'_>, ctx: &PlaybackCtx<'_>) {
+    // CD-player behavior: if position > 3s, restart current track.
+    // Otherwise, go to previous track.
+    const RESTART_THRESHOLD_MS: i64 = 3000;
+    let position_ms = ctx
+        .store
+        .read()
+        .await
+        .zones
+        .get(&ctx.zone_index)
+        .and_then(|z| z.track.as_ref().map(|t| t.position_ms))
+        .unwrap_or(0);
+
     match ds.source.clone() {
         ActiveSource::Radio { index } => {
             let prev = if index == 0 {
@@ -238,8 +250,18 @@ pub async fn handle_previous(ds: &mut DecodeState<'_>, ctx: &PlaybackCtx<'_>) {
             playlist_id,
             track_index,
             track_count,
-        } if track_index > 0 => {
-            advance_playlist_track(ds, &playlist_id, track_index - 1, track_count, ctx).await;
+        } => {
+            if position_ms > RESTART_THRESHOLD_MS {
+                // Restart current track (seek to 0)
+                advance_playlist_track(ds, &playlist_id, track_index, track_count, ctx).await;
+            } else if track_index > 0 {
+                // Go to previous track
+                advance_playlist_track(ds, &playlist_id, track_index - 1, track_count, ctx).await;
+            }
+        }
+        ActiveSource::SubsonicTrack { .. } => {
+            // Single track: restart from beginning
+            // (handled by seek to 0 via self_tx in the caller if needed)
         }
         _ => {}
     }
