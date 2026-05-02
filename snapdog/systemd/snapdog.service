@@ -5,7 +5,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/snapdog --config /etc/snapdog/snapdog.toml
+EnvironmentFile=-/etc/default/snapdog
+ExecStart=/usr/bin/snapdog $SNAPDOG_ARGS
 Restart=on-failure
 RestartSec=5
 DynamicUser=yes

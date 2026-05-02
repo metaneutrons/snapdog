@@ -73,9 +73,10 @@ tokio = { workspace = true, features = ["test-util"] }
 section = "sound"
 copyright = "2026 Fabian Schmieder"
 depends = "libasound2"
-conf-files = ["/etc/snapdog/snapdog.toml"]
+conf-files = ["/etc/snapdog/snapdog.toml", "/etc/default/snapdog"]
 assets = [
   ["target/release/snapdog", "usr/bin/", "755"],
   ["../snapdog.example.toml", "etc/snapdog/snapdog.toml", "644"],
+  ["debian/snapdog.default", "etc/default/snapdog", "644"],
 ]
 systemd-units = { unit-name = "snapdog", enable = false, start = false }

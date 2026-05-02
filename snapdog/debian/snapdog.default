@@ -1,0 +1,14 @@
+# Configuration for snapdog systemd service.
+# Edit this file, then: systemctl restart snapdog
+
+# Standard mode: use TOML configuration file
+SNAPDOG_ARGS="--config /etc/snapdog/snapdog.toml"
+
+# KNX device mode (ETS programs everything, no TOML needed):
+#SNAPDOG_ARGS="--knx-device --knx-address 1.1.100"
+
+# KNX device mode with programming mode active (first-time ETS setup):
+#SNAPDOG_ARGS="--knx-device --knx-address 1.1.100 --knx-prog-mode"
+
+# Custom HTTP port:
+#SNAPDOG_ARGS="--config /etc/snapdog/snapdog.toml --port 8080"
