@@ -218,11 +218,11 @@ fn set_alsa_volume_inner(control: &str, percent: u8) -> anyhow::Result<()> {
         .find_selem(&selem_id)
         .ok_or_else(|| anyhow::anyhow!("ALSA control '{control}' not found"))?;
     let (min, max) = selem.get_playback_volume_range();
-    // Perceptual volume curve (cubic) — matches how humans perceive loudness.
-    // Linear percent → cubic raw value. This makes 50% feel like "half volume"
-    // instead of being nearly silent on logarithmic DACs.
+    // Perceptual volume curve (quadratic) — balances between linear (too quiet
+    // at low values on DACs) and cubic (too quiet on amplifiers).
+    // 50% → 25% raw, 70% → 49% raw, 90% → 81% raw.
     let normalized = f64::from(percent) / 100.0;
-    let curved = normalized * normalized * normalized; // cubic curve
+    let curved = normalized * normalized; // quadratic curve
     let vol = min + ((max - min) as f64 * curved) as i64;
     selem.set_playback_volume_all(vol)?;
     if selem.has_playback_switch() {
