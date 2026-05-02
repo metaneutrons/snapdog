@@ -91,14 +91,17 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
     eqApi.applyPreset(name).then(setConfig).catch((e: unknown) => console.error("API error", e));
   };
 
-  // Off: send enabled:false (bands stay persisted on server), clear UI bands
-  // On: send enabled:true, reload full config from API
+  // Off: send only enabled:false (bands stay persisted on server), clear UI
+  // On: reload from server (which has the bands), then enable
   const toggleEnabled = (on: boolean) => {
     if (on) {
-      pushConfig({ ...config, enabled: true });
-      eqApi.get().then((c) => setConfig({ ...c, enabled: true })).catch((e: unknown) => console.error("API error", e));
+      eqApi.get().then((c) => {
+        const next = { ...c, enabled: true };
+        setConfig(next);
+        pushConfig(next);
+      }).catch((e: unknown) => console.error("API error", e));
     } else {
-      pushConfig({ ...config, enabled: false });
+      eqApi.set({ ...config, enabled: false }).catch((e: unknown) => console.error("API error", e));
       setConfig((prev) => ({ ...prev, enabled: false }));
     }
   };
@@ -125,8 +128,6 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
 
   if (loading) return null;
 
-  const bypassed = abBypass;
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label={t("title", { zone: label })} onKeyDown={(e) => { if (e.key === "Escape") handleClose(); }}>
       <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={handleClose} role="presentation" />
@@ -150,7 +151,7 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
 
         {/* Curve + Presets + Bands — curve always visible, rest hidden when off, all dimmed when A/B */}
         {config.enabled ? (
-          <div className={`space-y-5 transition-opacity ${bypassed ? 'opacity-50 pointer-events-none' : ''}`}>
+          <div className={`space-y-5 transition-opacity ${abBypass ? 'opacity-50 pointer-events-none' : ''}`}>
             <FrequencyResponseCurve response={response} curveLabel={t("curve")} />
             {/* Preset chips */}
             <div className="flex gap-1.5 overflow-x-auto scrollbar-none py-1 -mx-1 px-1">
