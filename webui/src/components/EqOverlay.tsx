@@ -112,7 +112,7 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">{t("title", { zone: label })}</h2>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={toggleAB} className={abBypass ? "text-muted-foreground" : "text-primary font-semibold"}>
+            <Button variant="ghost" size="sm" onClick={toggleAB} disabled={!config.enabled} className={abBypass ? "text-muted-foreground" : config.enabled ? "text-primary font-semibold" : "text-muted-foreground"}>
               A/B
             </Button>
             <Button variant="ghost" size="sm" onClick={handleClose} aria-label={t("close")}>✕</Button>
