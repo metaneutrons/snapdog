@@ -164,6 +164,18 @@ async fn publisher(
     mut notify_rx: tokio::sync::broadcast::Receiver<crate::api::ws::Notification>,
 ) {
     tracing::info!("KNX publisher started");
+
+    // Publish initial state for all zones and clients
+    for (idx, _) in config.zones.iter().enumerate() {
+        let zone_index = idx + 1;
+        publish_zone_state(zone_index, &config, &store, &transport).await;
+        publish_zone_track(zone_index, &config, &store, &transport).await;
+        publish_zone_progress(zone_index, &config, &store, &transport).await;
+    }
+    for (idx, _) in config.clients.iter().enumerate() {
+        publish_client_state(idx + 1, &config, &store, &transport).await;
+    }
+
     loop {
         match notify_rx.recv().await {
             Ok(crate::api::ws::Notification::ZoneStateChanged { zone, .. }) => {
