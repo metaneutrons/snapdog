@@ -183,8 +183,126 @@ pub fn preset(name: &str) -> Option<Vec<EqBand>> {
                 filter_type: FilterType::LowShelf,
             },
             EqBand {
-                freq: 12000.0,
+                freq: 1000.0,
+                gain: 1.0,
+                q: 0.5,
+                filter_type: FilterType::Peaking,
+            },
+            EqBand {
+                freq: 10000.0,
+                gain: 3.0,
+                q: 0.7,
+                filter_type: FilterType::HighShelf,
+            },
+        ],
+        "rock" => vec![
+            EqBand {
+                freq: 80.0,
+                gain: 3.0,
+                q: 0.8,
+                filter_type: FilterType::Peaking,
+            },
+            EqBand {
+                freq: 400.0,
+                gain: -1.5,
+                q: 1.0,
+                filter_type: FilterType::Peaking,
+            },
+            EqBand {
+                freq: 3000.0,
                 gain: 2.0,
+                q: 1.2,
+                filter_type: FilterType::Peaking,
+            },
+            EqBand {
+                freq: 10000.0,
+                gain: 1.5,
+                q: 0.7,
+                filter_type: FilterType::HighShelf,
+            },
+        ],
+        "jazz" => vec![
+            EqBand {
+                freq: 100.0,
+                gain: 2.0,
+                q: 0.7,
+                filter_type: FilterType::LowShelf,
+            },
+            EqBand {
+                freq: 1000.0,
+                gain: -1.0,
+                q: 0.8,
+                filter_type: FilterType::Peaking,
+            },
+            EqBand {
+                freq: 4000.0,
+                gain: 1.5,
+                q: 1.0,
+                filter_type: FilterType::Peaking,
+            },
+        ],
+        "classical" => vec![
+            EqBand {
+                freq: 60.0,
+                gain: 1.5,
+                q: 0.7,
+                filter_type: FilterType::LowShelf,
+            },
+            EqBand {
+                freq: 500.0,
+                gain: -0.5,
+                q: 0.8,
+                filter_type: FilterType::Peaking,
+            },
+            EqBand {
+                freq: 8000.0,
+                gain: 1.0,
+                q: 0.7,
+                filter_type: FilterType::Peaking,
+            },
+            EqBand {
+                freq: 14000.0,
+                gain: 1.5,
+                q: 0.7,
+                filter_type: FilterType::HighShelf,
+            },
+        ],
+        "electronic" => vec![
+            EqBand {
+                freq: 50.0,
+                gain: 4.0,
+                q: 0.8,
+                filter_type: FilterType::Peaking,
+            },
+            EqBand {
+                freq: 300.0,
+                gain: -2.0,
+                q: 1.0,
+                filter_type: FilterType::Peaking,
+            },
+            EqBand {
+                freq: 5000.0,
+                gain: 2.5,
+                q: 1.2,
+                filter_type: FilterType::Peaking,
+            },
+        ],
+        "late_night" => vec![
+            EqBand {
+                freq: 50.0,
+                gain: -3.0,
+                q: 0.7,
+                filter_type: FilterType::LowShelf,
+            },
+            EqBand {
+                freq: 2000.0,
+                gain: 2.0,
+                q: 1.0,
+                filter_type: FilterType::Peaking,
+            },
+            EqBand {
+                freq: 10000.0,
+                gain: -2.0,
                 q: 0.7,
                 filter_type: FilterType::HighShelf,
             },
@@ -195,7 +313,18 @@ pub fn preset(name: &str) -> Option<Vec<EqBand>> {
 
 /// List all available preset names.
 pub fn preset_names() -> &'static [&'static str] {
-    &["flat", "bass_boost", "treble_boost", "vocal", "loudness"]
+    &[
+        "flat",
+        "bass_boost",
+        "treble_boost",
+        "vocal",
+        "rock",
+        "jazz",
+        "classical",
+        "electronic",
+        "loudness",
+        "late_night",
+    ]
 }
 
 // ── DSP engine ────────────────────────────────────────────────

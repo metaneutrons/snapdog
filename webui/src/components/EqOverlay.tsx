@@ -9,7 +9,20 @@ import { api, type EqBand, type EqConfig } from "@/lib/api";
 import { computeResponse } from "@/lib/eq-response";
 
 const FILTER_TYPES = ["low_shelf", "high_shelf", "peaking", "low_pass", "high_pass"] as const;
-const PRESETS = ["flat", "bass_boost", "treble_boost", "vocal", "loudness"];
+const PRESETS = ['flat', 'bass_boost', 'treble_boost', 'vocal', 'rock', 'jazz', 'classical', 'electronic', 'loudness', 'late_night'] as const;
+
+const PRESET_LABELS: Record<string, string> = {
+  flat: 'Flat',
+  bass_boost: 'Bass Boost',
+  treble_boost: 'Treble Boost',
+  vocal: 'Vocal',
+  rock: 'Rock',
+  jazz: 'Jazz',
+  classical: 'Classical',
+  electronic: 'Electronic',
+  loudness: 'Loudness',
+  late_night: 'Late Night',
+};
 
 interface EqOverlayProps {
   zoneId?: number;
@@ -104,11 +117,13 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
 
   if (loading) return null;
 
+  const dimmed = !config.enabled || abBypass;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label={t("title", { zone: label })} onKeyDown={(e) => { if (e.key === "Escape") handleClose(); }}>
       <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={handleClose} role="presentation" />
       <div className="relative z-10 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-xl space-y-5" ref={trapRef}>
-        {/* Header */}
+        {/* 1. Header */}
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">{t("title", { zone: label })}</h2>
           <div className="flex items-center gap-2">
@@ -119,53 +134,53 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
           </div>
         </div>
 
-        {/* Enable + Preset */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={config.enabled}
-              onChange={(e) => update({ enabled: e.target.checked })}
-              className="accent-primary"
-            />
-            {t("enabled")}
-          </label>
-          <select
-            value={config.preset ?? ""}
-            onChange={(e) => applyPreset(e.target.value)}
-            className="text-sm bg-muted border border-border rounded px-2 py-1"
-            aria-label={t("preset")}
-          >
-            <option value="" disabled>{t("preset")}</option>
+        {/* 2. Segmented On/Off toggle */}
+        <div className="inline-flex rounded-lg bg-muted p-0.5">
+          <button className={`px-3 py-1 text-xs rounded-md transition-colors ${!config.enabled ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`} onClick={() => update({ enabled: false })}>Off</button>
+          <button className={`px-3 py-1 text-xs rounded-md transition-colors ${config.enabled ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`} onClick={() => update({ enabled: true })}>On</button>
+        </div>
+
+        {/* Everything below dims when EQ is off */}
+        <div className={`space-y-5 transition-opacity ${dimmed ? 'opacity-40 pointer-events-none' : ''}`}>
+          {/* 3. Preset chips */}
+          <div className="flex gap-1.5 overflow-x-auto scrollbar-none py-1 -mx-1 px-1">
             {PRESETS.map((p) => (
-              <option key={p} value={p}>{p.replace("_", " ")}</option>
+              <button
+                key={p}
+                onClick={() => applyPreset(p)}
+                className={`shrink-0 px-3 py-1 text-xs rounded-full transition-colors ${
+                  config.preset === p
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted hover:bg-muted/80 text-foreground'
+                }`}
+              >
+                {PRESET_LABELS[p] || p}
+              </button>
             ))}
-          </select>
-        </div>
+          </div>
 
-        {/* Frequency Response Curve */}
-        <div className={abBypass ? "opacity-40 transition-opacity" : "transition-opacity"}>
+          {/* 4. Frequency Response Curve */}
           <FrequencyResponseCurve response={response} curveLabel={t("curve")} />
-        </div>
 
-        {/* Bands */}
-        <div className={`space-y-3 ${abBypass ? "opacity-40 pointer-events-none" : ""}`}>
-          {config.bands.map((band, idx) => (
-            <BandRow
-              key={idx}
-              band={band}
-              index={idx}
-              onChange={(patch) => updateBand(idx, patch)}
-              onRemove={() => removeBand(idx)}
-            />
-          ))}
-        </div>
+          {/* 5. Band rows */}
+          <div className="space-y-3">
+            {config.bands.map((band, idx) => (
+              <BandRow
+                key={idx}
+                band={band}
+                index={idx}
+                onChange={(patch) => updateBand(idx, patch)}
+                onRemove={() => removeBand(idx)}
+              />
+            ))}
+          </div>
 
-        {config.bands.length < 10 && (
-          <Button variant="ghost" size="sm" onClick={addBand} className="w-full">
-            {t("addBand")}
-          </Button>
-        )}
+          {config.bands.length < 10 && (
+            <Button variant="ghost" size="sm" onClick={addBand} className="w-full">
+              {t("addBand")}
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );

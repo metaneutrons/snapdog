@@ -1,6 +1,10 @@
 {
   "zones": {},
   "clients": {
+    "2": {
+      "enabled": false,
+      "bands": []
+    },
     "1": {
       "enabled": false,
       "bands": []
