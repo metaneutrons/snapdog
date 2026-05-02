@@ -386,6 +386,7 @@ pub async fn update_client_and_notify(
             muted: client.muted,
             connected: client.connected,
             zone: client.zone_index,
+            is_snapdog: client.is_snapdog,
         }
     };
     let _ = notify.send(notification);

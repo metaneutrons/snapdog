@@ -472,6 +472,7 @@ fn client_notification(idx: usize, client: &state::ClientState) -> api::ws::Noti
         muted: client.muted,
         connected: client.connected,
         zone: client.zone_index,
+        is_snapdog: client.is_snapdog,
     }
 }
 

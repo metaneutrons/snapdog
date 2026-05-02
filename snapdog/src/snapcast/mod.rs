@@ -418,6 +418,7 @@ mod process_impl {
                     muted: c.muted,
                     connected: c.connected,
                     zone: c.zone_index,
+                    is_snapdog: c.is_snapdog,
                 })
                 .collect();
             drop(s);
@@ -489,6 +490,7 @@ mod process_impl {
                         muted: client.muted,
                         connected: client.connected,
                         zone: zone_index,
+                        is_snapdog: client.is_snapdog,
                     };
                     let name = client.name.clone();
                     drop(s);
@@ -512,6 +514,7 @@ mod process_impl {
                         muted: client.muted,
                         connected: client.connected,
                         zone: client.zone_index,
+                        is_snapdog: client.is_snapdog,
                     };
                     let name = client.name.clone();
                     drop(s);
@@ -539,6 +542,7 @@ mod process_impl {
                         muted: client.muted,
                         connected: client.connected,
                         zone: client.zone_index,
+                        is_snapdog: client.is_snapdog,
                     };
                     let name = client.name.clone();
                     drop(s);
@@ -564,6 +568,7 @@ mod process_impl {
                         muted: client.muted,
                         connected: client.connected,
                         zone: client.zone_index,
+                        is_snapdog: client.is_snapdog,
                     };
                     let name = client.name.clone();
                     drop(s);
@@ -588,6 +593,7 @@ mod process_impl {
                         muted: client.muted,
                         connected: client.connected,
                         zone: client.zone_index,
+                        is_snapdog: client.is_snapdog,
                     };
                     drop(s);
                     tracing::info!(client = %new_name, "Name changed");

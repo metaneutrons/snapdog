@@ -45,7 +45,7 @@ interface AppState {
   setClients: (clients: ClientInfo[]) => void;
   updateClient: (
     id: number,
-    patch: Partial<Pick<ClientInfo, "volume" | "muted" | "connected" | "zone_index">>,
+    patch: Partial<Pick<ClientInfo, "volume" | "muted" | "connected" | "zone_index" | "is_snapdog">>,
   ) => void;
 
   // UI

@@ -282,6 +282,7 @@ export default function Home() {
             muted: n.muted,
             connected: n.connected,
             zone_index: n.zone,
+            is_snapdog: n.is_snapdog,
           });
           break;
         case "zone_presence_changed":

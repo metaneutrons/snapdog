@@ -153,6 +153,7 @@ export interface WsClientStateChanged {
   muted: boolean;
   connected: boolean;
   zone: number;
+  is_snapdog: boolean;
 }
 
 export interface WsZonePresenceChanged {
