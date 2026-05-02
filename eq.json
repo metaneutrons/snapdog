@@ -1,7 +1,7 @@
 {
   "zones": {
     "1": {
-      "enabled": true,
+      "enabled": false,
       "bands": [
         {
           "freq": 100.0,
@@ -18,7 +18,7 @@
       "bands": []
     },
     "1": {
-      "enabled": false,
+      "enabled": true,
       "bands": []
     }
   }

@@ -37,7 +37,7 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
   const t = useTranslations("eq");
   const trapRef = useFocusTrap<HTMLDivElement>();
   const [config, setConfig] = useState<EqConfig>({ enabled: false, bands: [], preset: "flat" });
-  const [abBypass, setAbBypass] = useState(false);
+  const [backup, setBackup] = useState<EqBand[] | null>(null);
   const [loading, setLoading] = useState(true);
 
   const eqApi = clientId
@@ -88,22 +88,29 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
   };
 
   const applyPreset = (name: string) => {
+    setBackup(null);
     eqApi.applyPreset(name).then(setConfig).catch((e: unknown) => console.error("API error", e));
   };
 
-  const toggleAB = () => {
-    const next = !abBypass;
-    setAbBypass(next);
-    // A/B temporarily disables EQ on server without changing local state
-    const c = { ...config, enabled: next ? false : config.enabled };
-    pushConfig(c);
+  const toggleEnabled = (on: boolean) => {
+    if (on && !config.enabled) {
+      // Restore backup if available
+      const bands = backup ?? config.bands;
+      setBackup(null);
+      const next: EqConfig = { ...config, enabled: true, bands, preset: null };
+      setConfig(next);
+      pushConfig(next);
+    } else if (!on && config.enabled) {
+      // Save bands as backup, send flat to server
+      setBackup(config.bands);
+      const next: EqConfig = { enabled: false, bands: [], preset: "flat" };
+      setConfig(next);
+      pushConfig(next);
+    }
   };
 
   const handleClose = () => {
-    if (abBypass) {
-      // Restore actual state on close
-      pushConfig(config);
-    }
+    // If off, backup is discarded — reset is permanent
     onClose();
   };
 
@@ -116,31 +123,25 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
   if (loading) return null;
 
   const dimmed = !config.enabled;
-  const bypassed = abBypass && config.enabled;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label={t("title", { zone: label })} onKeyDown={(e) => { if (e.key === "Escape") handleClose(); }}>
       <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={handleClose} role="presentation" />
       <div className="relative z-10 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-xl space-y-5" ref={trapRef}>
-        {/* Header: title + On/Off toggle (left), A/B + close (right) */}
+        {/* Header: title + On/Off toggle (left), close (right) */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h2 className="text-lg font-semibold">{t("title", { zone: label })}</h2>
             <div className="inline-flex rounded-lg bg-muted p-0.5">
-              <button className={`px-3 py-1 text-xs rounded-md transition-colors ${!config.enabled ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`} onClick={() => { if (abBypass) return; update({ enabled: false }); }}>Off</button>
-              <button className={`px-3 py-1 text-xs rounded-md transition-colors ${config.enabled ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`} onClick={() => { if (abBypass) return; update({ enabled: true }); }}>On</button>
+              <button className={`px-3 py-1 text-xs rounded-md transition-colors ${!config.enabled ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`} onClick={() => toggleEnabled(false)}>Off</button>
+              <button className={`px-3 py-1 text-xs rounded-md transition-colors ${config.enabled ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`} onClick={() => toggleEnabled(true)}>On</button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={toggleAB} className={abBypass ? "text-primary font-semibold" : "text-muted-foreground"}>
-              A/B
-            </Button>
-            <Button variant="ghost" size="sm" onClick={handleClose} aria-label={t("close")}>✕</Button>
-          </div>
+          <Button variant="ghost" size="sm" onClick={handleClose} aria-label={t("close")}>✕</Button>
         </div>
 
         {/* Everything below dims when EQ is off */}
-        <div className={`space-y-5 transition-opacity ${dimmed ? 'opacity-40 pointer-events-none' : bypassed ? 'opacity-50' : ''}`}>
+        <div className={`space-y-5 transition-opacity ${dimmed ? 'opacity-40 pointer-events-none' : ''}`}>
           {/* 3. Preset chips */}
           <div className="flex gap-1.5 overflow-x-auto scrollbar-none py-1 -mx-1 px-1">
             {PRESETS.map((p) => (
