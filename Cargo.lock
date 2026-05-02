@@ -4024,6 +4024,7 @@ dependencies = [
 name = "snapdog-client"
 version = "0.6.2"
 dependencies = [
+ "alsa",
  "anyhow",
  "base64",
  "biquad",

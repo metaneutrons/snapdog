@@ -201,57 +201,58 @@ fn parse_midi_param(param: &str) -> anyhow::Result<(midir::MidiOutputConnection,
 
 #[cfg(target_os = "linux")]
 fn set_alsa_volume(control: &str, percent: u8, muted: bool) {
-    use std::process::Command;
-    // Use amixer for simplicity — avoids alsa-sys dependency
-    let vol_arg = if muted {
-        "0%".to_string()
+    let vol = if muted { 0 } else { percent };
+    if let Err(e) = set_alsa_volume_inner(control, vol) {
+        tracing::warn!(control, error = %e, "Failed to set ALSA volume");
     } else {
-        format!("{percent}%")
-    };
-    match Command::new("amixer")
-        .args(["sset", control, &vol_arg])
-        .output()
-    {
-        Ok(output) if !output.status.success() => {
-            tracing::warn!(
-                control,
-                "amixer failed: {}",
-                String::from_utf8_lossy(&output.stderr).trim()
-            );
-        }
-        Err(e) => tracing::warn!(control, error = %e, "Failed to run amixer"),
-        _ => tracing::debug!(control, percent, muted, "Hardware volume set"),
+        tracing::debug!(control, percent, muted, "Hardware volume set");
     }
 }
 
-/// Check if an ALSA mixer control exists.
+#[cfg(target_os = "linux")]
+fn set_alsa_volume_inner(control: &str, percent: u8) -> anyhow::Result<()> {
+    use alsa::mixer::{Mixer, SelemChannelId, SelemId};
+    let mixer = Mixer::new("default", false)?;
+    let selem_id = SelemId::new(control, 0);
+    let selem = mixer
+        .find_selem(&selem_id)
+        .ok_or_else(|| anyhow::anyhow!("ALSA control '{control}' not found"))?;
+    let (min, max) = selem.get_playback_volume_range();
+    let vol = min + (max - min) * i64::from(percent) / 100;
+    selem.set_playback_volume_all(vol)?;
+    // Handle mute switch if available
+    if selem.has_playback_switch() {
+        selem.set_playback_switch_all(if percent == 0 { 0 } else { 1 })?;
+    }
+    Ok(())
+}
+
 #[cfg(target_os = "linux")]
 fn validate_alsa_control(control: &str) -> bool {
-    use std::process::Command;
-    Command::new("amixer")
-        .args(["sget", control])
-        .output()
-        .is_ok_and(|o| o.status.success())
+    use alsa::mixer::{Mixer, SelemId};
+    let Ok(mixer) = Mixer::new("default", false) else {
+        return false;
+    };
+    let selem_id = SelemId::new(control, 0);
+    mixer.find_selem(&selem_id).is_some()
 }
 
-/// List available ALSA mixer controls (for error messages).
 #[cfg(target_os = "linux")]
 fn list_alsa_controls() -> Option<String> {
-    use std::process::Command;
-    let output = Command::new("amixer").arg("scontrols").output().ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let names: Vec<&str> = std::str::from_utf8(&output.stdout)
-        .ok()?
-        .lines()
-        .filter_map(|l| l.split('\'').nth(1))
+    use alsa::mixer::Mixer;
+    let mixer = Mixer::new("default", false).ok()?;
+    let names: Vec<String> = mixer
+        .iter()
+        .filter_map(|elem| {
+            use alsa::mixer::Selem;
+            let selem = Selem::new(elem)?;
+            let id = selem.get_id();
+            Some(id.get_name().ok()?.to_string())
+        })
         .collect();
     Some(names.join(", "))
 }
 
-/// Auto-detect the best ALSA mixer control.
-/// Prefers "Master", falls back to "Digital", then first available.
 #[cfg(target_os = "linux")]
 fn detect_alsa_control() -> Option<String> {
     for candidate in ["Master", "Digital", "PCM", "Speaker"] {
@@ -259,16 +260,17 @@ fn detect_alsa_control() -> Option<String> {
             return Some(candidate.to_string());
         }
     }
-    // Fall back to first available
-    use std::process::Command;
-    let output = Command::new("amixer").arg("scontrols").output().ok()?;
-    std::str::from_utf8(&output.stdout)
-        .ok()?
-        .lines()
-        .next()?
-        .split('\'')
-        .nth(1)
-        .map(String::from)
+    // Fall back to first available playback control
+    use alsa::mixer::{Mixer, Selem};
+    let mixer = Mixer::new("default", false).ok()?;
+    mixer.iter().find_map(|elem| {
+        let selem = Selem::new(elem)?;
+        if selem.has_playback_volume() {
+            Some(selem.get_id().get_name().ok()?.to_string())
+        } else {
+            None
+        }
+    })
 }
 
 /// Start audio output. Waits for the Stream to have audio, then starts cpal.

@@ -9,6 +9,9 @@ license.workspace = true
 name = "snapdog-client"
 path = "src/main.rs"
 
+
+[target.'cfg(target_os = "linux")'.dependencies]
+alsa = "0.11"
 [dependencies]
 snapcast-client = "0.7"
 snapcast-proto = "0.7"
