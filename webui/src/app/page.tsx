@@ -195,7 +195,12 @@ function TrackInfo({ zone }: { zone: ZoneState }) {
 
 function ZoneDetail({ zone }: { zone: ZoneState }) {
   const [showEq, setShowEq] = useState(false);
+  const [eqEnabled, setEqEnabled] = useState(false);
   const t = useTranslations();
+
+  useEffect(() => {
+    api.eq.get(zone.index).then((c) => setEqEnabled(c.enabled)).catch(() => {});
+  }, [zone.index]);
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       <div className="w-full max-w-[calc(100%-2rem)] mx-auto sm:max-w-[600px] space-y-3 px-4 py-4 sm:px-5 sm:py-4">
@@ -210,7 +215,10 @@ function ZoneDetail({ zone }: { zone: ZoneState }) {
             <SeekBar zone={zone} />
             <div className="flex items-center gap-2">
               <div className="flex-1"><TransportControls zone={zone} /></div>
-              <Button variant="ghost" size="sm" onClick={() => setShowEq(true)} className="text-xs px-2" aria-label={t("eq.title", { zone: zone.name })}>EQ</Button>
+              <Button variant="ghost" size="sm" onClick={() => setShowEq(true)} className={`relative text-xs px-2 ${eqEnabled ? "text-primary" : ""}`} aria-label={t("eq.title", { zone: zone.name })}>
+                EQ
+                {eqEnabled && <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-primary" aria-hidden="true" />}
+              </Button>
             </div>
             <ShuffleRepeat zone={zone} />
             <VolumeSlider
@@ -225,7 +233,7 @@ function ZoneDetail({ zone }: { zone: ZoneState }) {
         <ClientList zone={zone} />
         <PlaylistBrowser zone={zone} />
       </div>
-      {showEq && <EqOverlay zoneId={zone.index} label={zone.name} onClose={() => setShowEq(false)} />}
+      {showEq && <EqOverlay zoneId={zone.index} label={zone.name} onClose={() => { setShowEq(false); api.eq.get(zone.index).then((c) => setEqEnabled(c.enabled)).catch(() => {}); }} />}
     </div>
   );
 }

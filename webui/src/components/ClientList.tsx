@@ -16,6 +16,13 @@ function ClientCard({ client }: { client: ClientInfo }) {
   const otherZones = Array.from(zones.values()).filter((z) => z.index !== client.zone_index);
   const [menuOpen, setMenuOpen] = useState(false);
   const [showEq, setShowEq] = useState(false);
+  const [eqEnabled, setEqEnabled] = useState(false);
+
+  useEffect(() => {
+    if (client.is_snapdog) {
+      api.clientEq.get(client.index).then((c) => setEqEnabled(c.enabled)).catch(() => {});
+    }
+  }, [client.index, client.is_snapdog]);
 
   // Close menu on Escape
   useEffect(() => {
@@ -102,15 +109,16 @@ function ClientCard({ client }: { client: ClientInfo }) {
           {client.is_snapdog && (
             <button
               onClick={() => setShowEq(true)}
-              className="text-[10px] text-muted-foreground hover:text-foreground transition-colors px-1"
+              className={`relative text-[10px] transition-colors px-1 ${eqEnabled ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
               aria-label={`EQ ${client.name}`}
             >
               EQ
+              {eqEnabled && <span className="absolute -top-0.5 -right-0.5 size-1 rounded-full bg-primary" aria-hidden="true" />}
             </button>
           )}
         </div>
       </div>
-      {showEq && <EqOverlay clientId={client.index} label={client.name} onClose={() => setShowEq(false)} />}
+      {showEq && <EqOverlay clientId={client.index} label={client.name} onClose={() => { setShowEq(false); api.clientEq.get(client.index).then((c) => setEqEnabled(c.enabled)).catch(() => {}); }} />}
     </div>
   );
 }
