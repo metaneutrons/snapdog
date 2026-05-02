@@ -41,8 +41,13 @@ export function VolumeSlider({
   useEffect(() => () => clearTimeout(timerRef.current), []);
 
   useEffect(() => {
-    if (!dragging) setLocalVolume(volume);
-  }, [volume, dragging]);
+    if (!dragging) {
+      setLocalVolume(volume);
+    } else if (volume === localVolume) {
+      // Server confirmed our value — safe to release
+      setDragging(false);
+    }
+  }, [volume, dragging, localVolume]);
 
   const volumeIcon = muted
     ? VolumeMute02Icon
@@ -64,9 +69,11 @@ export function VolumeSlider({
 
   const handleCommit = useCallback(
     (value: number[]) => {
-      setDragging(false);
       clearTimeout(timerRef.current);
       onVolumeChange(value[0]);
+      // Keep localVolume at the committed value — don't reset to old prop.
+      // dragging stays true until the prop updates to match.
+      setLocalVolume(value[0]);
     },
     [onVolumeChange],
   );
