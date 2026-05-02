@@ -241,11 +241,17 @@ async fn run(
                 }
                 ReceiverEvent::Volume { percent } => {
                     update_and_notify(store, zone_index, notify, |z| z.volume = percent).await;
-                    if let Some(ref gid) = group_id {
+                    let gid = store
+                        .read()
+                        .await
+                        .zones
+                        .get(&zone_index)
+                        .and_then(|z| z.snapcast_group_id.clone());
+                    if let Some(gid) = gid {
                         let _ = ctx
                             .snap_tx
                             .send(SnapcastCmd::Group {
-                                group_id: gid.clone(),
+                                group_id: gid,
                                 action: GroupAction::Volume(percent),
                             })
                             .await;
@@ -564,8 +570,9 @@ async fn run(
                     }
                     ZoneCommand::SetVolume(v) => {
                         update_and_notify(store, zone_index, notify, |z| z.volume = v.clamp(0, 100)).await;
-                        if let Some(ref gid) = group_id {
-                            let _ = ctx.snap_tx.send(SnapcastCmd::Group { group_id: gid.clone(), action: GroupAction::Volume(v) }).await;
+                        let gid = store.read().await.zones.get(&zone_index).and_then(|z| z.snapcast_group_id.clone());
+                        if let Some(gid) = gid {
+                            let _ = ctx.snap_tx.send(SnapcastCmd::Group { group_id: gid, action: GroupAction::Volume(v) }).await;
                         }
                     }
                     ZoneCommand::AdjustVolume(delta) => {
@@ -574,18 +581,21 @@ async fn run(
                             s.zones.get(&zone_index).map_or(crate::state::DEFAULT_VOLUME, |z| (z.volume + delta).clamp(0, 100))
                         };
                         update_and_notify(store, zone_index, notify, |z| z.volume = new_vol).await;
-                        if let Some(ref gid) = group_id {
-                            let _ = ctx.snap_tx.send(SnapcastCmd::Group { group_id: gid.clone(), action: GroupAction::Volume(new_vol) }).await;
+                        let gid = store.read().await.zones.get(&zone_index).and_then(|z| z.snapcast_group_id.clone());
+                        if let Some(gid) = gid {
+                            let _ = ctx.snap_tx.send(SnapcastCmd::Group { group_id: gid, action: GroupAction::Volume(new_vol) }).await;
                         }
                     }
                     ZoneCommand::SetMute(m) => {
-                        if let Some(ref gid) = group_id {
+                        let gid = store.read().await.zones.get(&zone_index).and_then(|z| z.snapcast_group_id.clone());
+                        if let Some(gid) = gid {
                             let _ = ctx.snap_tx.send(SnapcastCmd::Group { group_id: gid.clone(), action: GroupAction::Mute(m) }).await;
                         }
                     }
                     ZoneCommand::ToggleMute => {
                         let muted = { store.read().await.zones.get(&zone_index).is_some_and(|z| !z.muted) };
-                        if let Some(ref gid) = group_id {
+                        let gid = store.read().await.zones.get(&zone_index).and_then(|z| z.snapcast_group_id.clone());
+                        if let Some(gid) = gid {
                             let _ = ctx.snap_tx.send(SnapcastCmd::Group { group_id: gid.clone(), action: GroupAction::Mute(muted) }).await;
                         }
                     }
