@@ -203,6 +203,7 @@ A specialized Snapcast client that understands SnapDog's custom protocol extensi
 
 - **F32+LZ4 codec** — lossless 32-bit float audio with LZ4 compression (not supported by stock snapclients)
 - **Per-client parametric EQ** — receives EQ curves via custom protocol, applies biquad filters before output
+- **Hardware volume** — native ALSA mixer control with auto-detection (Linux)
 - **Encryption** — PSK-based chunk encryption matching the embedded server
 
 Available as binary and Docker image (`ghcr.io/metaneutrons/snapdog-client`).
