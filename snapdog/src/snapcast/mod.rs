@@ -414,7 +414,7 @@ mod process_impl {
                 .iter()
                 .map(|(&idx, c)| api::ws::Notification::ClientStateChanged {
                     client: idx,
-                    volume: c.volume,
+                    volume: c.base_volume,
                     muted: c.muted,
                     connected: c.connected,
                     zone: c.zone_index,

@@ -382,7 +382,7 @@ pub async fn update_client_and_notify(
         f(client);
         crate::api::ws::Notification::ClientStateChanged {
             client: client_index,
-            volume: client.volume,
+            volume: client.base_volume,
             muted: client.muted,
             connected: client.connected,
             zone: client.zone_index,
