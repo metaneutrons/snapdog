@@ -5,7 +5,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/snapdog-client
+EnvironmentFile=-/etc/default/snapdog-client
+ExecStart=/usr/bin/snapdog-client $SNAPDOG_CLIENT_ARGS
 Restart=on-failure
 RestartSec=5
 DynamicUser=yes
@@ -13,6 +14,7 @@ SupplementaryGroups=audio
 ProtectSystem=strict
 ProtectHome=yes
 NoNewPrivileges=yes
+PrivateTmp=yes
 
 [Install]
 WantedBy=multi-user.target

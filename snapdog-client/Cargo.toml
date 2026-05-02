@@ -42,5 +42,6 @@ copyright = "2026 Fabian Schmieder"
 depends = "libasound2"
 assets = [
   ["target/release/snapdog-client", "usr/bin/", "755"],
+  ["debian/snapdog-client.default", "etc/default/snapdog-client", "644"],
 ]
-systemd-units = { unit-name = "snapdog-client", enable = true, start = true }
+systemd-units = { unit-name = "snapdog-client", enable = false, start = false }

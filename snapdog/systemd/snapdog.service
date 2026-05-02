@@ -11,10 +11,12 @@ RestartSec=5
 DynamicUser=yes
 SupplementaryGroups=audio
 StateDirectory=snapdog
+WorkingDirectory=/var/lib/snapdog
 ConfigurationDirectory=snapdog
 ProtectSystem=strict
 ProtectHome=yes
 NoNewPrivileges=yes
+PrivateTmp=yes
 
 [Install]
 WantedBy=multi-user.target
