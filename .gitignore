@@ -24,4 +24,4 @@ tools/
 knx/*.knxprod
 knx/*.xml
 knx/*.debug.xml
-include/
+include/eq.json
