@@ -321,9 +321,9 @@ async fn setup_zone_group(
 
     // Only send commands for things that actually differ
     let mut sorted_want = snap_client_ids.clone();
-    sorted_want.sort();
+    sorted_want.sort_unstable();
     let mut sorted_have: Vec<&str> = current_clients;
-    sorted_have.sort();
+    sorted_have.sort_unstable();
     let clients_match = sorted_want.len() == sorted_have.len()
         && sorted_want.iter().zip(&sorted_have).all(|(a, b)| a == b);
 

@@ -161,7 +161,7 @@ async fn run_spotify(
             },
             session.clone(),
             Box::new(NoOpVolume),
-            move || Box::new(ChannelSink::new(tx.clone())) as Box<dyn Sink>,
+            move || Box::new(ChannelSink::new(tx)) as Box<dyn Sink>,
         );
 
         let mut event_rx = player.get_player_event_channel();

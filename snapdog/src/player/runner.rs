@@ -211,7 +211,7 @@ async fn run(
     {
         let mut s = store.write().await;
         if let Some(zone) = s.zones.get_mut(&zone_index) {
-            zone.snapcast_group_id = group_id.clone();
+            zone.snapcast_group_id.clone_from(&group_id);
         }
     }
 
@@ -828,14 +828,14 @@ async fn run(
                         notify_presence(store, zone_index, notify).await;
                     }
                     ZoneCommand::SetPresenceEnabled(v) => {
-                        if !v {
+                        if v {
+                            update_and_notify(store, zone_index, notify, |z| z.presence_enabled = v).await;
+                        } else {
                             auto_off_armed = false;
                             update_and_notify(store, zone_index, notify, |z| {
                                 z.presence_enabled = false;
                                 z.auto_off_active = false;
                             }).await;
-                        } else {
-                            update_and_notify(store, zone_index, notify, |z| z.presence_enabled = v).await;
                         }
                         notify_presence(store, zone_index, notify).await;
                     }

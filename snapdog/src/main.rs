@@ -413,10 +413,8 @@ async fn main() -> Result<()> {
                 // Coalesce client volume commands
                 if let player::SnapcastCmd::Client { ref client_id, action: player::ClientAction::Volume(v) } = cmd {
                     coalescer.push(client_id.clone(), v);
-                } else {
-                    if let Err(e) = cmd_backend.execute(cmd).await {
-                        tracing::warn!(error = %e, "Snapcast command failed");
-                    }
+                } else if let Err(e) = cmd_backend.execute(cmd).await {
+                    tracing::warn!(error = %e, "Snapcast command failed");
                 }
             }
             // Coalesce timer fired — flush expired volumes

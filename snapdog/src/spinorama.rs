@@ -87,7 +87,7 @@ impl SpeakerDb {
             .map(|e| e.name)
             .collect();
         let mut inner = self.inner.write().await;
-        inner.index = names.clone();
+        inner.index.clone_from(&names);
         inner.index_fetched_at = Some(std::time::Instant::now());
         Ok(names)
     }
@@ -187,12 +187,12 @@ mod tests {
 
     #[test]
     fn parse_autoeq_basic() {
-        let input = r#"EQ for KEF LS50 Meta
+        let input = r"EQ for KEF LS50 Meta
 Preamp: -4.0 dB
 Filter 1: ON PK Fc 42 Hz Gain +2.88 dB Q 1.04
 Filter 2: ON PK Fc 69 Hz Gain +2.25 dB Q 0.80
 Filter 3: ON LSC Fc 105 Hz Gain -2.21 dB Q 1.21
-"#;
+";
         let config = parse_autoeq(input, "KEF LS50 Meta");
         assert_eq!(config.bands.len(), 3);
         assert_eq!(config.bands[0].freq, 42.0);

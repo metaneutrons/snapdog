@@ -525,6 +525,7 @@ async fn resolve_playlist_url(url: &str) -> Option<ResolvedUrl> {
 /// Maximum recursion depth for nested playlist resolution.
 const MAX_PLAYLIST_DEPTH: u8 = 3;
 
+#[allow(clippy::case_sensitive_file_extension_comparisons)] // URLs are already lowercased
 async fn resolve_playlist_recursive(url: &str, depth: u8) -> Option<ResolvedUrl> {
     if depth == 0 {
         tracing::warn!(url, "Nested playlist resolution exceeded max depth");

@@ -141,8 +141,8 @@ pub async fn start_radio_decode(
                 let (artist, title) = parse_icy_title(&raw_title);
                 update_and_notify(&icy_store, zone_index, &icy_notify, |z| {
                     if let Some(ref mut track) = z.track {
-                        track.artist = artist.clone();
-                        track.title = title.clone();
+                        track.artist.clone_from(&artist);
+                        track.title.clone_from(&title);
                     }
                 })
                 .await;

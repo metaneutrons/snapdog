@@ -760,7 +760,7 @@ impl AppConfig {
 
     /// Total number of unified playlists (radio + subsonic).
     pub fn unified_playlist_count(&self, subsonic_count: usize) -> usize {
-        (if self.has_radio_playlist() { 1 } else { 0 }) + subsonic_count
+        usize::from(self.has_radio_playlist()) + subsonic_count
     }
 
     /// Resolve a unified playlist index to radio or a Subsonic playlist offset.

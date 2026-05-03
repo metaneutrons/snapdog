@@ -6,6 +6,8 @@
 //! Playlists, track streaming URLs, cover art.
 //! Uses token-based auth (md5(password+salt)) for security.
 
+use std::fmt::Write;
+
 use anyhow::{Context, Result};
 use serde::Deserialize;
 
@@ -101,7 +103,7 @@ impl SubsonicClient {
             self.format.as_str()
         );
         if offset_secs > 0 {
-            url.push_str(&format!("&timeOffset={offset_secs}"));
+            write!(url, "&timeOffset={offset_secs}").unwrap();
         }
         url
     }
@@ -141,12 +143,14 @@ impl SubsonicClient {
     ) -> Result<T> {
         let (token, salt) = self.auth_token();
         let mut url = format!("{}/rest/{}", self.base_url, method);
-        url.push_str(&format!(
+        write!(
+            url,
             "?u={}&t={}&s={}&v={}&c={}&f=json",
             self.username, token, salt, API_VERSION, CLIENT_NAME
-        ));
+        )
+        .unwrap();
         for (k, v) in params {
-            url.push_str(&format!("&{k}={v}"));
+            write!(url, "&{k}={v}").unwrap();
         }
 
         let resp = self

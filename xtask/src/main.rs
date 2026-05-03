@@ -28,7 +28,12 @@ fn main() {
     match cmd.as_str() {
         "ci" => ci(),
         "knxprod" | "" => knxprod(),
-        arg if arg.ends_with(".xml") => knxprod(), // backward compat: `cargo xtask path.xml`
+        arg if std::path::Path::new(arg)
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("xml")) =>
+        {
+            knxprod();
+        } // backward compat: `cargo xtask path.xml`
         _ => {
             eprintln!("Usage: cargo xtask <command>");
             eprintln!("Commands:");
@@ -96,7 +101,13 @@ fn knxprod() {
     // Accept path as: `cargo xtask knxprod path.xml` (arg 2) or `cargo xtask path.xml` (arg 1)
     let xml_path = std::env::args()
         .nth(2)
-        .or_else(|| std::env::args().nth(1).filter(|a| a.ends_with(".xml")))
+        .or_else(|| {
+            std::env::args().nth(1).filter(|a| {
+                std::path::Path::new(a)
+                    .extension()
+                    .is_some_and(|e| e.eq_ignore_ascii_case("xml"))
+            })
+        })
         .unwrap_or_else(|| "knx/snapdog.xml".into());
     let knxprod_path = xml_path.replace(".xml", ".knxprod");
 
@@ -1041,7 +1052,7 @@ fn write_hardware(x: &mut String) {
             r#"            <Product Id="{MFR}_H-0xFF01-1_P-0xFF01" Text="SnapDog" OrderNumber="0xFF01" IsRailMounted="false" DefaultLanguage="de-DE">"#
         ),
     );
-    w(x, r#"              <RegistrationInfo />"#);
+    w(x, r"              <RegistrationInfo />");
     w(x, "            </Product>");
     w(x, "          </Products>");
     w(x, "          <Hardware2Programs>");

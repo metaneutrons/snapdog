@@ -6,6 +6,7 @@
 //! Generates snapserver.conf from app config, spawns and monitors the process.
 //! In dev mode (managed=false), this is a no-op.
 
+use std::fmt::Write;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
@@ -99,24 +100,30 @@ fn render_config(config: &AppConfig) -> String {
     out.push_str("[http]\nenabled = false\n\n");
 
     // TCP control (raw JSON-RPC — used by SnapDog)
-    out.push_str(&format!(
+    write!(
+        out,
         "[tcp-control]\nenabled = true\nport = {}\n\n",
         config.snapcast.jsonrpc_port
-    ));
+    )
+    .unwrap();
     // Streaming server
-    out.push_str(&format!(
+    write!(
+        out,
         "[tcp-streaming]\nport = {}\n\n",
         config.snapcast.streaming_port
-    ));
+    )
+    .unwrap();
 
     // TCP sources — one per zone
     out.push_str("[stream]\n");
     for zone in &config.zones {
         let sf = config.audio.sample_format();
-        out.push_str(&format!(
-            "source = tcp://127.0.0.1:{}?name={}&sampleformat={}&mode=server\n",
+        writeln!(
+            out,
+            "source = tcp://127.0.0.1:{}?name={}&sampleformat={}&mode=server",
             zone.tcp_source_port, zone.stream_name, sf
-        ));
+        )
+        .unwrap();
     }
 
     out

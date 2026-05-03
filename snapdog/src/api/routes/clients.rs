@@ -147,7 +147,7 @@ async fn set_mute(
 ) -> impl IntoResponse {
     let snap_id = read_client(&state, idx)
         .await
-        .and_then(|c| c.snapcast_id.clone())
+        .and_then(|c| c.snapcast_id)
         .ok_or(not_found())?;
     let _ = state
         .snap_tx
@@ -196,7 +196,7 @@ async fn set_latency(
 ) -> impl IntoResponse {
     let snap_id = read_client(&state, idx)
         .await
-        .and_then(|c| c.snapcast_id.clone())
+        .and_then(|c| c.snapcast_id)
         .ok_or(not_found())?;
     let _ = state
         .snap_tx
