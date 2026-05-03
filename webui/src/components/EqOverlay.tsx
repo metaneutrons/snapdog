@@ -192,7 +192,7 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
         {tab === "eq" ? (
           <>
             {config.enabled ? (
-              <div className={`space-y-5 transition-opacity ${abBypass ? 'opacity-50 pointer-events-none' : ''}`}>
+              <div className={`space-y-5 ${abBypass ? 'opacity-50 pointer-events-none' : ''}`}>
                 <FrequencyResponseCurve response={response} curveLabel={t("curve")} />
                 <div className="flex gap-1.5 overflow-x-auto scrollbar-none py-1 -mx-1 px-1" role="radiogroup" aria-label={t("presets")}>
                   {PRESETS.map((p) => (
@@ -350,7 +350,7 @@ function SpeakerTab({ clientId, enabled, setEnabled }: { clientId: number; enabl
 
       {/* Content — hidden when off, dimmed when A/B */}
       {isEnabled || abBypass ? (
-        <div className={`space-y-4 transition-opacity ${abBypass ? 'opacity-50 pointer-events-none' : ''}`}>
+        <div className={`space-y-4 ${abBypass ? 'opacity-50 pointer-events-none' : ''}`}>
         {/* Correction curve */}
         <FrequencyResponseCurve response={response} curveLabel="Speaker correction curve" />
 
