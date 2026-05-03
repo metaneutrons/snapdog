@@ -131,7 +131,9 @@ pub async fn start_radio_decode(
     let (icy_tx, mut icy_rx) = mpsc::channel::<audio::icy::IcyMetadata>(4);
     let icy_store = ctx.store.clone();
     let icy_notify = ctx.notify.clone();
+    let icy_covers = ctx.covers.clone();
     let zone_index = ctx.zone_index;
+    let fallback_cover = radio.cover.clone();
     tokio::spawn(async move {
         while let Some(meta) = icy_rx.recv().await {
             if let Some(title) = meta.title {
@@ -142,6 +144,14 @@ pub async fn start_radio_decode(
                     }
                 })
                 .await;
+            }
+            // Use StreamUrl as cover if it's an image, else fall back to config cover
+            let cover_url = match meta.url {
+                Some(ref url) if is_image_url(url).await => Some(url.clone()),
+                _ => fallback_cover.clone(),
+            };
+            if let Some(url) = cover_url {
+                spawn_cover_fetch(&icy_covers, &icy_store, zone_index, &icy_notify, url);
             }
         }
     });
@@ -355,4 +365,20 @@ async fn advance_playlist_track(
             }
         }
     }
+}
+
+/// Check if a URL points to an image by sending a HEAD request and checking Content-Type.
+async fn is_image_url(url: &str) -> bool {
+    let Ok(resp) = reqwest::Client::new()
+        .head(url)
+        .timeout(std::time::Duration::from_secs(3))
+        .send()
+        .await
+    else {
+        return false;
+    };
+    resp.headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|ct| ct.starts_with("image/"))
 }
