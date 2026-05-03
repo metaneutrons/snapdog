@@ -24,6 +24,9 @@ pub const MSG_TYPE_FADE_OUT: u16 = 12;
 /// Default crossfade duration in milliseconds.
 pub const DEFAULT_FADE_MS: u16 = 300;
 
+/// Default audio sample rate in Hz.
+pub const DEFAULT_SAMPLE_RATE: u32 = 48000;
+
 /// Maximum number of EQ bands per zone/client.
 pub const MAX_EQ_BANDS: usize = 10;
 
@@ -123,5 +126,25 @@ mod tests {
         assert!(!config.enabled);
         assert!(config.bands.is_empty());
         assert_eq!(config.preset, Some("flat".into()));
+    }
+
+    #[test]
+    fn fade_gain_zero_total() {
+        assert_eq!(fade_gain(0, 0, true), 1.0);
+        assert_eq!(fade_gain(0, 0, false), 1.0);
+    }
+
+    #[test]
+    fn fade_gain_out_full_to_zero() {
+        assert_eq!(fade_gain(100, 100, true), 1.0);
+        assert_eq!(fade_gain(50, 100, true), 0.5);
+        assert_eq!(fade_gain(0, 100, true), 0.0);
+    }
+
+    #[test]
+    fn fade_gain_in_zero_to_full() {
+        assert_eq!(fade_gain(100, 100, false), 0.0);
+        assert_eq!(fade_gain(50, 100, false), 0.5);
+        assert_eq!(fade_gain(0, 100, false), 1.0);
     }
 }

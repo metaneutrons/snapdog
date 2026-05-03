@@ -8,7 +8,7 @@ use snapcast_client::{ClientCommand, ClientConfig, ClientEvent, SnapClient};
 
 use snapdog_common::CLIENT_NAME;
 
-const DEFAULT_SAMPLE_RATE: u32 = 48000;
+const DEFAULT_SAMPLE_RATE: u32 = snapdog_common::DEFAULT_SAMPLE_RATE;
 
 fn main() -> anyhow::Result<()> {
     let cli = cli::Cli::parse();

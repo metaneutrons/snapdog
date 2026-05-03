@@ -280,20 +280,14 @@ pub async fn handle_previous(ds: &mut DecodeState<'_>, ctx: &PlaybackCtx<'_>) {
 }
 
 pub async fn handle_track_complete(ds: &mut DecodeState<'_>, ctx: &PlaybackCtx<'_>) {
-    let track_repeat = ctx
-        .store
-        .read()
-        .await
-        .zones
-        .get(&ctx.zone_index)
-        .is_some_and(|z| z.track_repeat);
-    let shuffle = ctx
-        .store
-        .read()
-        .await
-        .zones
-        .get(&ctx.zone_index)
-        .is_some_and(|z| z.shuffle);
+    let (track_repeat, shuffle) = {
+        let s = ctx.store.read().await;
+        let z = s.zones.get(&ctx.zone_index);
+        (
+            z.is_some_and(|z| z.track_repeat),
+            z.is_some_and(|z| z.shuffle),
+        )
+    };
 
     match ds.source.clone() {
         ActiveSource::SubsonicPlaylist {

@@ -245,7 +245,7 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
         </div>
         {showTabs && (
           <div className={`${tab === "speaker" ? 'opacity-100' : 'opacity-0 pointer-events-none h-0 overflow-hidden'} transition-opacity duration-150`}>
-            <SpeakerTab clientId={clientId!} enabled={speakerEnabled} setEnabled={setSpeakerEnabled} abBypass={speakerAbBypass} setAbBypass={setSpeakerAbBypass} />
+            <SpeakerTab clientId={clientId!} enabled={speakerEnabled} setEnabled={setSpeakerEnabled} abBypass={speakerAbBypass} />
           </div>
         )}
       </div>
@@ -255,7 +255,7 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
 
 // ── Speaker Tab ───────────────────────────────────────────────
 
-function SpeakerTab({ clientId, enabled, setEnabled, abBypass, setAbBypass }: { clientId: number; enabled: boolean; setEnabled: (v: boolean) => void; abBypass: boolean; setAbBypass: (v: boolean) => void }) {
+function SpeakerTab({ clientId, enabled, setEnabled, abBypass }: { clientId: number; enabled: boolean; setEnabled: (v: boolean) => void; abBypass: boolean }) {
   const t = useTranslations("eq");
   const [search, setSearch] = useState("");
   const [speakers, setSpeakers] = useState<string[]>([]);

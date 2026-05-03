@@ -960,7 +960,7 @@ impl From<RawRadioConfig> for RadioConfig {
 // ── Defaults ──────────────────────────────────────────────────
 
 fn default_sample_rate() -> u32 {
-    48000
+    snapdog_common::DEFAULT_SAMPLE_RATE
 }
 fn default_bit_depth() -> u16 {
     16
