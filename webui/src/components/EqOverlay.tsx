@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { Button } from "@/components/ui/button";
@@ -236,11 +236,25 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
 // ── Speaker Tab ───────────────────────────────────────────────
 
 function SpeakerTab({ clientId }: { clientId: number }) {
+  const t = useTranslations("eq");
   const [search, setSearch] = useState("");
   const [speakers, setSpeakers] = useState<string[]>([]);
   const [currentConfig, setCurrentConfig] = useState<EqConfig | null>(null);
   const [appliedName, setAppliedName] = useState<string | null>(null);
+  const [abBypass, setAbBypass] = useState(false);
   const [loading, setLoading] = useState(true);
+  const abBypassRef = useRef(false);
+  const appliedNameRef = useRef<string | null>(null);
+
+  useEffect(() => { abBypassRef.current = abBypass; }, [abBypass]);
+  useEffect(() => { appliedNameRef.current = appliedName; }, [appliedName]);
+
+  // Restore speaker EQ on unmount if A/B was active
+  useEffect(() => () => {
+    if (abBypassRef.current && appliedNameRef.current) {
+      api.speakers.apply(clientId, appliedNameRef.current).catch(logApiError);
+    }
+  }, [clientId]);
 
   useEffect(() => {
     Promise.all([
@@ -274,6 +288,30 @@ function SpeakerTab({ clientId }: { clientId: number }) {
     }).catch(logApiError);
   };
 
+  const toggleEnabled = (on: boolean) => {
+    if (on && appliedName) {
+      api.speakers.apply(clientId, appliedName).then((config) => {
+        setCurrentConfig(config);
+      }).catch(logApiError);
+    } else if (!on) {
+      api.speakers.apply(clientId, null).then((config) => {
+        setCurrentConfig(config);
+      }).catch(logApiError);
+    }
+  };
+
+  const toggleAB = () => {
+    const next = !abBypass;
+    setAbBypass(next);
+    if (next) {
+      // Temporarily disable
+      api.speakers.apply(clientId, null).catch(logApiError);
+    } else if (appliedName) {
+      // Restore
+      api.speakers.apply(clientId, appliedName).catch(logApiError);
+    }
+  };
+
   const response = useMemo(
     () => (currentConfig?.bands.length ? computeResponse(currentConfig.bands) : []),
     [currentConfig],
@@ -281,10 +319,26 @@ function SpeakerTab({ clientId }: { clientId: number }) {
 
   if (loading) return <div className="text-sm text-muted-foreground py-8 text-center">Loading speakers…</div>;
 
+  const isEnabled = currentConfig?.enabled ?? false;
+  const dimmed = abBypass || !isEnabled;
+
   return (
     <div className="space-y-4">
-      {/* Correction curve */}
-      <FrequencyResponseCurve response={response} curveLabel="Speaker correction curve" />
+      {/* On/Off + A/B */}
+      <div className="flex items-center justify-between">
+        <div className="inline-flex rounded-lg bg-muted p-0.5" role="radiogroup" aria-label={t("toggle")}>
+          <button role="radio" aria-checked={!isEnabled} className={`px-3 py-1 text-xs rounded-md transition-colors ${!isEnabled ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`} onClick={() => toggleEnabled(false)}>Off</button>
+          <button role="radio" aria-checked={isEnabled} className={`px-3 py-1 text-xs rounded-md transition-colors ${isEnabled ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`} onClick={() => toggleEnabled(true)}>On</button>
+        </div>
+        <Button variant="ghost" size="sm" onClick={toggleAB} disabled={!isEnabled} className={abBypass ? "text-orange-500 font-semibold" : "text-muted-foreground"} aria-pressed={abBypass}>
+          A/B
+        </Button>
+      </div>
+
+      {/* Content — dims when off or A/B */}
+      <div className={`space-y-4 transition-opacity ${dimmed ? 'opacity-50 pointer-events-none' : ''}`}>
+        {/* Correction curve */}
+        <FrequencyResponseCurve response={response} curveLabel="Speaker correction curve" />
 
       {/* Applied speaker + clear */}
       {appliedName && (
@@ -319,6 +373,7 @@ function SpeakerTab({ clientId }: { clientId: number }) {
             </button>
           ))
         )}
+      </div>
       </div>
     </div>
   );
