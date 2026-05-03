@@ -27,14 +27,17 @@ SnapDog turns a Linux box (or Mac) into a synchronized multi-room audio system w
 | 🎧 **Spotify Connect** | Per-zone receivers via librespot |
 | 🔊 **Snapcast** | Synchronized playback, embedded server or external process |
 | 📚 **Subsonic/Navidrome** | Personal music library with playlist navigation and seek |
-| 📻 **Internet Radio** | Station list with live ICY metadata |
-| 🏠 **MQTT** | Bidirectional smart home integration |
+| 📻 **Internet Radio** | Station list with live ICY metadata (artist/title parsing, dynamic cover art) |
+| 🏠 **MQTT** | Bidirectional smart home integration (initial state on connect) |
 | 🏢 **KNX** | Building automation — client mode (tunnel/router) or device mode (ETS-programmable, 460 group objects, presence detection) |
-| 🎛️ **Parametric EQ** | Per-zone and per-client, real-time via custom protocol |
+| 🎛️ **Parametric EQ** | Per-zone and per-client, genre presets, real-time via custom protocol |
+| 🔊 **Speaker Correction** | Per-client Spinorama profiles (1000+ speakers from spinorama.org) |
+| 🔀 **Zone Switching** | Configurable audio fade (fade-out → fade-in) for SnapDog clients |
+| ⚡ **Source Conflict** | Configurable priority: `last_wins` or `receiver_wins` (AirPlay/Spotify vs local) |
 | 🌐 **REST API** | ~90 endpoints, full zone/client/media control |
 | 📡 **WebSocket** | Real-time state push notifications |
-| 🖥️ **WebUI** | Responsive SPA with drag-and-drop client management |
-| 🎨 **Cover Art** | Content-addressed caching, unified per-zone endpoint |
+| 🖥️ **WebUI** | Responsive SPA, drag-and-drop, tabbed EQ overlay, i18n (5 languages) |
+| 🎨 **Cover Art** | Content-addressed caching, ICY StreamUrl fallback, unified per-zone endpoint |
 
 ## Quick Start
 
@@ -130,6 +133,11 @@ port = 5555
 sample_rate = 48000
 bit_depth = 16
 channels = 2
+source_conflict = "last_wins"        # last_wins | receiver_wins
+zone_switch_fade_ms = 300            # 0 to disable
+
+[system]
+base_url = "http://192.168.1.10:5555"  # For absolute URLs in MQTT cover art
 
 [snapcast]
 streaming_port = 1704
@@ -196,6 +204,7 @@ SnapDog builds on a family of Rust crates:
 | [snapcast-server](https://github.com/metaneutrons/snapcast-rs) | Embeddable Snapcast server with per-stream codecs, custom protocol, encryption |
 | [shairplay-rust](https://github.com/metaneutrons/shairplay-rust) | AirPlay 1 + 2 receiver library (RAOP/AirTunes) |
 | [knx-rs](https://github.com/metaneutrons/knx-rs) | KNX protocol stack — core types, KNXnet/IP, device stack, TP-UART, .knxprod generator |
+| snapdog-common | Shared types and constants between server and client (EQ, protocol IDs, volume curve) |
 
 ### snapdog-client
 
@@ -203,7 +212,9 @@ A specialized Snapcast client that understands SnapDog's custom protocol extensi
 
 - **F32+LZ4 codec** — lossless 32-bit float audio with LZ4 compression (not supported by stock snapclients)
 - **Per-client parametric EQ** — receives EQ curves via custom protocol, applies biquad filters before output
-- **Hardware volume** — native ALSA mixer control with auto-detection (Linux)
+- **Speaker correction** — second EQ stage for Spinorama-based speaker profiles
+- **Audio fade** — smooth fade-out/fade-in on zone switch (triggered by server)
+- **Hardware volume** — native ALSA mixer control with perceptual (quadratic) curve
 - **Encryption** — PSK-based chunk encryption matching the embedded server
 
 Available as binary and Docker image (`ghcr.io/metaneutrons/snapdog-client`).
@@ -262,6 +273,7 @@ See [Architecture Decision Records](docs/architecture/decisions.md) for design r
 make setup                                    # Git hooks
 docker compose -f docker-compose.dev.yml up -d  # Dev infrastructure
 cargo run -- --config snapdog.dev.toml        # Run
+cargo xtask ci                                # Run all CI checks locally
 cargo test                                    # Test
 cargo clippy -- -D warnings                   # Lint
 ```
