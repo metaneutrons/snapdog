@@ -21,7 +21,7 @@ pub struct SnapserverHandle {
 
 impl SnapserverHandle {
     /// Start snapserver if managed=true, otherwise return a no-op handle.
-    pub async fn start(config: &AppConfig) -> Result<Self> {
+    pub fn start(config: &AppConfig) -> Result<Self> {
         if !config.snapcast.managed {
             tracing::info!("Snapserver not managed — skipping");
             return Ok(Self {

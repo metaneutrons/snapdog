@@ -229,7 +229,7 @@ async fn main() -> Result<()> {
 
     // ── Snapcast backend ──────────────────────────────────────
     #[cfg(feature = "snapcast-process")]
-    let mut snapserver = process::SnapserverHandle::start(&config).await?;
+    let mut snapserver = process::SnapserverHandle::start(&config)?;
     #[cfg(feature = "snapcast-process")]
     if config.snapcast.managed {
         tokio::time::sleep(SNAPSERVER_STARTUP_DELAY).await;
@@ -251,7 +251,7 @@ async fn main() -> Result<()> {
 
     #[cfg(feature = "snapcast-embedded")]
     let (embedded_backend, embedded_events) =
-        snapcast::embedded::EmbeddedBackend::start(&config, store.clone()).await?;
+        snapcast::embedded::EmbeddedBackend::start(&config, store.clone())?;
     #[cfg(feature = "snapcast-embedded")]
     let backend: Arc<dyn snapcast::backend::SnapcastBackend> = Arc::new(embedded_backend);
     #[cfg(feature = "snapcast-embedded")]

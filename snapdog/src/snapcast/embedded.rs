@@ -33,7 +33,7 @@ pub struct EmbeddedEventReceiver {
 
 impl EmbeddedBackend {
     /// Start the embedded server. Returns the backend + event receiver.
-    pub async fn start(
+    pub fn start(
         config: &AppConfig,
         store: state::SharedState,
     ) -> Result<(Self, EmbeddedEventReceiver)> {
