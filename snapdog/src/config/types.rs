@@ -276,6 +276,7 @@ pub struct PresenceConfig {
 /// Default auto-off delay in seconds (15 minutes).
 pub(crate) const DEFAULT_AUTO_OFF_DELAY: u16 = 900;
 
+/// Default auto-off delay in seconds (15 minutes).
 pub(crate) const fn default_auto_off_delay() -> u16 {
     DEFAULT_AUTO_OFF_DELAY
 }
@@ -995,9 +996,11 @@ fn default_zone_icon() -> String {
 fn default_client_icon() -> String {
     "🎵".into()
 }
+/// Default maximum volume (100%).
 pub(crate) const fn default_max_volume() -> i32 {
     100
 }
+/// Serde default returning `true`.
 pub(crate) const fn default_true() -> bool {
     true
 }
