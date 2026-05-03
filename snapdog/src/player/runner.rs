@@ -71,6 +71,61 @@ async fn reset_playback(
     *position_offset_ms = 0;
 }
 
+/// Fade out the current stream, stop decode, and prepare fade-in for the next stream.
+/// If fade_ms is 0 or no stream is active, falls back to immediate reset.
+#[allow(clippy::too_many_arguments)]
+async fn fade_transition(
+    current_decode: &mut Option<JoinHandle<()>>,
+    decode_rx: &mut Option<mpsc::Receiver<audio::PcmMessage>>,
+    position_offset_ms: &mut i64,
+    zone_fade: &mut Option<ZoneFade>,
+    fade_ms: u16,
+    sample_rate: u32,
+    zone_eq: &mut crate::audio::eq::ZoneEq,
+    backend: &dyn crate::snapcast::backend::SnapcastBackend,
+    zone_index: usize,
+    channels: u16,
+    resampler: &mut audio::resample::F32Resampling,
+) {
+    if fade_ms == 0 || decode_rx.is_none() {
+        stop_decode(current_decode, decode_rx).await;
+        *position_offset_ms = 0;
+        return;
+    }
+
+    // Drain old stream with fade-out applied
+    let mut fade = ZoneFade::new(fade_ms, sample_rate);
+    if let Some(rx) = decode_rx.as_mut() {
+        let deadline =
+            tokio::time::Instant::now() + std::time::Duration::from_millis(fade_ms as u64);
+        loop {
+            let timeout = tokio::time::timeout_at(deadline, rx.recv());
+            match timeout.await {
+                Ok(Some(audio::PcmMessage::Audio(samples))) => {
+                    let mut samples = resampler.process_or_passthrough(samples);
+                    zone_eq.process(&mut samples);
+                    fade.process(&mut samples);
+                    let _ = backend
+                        .send_audio(zone_index, &samples, sample_rate, channels)
+                        .await;
+                    if fade.remaining == 0 {
+                        break;
+                    }
+                }
+                _ => break, // Timeout or channel closed
+            }
+        }
+    }
+
+    stop_decode(current_decode, decode_rx).await;
+    *position_offset_ms = 0;
+
+    // Prepare fade-in for the next stream
+    let mut fade_in = ZoneFade::new(fade_ms, sample_rate);
+    fade_in.start_fade_in();
+    *zone_fade = Some(fade_in);
+}
+
 /// Check if a receiver (AirPlay/Spotify) is active and the source conflict
 /// policy blocks local playback. Returns `true` if the command should proceed.
 fn may_start_local_playback(source: &ActiveSource, policy: crate::config::SourceConflict) -> bool {
@@ -78,6 +133,54 @@ fn may_start_local_playback(source: &ActiveSource, policy: crate::config::Source
         return true;
     }
     matches!(policy, crate::config::SourceConflict::LastWins)
+}
+
+/// Audio fade state for source transitions within a zone.
+struct ZoneFade {
+    /// Total fade duration in samples.
+    total: u32,
+    /// Remaining samples in the current fade.
+    remaining: u32,
+    /// true = fading out, false = fading in.
+    fading_out: bool,
+}
+
+impl ZoneFade {
+    fn new(duration_ms: u16, sample_rate: u32) -> Self {
+        let total = (sample_rate as u64 * duration_ms as u64 / 1000) as u32;
+        Self {
+            total,
+            remaining: total,
+            fading_out: true,
+        }
+    }
+
+    /// Apply gain ramp to samples. Returns true when fade is complete.
+    fn process(&mut self, samples: &mut [f32]) -> bool {
+        if self.total == 0 || self.remaining == 0 {
+            return true;
+        }
+        // Assume interleaved stereo (2 channels) — process per-sample
+        for sample in samples.iter_mut() {
+            let gain = if self.fading_out {
+                self.remaining as f32 / self.total as f32
+            } else {
+                1.0 - (self.remaining as f32 / self.total as f32)
+            };
+            *sample *= gain;
+            self.remaining = self.remaining.saturating_sub(1);
+            if self.remaining == 0 {
+                break;
+            }
+        }
+        self.remaining == 0
+    }
+
+    /// Switch from fade-out to fade-in (resets remaining to total).
+    fn start_fade_in(&mut self) {
+        self.fading_out = false;
+        self.remaining = self.total;
+    }
 }
 
 /// Main ZonePlayer loop.
@@ -172,6 +275,7 @@ async fn run(
     let mut source = ActiveSource::Idle;
     let mut remote_control: Option<std::sync::Arc<dyn crate::receiver::RemoteControl>> = None;
     let mut position_offset_ms: i64 = 0;
+    let mut zone_fade: Option<ZoneFade> = None;
     let mut resampler = audio::resample::F32Resampling::new(
         config.audio.sample_rate,
         config.audio.sample_rate,
@@ -326,7 +430,7 @@ async fn run(
                             tracing::info!(zone = zone_index, "Playback blocked: receiver has priority");
                             continue;
                         }
-                        reset_playback(&mut current_decode, &mut decode_rx, &mut position_offset_ms).await;
+                        fade_transition(&mut current_decode, &mut decode_rx, &mut position_offset_ms, &mut zone_fade, config.audio.zone_switch_fade_ms, config.audio.sample_rate, &mut zone_eq, ctx.backend.as_ref(), zone_index, config.audio.channels, &mut resampler).await;
                         if let Some(sub) = &subsonic {
                             if let Ok(playlist) = sub.get_playlist(&playlist_id).await {
                                 let track_count = playlist.entry.len();
@@ -351,7 +455,7 @@ async fn run(
                             tracing::info!(zone = zone_index, "Playback blocked: receiver has priority");
                             continue;
                         }
-                        reset_playback(&mut current_decode, &mut decode_rx, &mut position_offset_ms).await;
+                        fade_transition(&mut current_decode, &mut decode_rx, &mut position_offset_ms, &mut zone_fade, config.audio.zone_switch_fade_ms, config.audio.sample_rate, &mut zone_eq, ctx.backend.as_ref(), zone_index, config.audio.channels, &mut resampler).await;
                         if let Some(sub) = &subsonic {
                             let url = sub.stream_url(&track_id);
                             let (tx, rx) = audio::pcm_channel(PCM_DECODE_CHANNEL_SIZE);
@@ -371,7 +475,7 @@ async fn run(
                             tracing::info!(zone = zone_index, "Playback blocked: receiver has priority");
                             continue;
                         }
-                        reset_playback(&mut current_decode, &mut decode_rx, &mut position_offset_ms).await;
+                        fade_transition(&mut current_decode, &mut decode_rx, &mut position_offset_ms, &mut zone_fade, config.audio.zone_switch_fade_ms, config.audio.sample_rate, &mut zone_eq, ctx.backend.as_ref(), zone_index, config.audio.channels, &mut resampler).await;
                         let (tx, rx) = audio::pcm_channel(PCM_DECODE_CHANNEL_SIZE);
                         decode_rx = Some(rx);
                         let ac = audio_config.clone();
@@ -743,6 +847,17 @@ async fn run(
                     Some(audio::PcmMessage::Audio(samples)) => {
                         let mut samples = resampler.process_or_passthrough(samples);
                         zone_eq.process(&mut samples);
+                        if let Some(ref mut fade) = zone_fade {
+                            if fade.process(&mut samples) {
+                                if fade.fading_out {
+                                    // Fade-out complete — don't send silence, wait for new stream
+                                    zone_fade = None;
+                                } else {
+                                    // Fade-in complete
+                                    zone_fade = None;
+                                }
+                            }
+                        }
                         if let Err(e) = backend.send_audio(zone_index, &samples, config.audio.sample_rate, config.audio.channels).await {
                             tracing::error!(zone = zone_index, error = %e, "Audio send failed");
                         }
