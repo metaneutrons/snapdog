@@ -59,6 +59,7 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
   const [tab, setTab] = useState<Tab>("eq");
   const [config, setConfig] = useState<EqConfig>({ enabled: false, bands: [], preset: "flat" });
   const [abBypass, setAbBypass] = useState(false);
+  const [speakerEnabled, setSpeakerEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const showTabs = clientId != null;
@@ -162,6 +163,12 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
                 <button role="radio" aria-checked={config.enabled} className={`px-3 py-1 text-xs rounded-md transition-colors ${config.enabled ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`} onClick={() => toggleEnabled(true)}>On</button>
               </div>
             )}
+            {tab === "speaker" && (
+              <div className="inline-flex rounded-lg bg-muted p-0.5" role="radiogroup" aria-label={t("toggle")}>
+                <button role="radio" aria-checked={!speakerEnabled} className={`px-3 py-1 text-xs rounded-md transition-colors ${!speakerEnabled ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`} onClick={() => setSpeakerEnabled(false)}>Off</button>
+                <button role="radio" aria-checked={speakerEnabled} className={`px-3 py-1 text-xs rounded-md transition-colors ${speakerEnabled ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`} onClick={() => setSpeakerEnabled(true)}>On</button>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {tab === "eq" && (
@@ -226,7 +233,7 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
             )}
           </>
         ) : (
-          <SpeakerTab clientId={clientId!} />
+          <SpeakerTab clientId={clientId!} enabled={speakerEnabled} setEnabled={setSpeakerEnabled} />
         )}
       </div>
     </div>
@@ -235,7 +242,7 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
 
 // ── Speaker Tab ───────────────────────────────────────────────
 
-function SpeakerTab({ clientId }: { clientId: number }) {
+function SpeakerTab({ clientId, enabled, setEnabled }: { clientId: number; enabled: boolean; setEnabled: (v: boolean) => void }) {
   const t = useTranslations("eq");
   const [search, setSearch] = useState("");
   const [speakers, setSpeakers] = useState<string[]>([]);
@@ -290,22 +297,26 @@ function SpeakerTab({ clientId }: { clientId: number }) {
     }).catch(logApiError);
   };
 
-  const [enabled, setEnabled] = useState(false);
-
   const toggleEnabled = (on: boolean) => {
     setEnabled(on);
     if (!on && appliedName) {
-      // Disable: clear correction on server
       api.speakers.apply(clientId, null).then((config) => {
         setCurrentConfig(config);
       }).catch(logApiError);
     } else if (on && appliedName) {
-      // Re-enable: re-apply the speaker
       api.speakers.apply(clientId, appliedName).then((config) => {
         setCurrentConfig(config);
       }).catch(logApiError);
     }
   };
+
+  // Sync parent On/Off with server
+  const prevEnabled = useRef(enabled);
+  useEffect(() => {
+    if (prevEnabled.current === enabled) return;
+    prevEnabled.current = enabled;
+    toggleEnabled(enabled);
+  }, [enabled]);
 
   const toggleAB = () => {
     const next = !abBypass;
@@ -330,12 +341,8 @@ function SpeakerTab({ clientId }: { clientId: number }) {
 
   return (
     <div className="space-y-4">
-      {/* On/Off + A/B */}
-      <div className="flex items-center justify-between">
-        <div className="inline-flex rounded-lg bg-muted p-0.5" role="radiogroup" aria-label={t("toggle")}>
-          <button role="radio" aria-checked={!isEnabled} className={`px-3 py-1 text-xs rounded-md transition-colors ${!isEnabled ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`} onClick={() => toggleEnabled(false)}>Off</button>
-          <button role="radio" aria-checked={isEnabled} className={`px-3 py-1 text-xs rounded-md transition-colors ${isEnabled ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`} onClick={() => toggleEnabled(true)}>On</button>
-        </div>
+      {/* A/B */}
+      <div className="flex justify-end">
         <Button variant="ghost" size="sm" onClick={toggleAB} disabled={!isEnabled} className={abBypass ? "text-orange-500 font-semibold" : "text-muted-foreground"} aria-pressed={abBypass}>
           A/B
         </Button>
