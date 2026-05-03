@@ -263,7 +263,8 @@ function SpeakerTab({ clientId }: { clientId: number }) {
     ]).then(([list, config]) => {
       setSpeakers(list);
       setCurrentConfig(config);
-      setAppliedName(config.preset ?? null);
+      const name = config.preset?.startsWith("spinorama:") ? config.preset.slice("spinorama:".length) : null;
+      setAppliedName(name);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [clientId]);
@@ -320,7 +321,6 @@ function SpeakerTab({ clientId }: { clientId: number }) {
   if (loading) return <div className="text-sm text-muted-foreground py-8 text-center">Loading speakers…</div>;
 
   const isEnabled = currentConfig?.enabled ?? false;
-  const dimmed = abBypass || !isEnabled;
 
   return (
     <div className="space-y-4">
@@ -335,8 +335,9 @@ function SpeakerTab({ clientId }: { clientId: number }) {
         </Button>
       </div>
 
-      {/* Content — dims when off or A/B */}
-      <div className={`space-y-4 transition-opacity ${dimmed ? 'opacity-50 pointer-events-none' : ''}`}>
+      {/* Content — hidden when off, dimmed when A/B */}
+      {isEnabled || abBypass ? (
+        <div className={`space-y-4 transition-opacity ${abBypass ? 'opacity-50 pointer-events-none' : ''}`}>
         {/* Correction curve */}
         <FrequencyResponseCurve response={response} curveLabel="Speaker correction curve" />
 
@@ -375,6 +376,7 @@ function SpeakerTab({ clientId }: { clientId: number }) {
         )}
       </div>
       </div>
+      ) : null}
     </div>
   );
 }
