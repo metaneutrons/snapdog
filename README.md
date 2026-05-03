@@ -105,6 +105,15 @@ Download from [Releases](https://github.com/metaneutrons/snapdog/releases/latest
 snapdog --config snapdog.toml
 ```
 
+### Debian/Ubuntu (APT)
+
+```bash
+echo "deb [trusted=yes] https://metaneutrons.github.io/snapdog/debian stable main" \
+  | sudo tee /etc/apt/sources.list.d/snapdog.list
+sudo apt update
+sudo apt install snapdog snapdog-client
+```
+
 ### From Source
 
 ```bash
