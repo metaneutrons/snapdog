@@ -71,6 +71,15 @@ async fn reset_playback(
     *position_offset_ms = 0;
 }
 
+/// Check if a receiver (AirPlay/Spotify) is active and the source conflict
+/// policy blocks local playback. Returns `true` if the command should proceed.
+fn may_start_local_playback(source: &ActiveSource, policy: crate::config::SourceConflict) -> bool {
+    if !matches!(source, ActiveSource::AirPlay | ActiveSource::Spotify) {
+        return true;
+    }
+    matches!(policy, crate::config::SourceConflict::LastWins)
+}
+
 /// Main ZonePlayer loop.
 async fn run(
     zone_index: usize,
@@ -313,6 +322,10 @@ async fn run(
             Some(cmd) = commands.recv() => {
                 match cmd {
                     ZoneCommand::PlaySubsonicPlaylist(playlist_id, track_idx) => {
+                        if !may_start_local_playback(&source, config.audio.source_conflict) {
+                            tracing::info!(zone = zone_index, "Playback blocked: receiver has priority");
+                            continue;
+                        }
                         reset_playback(&mut current_decode, &mut decode_rx, &mut position_offset_ms).await;
                         if let Some(sub) = &subsonic {
                             if let Ok(playlist) = sub.get_playlist(&playlist_id).await {
@@ -334,6 +347,10 @@ async fn run(
                         }
                     }
                     ZoneCommand::PlaySubsonicTrack(track_id) => {
+                        if !may_start_local_playback(&source, config.audio.source_conflict) {
+                            tracing::info!(zone = zone_index, "Playback blocked: receiver has priority");
+                            continue;
+                        }
                         reset_playback(&mut current_decode, &mut decode_rx, &mut position_offset_ms).await;
                         if let Some(sub) = &subsonic {
                             let url = sub.stream_url(&track_id);
@@ -350,6 +367,10 @@ async fn run(
                         }
                     }
                     ZoneCommand::PlayUrl(url) => {
+                        if !may_start_local_playback(&source, config.audio.source_conflict) {
+                            tracing::info!(zone = zone_index, "Playback blocked: receiver has priority");
+                            continue;
+                        }
                         reset_playback(&mut current_decode, &mut decode_rx, &mut position_offset_ms).await;
                         let (tx, rx) = audio::pcm_channel(PCM_DECODE_CHANNEL_SIZE);
                         decode_rx = Some(rx);
@@ -479,6 +500,10 @@ async fn run(
                         }
                     }
                     ZoneCommand::NextPlaylist | ZoneCommand::PreviousPlaylist | ZoneCommand::SetPlaylist(..) => {
+                        if !may_start_local_playback(&source, config.audio.source_conflict) {
+                            tracing::info!(zone = zone_index, "Playback blocked: receiver has priority");
+                            continue;
+                        }
                         // Unified playlist model: index 0 = radio (from config), index 1+ = Subsonic playlists
                         let subsonic_playlists = if let Some(sub) = &subsonic {
                             sub.get_playlists().await.unwrap_or_default()

@@ -316,6 +316,21 @@ pub struct AudioConfig {
     /// Default group volume mode for all zones.
     #[serde(default)]
     pub group_volume_mode: GroupVolumeMode,
+    /// How to resolve conflicts when AirPlay/Spotify is active and local
+    /// playback (radio/subsonic) is requested.
+    #[serde(default)]
+    pub source_conflict: SourceConflict,
+}
+
+/// Source conflict resolution policy.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SourceConflict {
+    /// Most recent source always takes over (stops the other).
+    #[default]
+    LastWins,
+    /// AirPlay/Spotify has priority; local playback is rejected until it stops.
+    ReceiverWins,
 }
 
 impl Default for AudioConfig {
@@ -327,6 +342,7 @@ impl Default for AudioConfig {
             codec: AudioCodec::default(),
             encryption_psk: None,
             group_volume_mode: GroupVolumeMode::default(),
+            source_conflict: SourceConflict::default(),
         }
     }
 }
