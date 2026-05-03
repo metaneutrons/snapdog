@@ -188,11 +188,11 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
           </div>
         )}
 
-        {/* Tab content */}
-        {tab === "eq" ? (
+        {/* Tab content — crossfade, both mounted to avoid flash */}
+        <div className={`${tab === "eq" ? 'opacity-100' : 'opacity-0 pointer-events-none h-0 overflow-hidden'} transition-opacity duration-150`}>
           <>
             {config.enabled ? (
-              <div className={`space-y-5 ${abBypass ? 'opacity-50 pointer-events-none' : ''}`}>
+              <div className={`space-y-5 ${abBypass ? 'opacity-50 pointer-events-none' : ''} transition-opacity duration-150`}>
                 <FrequencyResponseCurve response={response} curveLabel={t("curve")} />
                 <div className="flex gap-1.5 overflow-x-auto scrollbar-none py-1 -mx-1 px-1" role="radiogroup" aria-label={t("presets")}>
                   {PRESETS.map((p) => (
@@ -232,8 +232,11 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
               <FrequencyResponseCurve response={[]} curveLabel={t("curve")} />
             )}
           </>
-        ) : (
-          <SpeakerTab clientId={clientId!} enabled={speakerEnabled} setEnabled={setSpeakerEnabled} />
+        </div>
+        {showTabs && (
+          <div className={`${tab === "speaker" ? 'opacity-100' : 'opacity-0 pointer-events-none h-0 overflow-hidden'} transition-opacity duration-150`}>
+            <SpeakerTab clientId={clientId!} enabled={speakerEnabled} setEnabled={setSpeakerEnabled} />
+          </div>
         )}
       </div>
     </div>
@@ -350,7 +353,7 @@ function SpeakerTab({ clientId, enabled, setEnabled }: { clientId: number; enabl
 
       {/* Content — hidden when off, dimmed when A/B */}
       {isEnabled || abBypass ? (
-        <div className={`space-y-4 ${abBypass ? 'opacity-50 pointer-events-none' : ''}`}>
+        <div className={`space-y-4 ${abBypass ? 'opacity-50 pointer-events-none' : ''} transition-opacity duration-150`}>
         {/* Correction curve */}
         <FrequencyResponseCurve response={response} curveLabel="Speaker correction curve" />
 
