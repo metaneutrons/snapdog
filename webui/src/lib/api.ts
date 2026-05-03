@@ -9,7 +9,11 @@ import type {
   VersionInfo,
   HealthResponse,
   VolumeValue,
+  EqBand,
+  EqConfig,
 } from "./types";
+
+export type { EqBand, EqConfig } from "./types";
 
 import { getApiKey, clearApiKey } from "./auth";
 
@@ -211,19 +215,6 @@ export const health = {
 };
 
 // ── EQ ────────────────────────────────────────────────────────
-
-export interface EqBand {
-  freq: number;
-  gain: number;
-  q: number;
-  type: "low_shelf" | "high_shelf" | "peaking" | "low_pass" | "high_pass";
-}
-
-export interface EqConfig {
-  enabled: boolean;
-  bands: EqBand[];
-  preset?: string | null;
-}
 
 export const eq = {
   get: (zoneId: number) => get<EqConfig>(`${Z}/${zoneId}/eq`),

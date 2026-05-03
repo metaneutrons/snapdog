@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { api } from "@/lib/api";
+import { logApiError } from "@/lib/log-api-error";
 import { Button } from "@/components/ui/button";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 
@@ -34,7 +35,7 @@ export function ProgrammingMode() {
       await api.knx.setProgrammingMode(newState);
       setActive(newState);
     } catch (e) {
-      console.error("Failed to set programming mode", e);
+      logApiError(e);
     }
     setConfirming(null);
   }, [confirming]);

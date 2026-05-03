@@ -189,3 +189,18 @@ export interface WsCommand {
 // ── Volume ────────────────────────────────────────────────────
 
 export type VolumeValue = number | string; // absolute (75) or relative ("+5")
+
+// ── EQ ────────────────────────────────────────────────────────
+
+export interface EqBand {
+  freq: number;
+  gain: number;
+  q: number;
+  type: "low_shelf" | "high_shelf" | "peaking" | "low_pass" | "high_pass";
+}
+
+export interface EqConfig {
+  enabled: boolean;
+  bands: EqBand[];
+  preset?: string | null;
+}

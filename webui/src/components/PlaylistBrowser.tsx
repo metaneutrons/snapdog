@@ -6,6 +6,7 @@ import { PlayIcon, MusicNote03Icon } from "@hugeicons/core-free-icons";
 import { useTranslations } from "next-intl";
 import { api } from "@/lib/api";
 import { logApiError } from "@/lib/log-api-error";
+import { formatTime } from "@/lib/format-time";
 import type { PlaylistInfo, TrackInfo } from "@/lib/types";
 import type { ZoneState } from "@/stores/useAppStore";
 
@@ -52,11 +53,7 @@ export function PlaylistBrowser({ zone }: PlaylistBrowserProps) {
     return <p className="text-sm text-muted-foreground p-4">{t("empty")}</p>;
   }
 
-  const formatDuration = (sec: number) => {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${m}:${s.toString().padStart(2, "0")}`;
-  };
+  const formatDuration = (sec: number) => formatTime(sec * 1000);
 
   return (
     <div className="w-full space-y-1 xl:max-h-48 xl:overflow-y-auto">

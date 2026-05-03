@@ -5,14 +5,11 @@ import { useTranslations } from "next-intl";
 import { Slider } from "@/components/ui/slider";
 import { api } from "@/lib/api";
 import { logApiError } from "@/lib/log-api-error";
+import { formatTime } from "@/lib/format-time";
 import type { ZoneState } from "@/stores/useAppStore";
 
-function formatTime(ms: number): string {
-  const totalSec = Math.floor(ms / 1000);
-  const min = Math.floor(totalSec / 60);
-  const sec = totalSec % 60;
-  return `${min}:${sec.toString().padStart(2, "0")}`;
-}
+const INTERPOLATION_INTERVAL_MS = 250;
+const SEEK_STEP_MS = 1000;
 
 export function SeekBar({ zone }: { zone: ZoneState }) {
   const t = useTranslations("seek");
@@ -48,8 +45,8 @@ export function SeekBar({ zone }: { zone: ZoneState }) {
   useEffect(() => {
     if (!isPlaying || dragging || isIdle) return;
     const interval = setInterval(() => {
-      setLocalPosition((prev) => duration > 0 ? Math.min(prev + 250, duration) : prev + 250);
-    }, 250);
+      setLocalPosition((prev) => duration > 0 ? Math.min(prev + INTERPOLATION_INTERVAL_MS, duration) : prev + INTERPOLATION_INTERVAL_MS);
+    }, INTERPOLATION_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [isPlaying, dragging, isIdle, duration]);
 
@@ -87,7 +84,7 @@ export function SeekBar({ zone }: { zone: ZoneState }) {
       <Slider
         value={isEndless ? [0] : [localPosition]}
         max={isEndless ? 1 : (duration || 1)}
-        step={1000}
+        step={SEEK_STEP_MS}
         onValueChange={handleSeek}
         onValueCommit={handleSeekCommit}
         disabled={!canSeek}

@@ -1,7 +1,10 @@
 // Biquad transfer function computation for frequency response visualization.
 // Computes magnitude response from biquad coefficients at given frequencies.
 
-import type { EqBand } from "@/lib/api";
+import type { EqBand } from "@/lib/types";
+
+const DEFAULT_SAMPLE_RATE = 48000;
+const DEFAULT_NUM_POINTS = 200;
 
 /** Compute biquad coefficients from band parameters (Audio EQ Cookbook). */
 function bandToCoeffs(band: EqBand, sampleRate: number) {
@@ -86,8 +89,8 @@ function magnitudeAt(coeffs: ReturnType<typeof bandToCoeffs>, freq: number, samp
 /** Compute combined frequency response for all bands. Returns array of {freq, db} points. */
 export function computeResponse(
   bands: EqBand[],
-  sampleRate: number = 48000,
-  numPoints: number = 200,
+  sampleRate: number = DEFAULT_SAMPLE_RATE,
+  numPoints: number = DEFAULT_NUM_POINTS,
 ): { freq: number; db: number }[] {
   const minFreq = 20;
   const maxFreq = 20000;

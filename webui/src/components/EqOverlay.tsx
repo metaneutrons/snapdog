@@ -26,6 +26,9 @@ const CURVE_HEIGHT = 160;
 const CURVE_DB_RANGE = 15;
 const CURVE_MIN_HEIGHT = 120;
 
+const GRID_FREQS = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000] as const;
+const GRID_DBS = [-12, -6, 0, 6, 12] as const;
+
 const PRESET_LABELS: Record<string, string> = {
   flat: 'Flat',
   bass_boost: 'Bass Boost',
@@ -309,8 +312,8 @@ function FrequencyResponseCurve({ response, curveLabel }: { response: { freq: nu
     console.warn("EQ: response has data but path is empty", response);
   }
 
-  const gridFreqs = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
-  const gridDbs = [-12, -6, 0, 6, 12];
+  const gridFreqs = GRID_FREQS;
+  const gridDbs = GRID_DBS;
 
   return (
     <svg viewBox={`0 0 ${width} ${height}`} className="w-full rounded-lg bg-muted/30 border border-border" style={{ minHeight: CURVE_MIN_HEIGHT }} role="img" aria-label={curveLabel}>

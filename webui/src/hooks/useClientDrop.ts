@@ -2,8 +2,9 @@
 
 import { useState, useCallback, type DragEvent } from "react";
 import { api } from "@/lib/api";
+import { logApiError } from "@/lib/log-api-error";
 
-const MIME = "application/x-snapdog-client";
+export const MIME = "application/x-snapdog-client";
 
 /** Shared drag-and-drop logic for dropping a client onto a zone. */
 export function useClientDrop(zoneIndex: number) {
@@ -25,9 +26,7 @@ export function useClientDrop(zoneIndex: number) {
       setDragOver(false);
       const clientIndex = Number(e.dataTransfer.getData(MIME));
       if (!isNaN(clientIndex)) {
-        api.clients.setZone(clientIndex, zoneIndex).catch((err: unknown) => {
-          console.error("Failed to move client to zone", err);
-        });
+        api.clients.setZone(clientIndex, zoneIndex).catch(logApiError);
       }
     },
     [zoneIndex],

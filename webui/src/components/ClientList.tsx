@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { api } from "@/lib/api";
 import { logApiError } from "@/lib/log-api-error";
 import { useEqEnabled } from "@/hooks/useEqEnabled";
+import { MIME } from "@/hooks/useClientDrop";
 import { useAppStore, type ZoneState } from "@/stores/useAppStore";
 import type { ClientInfo } from "@/lib/types";
 import { VolumeSlider } from "@/components/VolumeSlider";
@@ -38,7 +39,7 @@ function ClientCard({ client }: { client: ClientInfo }) {
           e.preventDefault();
           return;
         }
-        e.dataTransfer.setData("application/x-snapdog-client", String(client.index));
+        e.dataTransfer.setData(MIME, String(client.index));
         e.dataTransfer.effectAllowed = "move";
       }}
     >
@@ -119,11 +120,12 @@ function ClientCard({ client }: { client: ClientInfo }) {
   );
 }
 
+const BREAKPOINT_MD = 768;
 const SHOW_OFFLINE_KEY = "snapdog-show-offline";
 
 export function ClientList({ zone }: { zone: ZoneState }) {
   const t = useTranslations("client");
-  const [expanded, setExpanded] = useState(() => typeof window !== "undefined" && window.innerWidth >= 768);
+  const [expanded, setExpanded] = useState(() => typeof window !== "undefined" && window.innerWidth >= BREAKPOINT_MD);
   const [showOffline, setShowOffline] = useState(() => typeof window !== "undefined" && localStorage.getItem(SHOW_OFFLINE_KEY) === "true");
   const clients = useAppStore((s) => s.clients);
 
