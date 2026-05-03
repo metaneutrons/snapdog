@@ -14,6 +14,9 @@ pub const CLIENT_NAME: &str = "SnapDog";
 /// Snapcast custom message type ID for EQ configuration.
 pub const MSG_TYPE_EQ_CONFIG: u16 = 10;
 
+/// Snapcast custom message type ID for speaker correction EQ.
+pub const MSG_TYPE_SPEAKER_EQ: u16 = 11;
+
 /// Maximum number of EQ bands per zone/client.
 pub const MAX_EQ_BANDS: usize = 10;
 

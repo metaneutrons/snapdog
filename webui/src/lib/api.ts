@@ -235,4 +235,11 @@ const knx = {
   setProgrammingMode: (enabled: boolean) => putJson<boolean>("/api/v1/knx/programming-mode", enabled),
 };
 
-export const api = { zones, clients, media, system, health, eq, clientEq, knx };
+const speakers = {
+  list: () => get<string[]>("/api/v1/speakers"),
+  getProfile: (name: string) => get<EqConfig>(`/api/v1/speakers/${encodeURIComponent(name)}/profile`),
+  apply: (clientId: number, speaker: string | null) => putJson<EqConfig>(`/api/v1/clients/${clientId}/speaker`, { speaker }),
+  get: (clientId: number) => get<EqConfig>(`/api/v1/clients/${clientId}/speaker`),
+};
+
+export const api = { zones, clients, media, system, health, eq, clientEq, knx, speakers };

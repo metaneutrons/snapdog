@@ -67,8 +67,9 @@ fn main() -> anyhow::Result<()> {
         let (mut client, mut events, audio_rx) = SnapClient::new(config);
         let cmd = client.command_sender();
 
-        // EQ processor — shared between event loop and audio thread
+        // EQ processors — shared between event loop and audio thread
         let eq = std::sync::Arc::new(std::sync::Mutex::new(eq::ZoneEq::new(48000, 2)));
+        let speaker_eq = std::sync::Arc::new(std::sync::Mutex::new(eq::ZoneEq::new(48000, 2)));
 
         // Mixer — dispatches volume to software, hardware, midi, or none
         let volume = player::VolumeState::new();
@@ -78,6 +79,7 @@ fn main() -> anyhow::Result<()> {
         let player_stream = std::sync::Arc::clone(&client.stream);
         let player_tp = std::sync::Arc::clone(&client.time_provider);
         let player_eq = eq.clone();
+        let player_speaker_eq = speaker_eq.clone();
         let player_mixer = mixer.clone();
         if null_player {
             tracing::info!("Null player — audio output disabled");
@@ -87,17 +89,27 @@ fn main() -> anyhow::Result<()> {
             });
         } else {
             tokio::spawn(async move {
-                player::play_audio(audio_rx, player_stream, player_tp, player_eq, player_mixer)
-                    .await;
+                player::play_audio(
+                    audio_rx,
+                    player_stream,
+                    player_tp,
+                    player_eq,
+                    player_speaker_eq,
+                    player_mixer,
+                )
+                .await;
             });
         }
 
         // Event handler
         let event_eq = eq.clone();
+        let event_speaker_eq = speaker_eq.clone();
         let event_mixer = mixer.clone();
         tokio::spawn(async move {
             #[allow(unused_mut)]
             let mut last_eq_config: Option<eq::EqConfig> = None;
+            #[allow(unused_mut)]
+            let mut last_speaker_config: Option<eq::EqConfig> = None;
             while let Some(event) = events.recv().await {
                 match event {
                     ClientEvent::Connected { host, port } => {
@@ -118,6 +130,11 @@ fn main() -> anyhow::Result<()> {
                         if let Some(ref config) = last_eq_config {
                             eq.set_config(config);
                         }
+                        let mut spk = event_speaker_eq.lock().unwrap_or_else(|e| e.into_inner());
+                        *spk = eq::ZoneEq::new(format.rate(), format.channels());
+                        if let Some(ref config) = last_speaker_config {
+                            spk.set_config(config);
+                        }
                     }
                     #[cfg(feature = "custom-protocol")]
                     ClientEvent::CustomMessage(msg) if msg.type_id == eq::TYPE_EQ_CONFIG => {
@@ -135,6 +152,26 @@ fn main() -> anyhow::Result<()> {
                                 last_eq_config = Some(config);
                             }
                             Err(e) => tracing::warn!(error = %e, "Invalid EQ config payload"),
+                        }
+                    }
+                    #[cfg(feature = "custom-protocol")]
+                    ClientEvent::CustomMessage(msg) if msg.type_id == eq::TYPE_SPEAKER_EQ => {
+                        match serde_json::from_slice::<eq::EqConfig>(&msg.payload) {
+                            Ok(config) => {
+                                tracing::info!(
+                                    enabled = config.enabled,
+                                    bands = config.bands.len(),
+                                    "Speaker correction received"
+                                );
+                                event_speaker_eq
+                                    .lock()
+                                    .unwrap_or_else(|e| e.into_inner())
+                                    .set_config(&config);
+                                last_speaker_config = Some(config);
+                            }
+                            Err(e) => {
+                                tracing::warn!(error = %e, "Invalid speaker EQ payload")
+                            }
                         }
                     }
                     _ => {}

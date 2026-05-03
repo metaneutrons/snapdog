@@ -6,5 +6,6 @@ pub mod clients;
 pub mod eq;
 pub mod knx;
 pub mod media;
+pub mod speakers;
 pub mod system;
 pub mod zones;

@@ -286,6 +286,7 @@ pub async fn play_audio(
     stream: Arc<Mutex<Stream>>,
     time_provider: Arc<Mutex<TimeProvider>>,
     eq: SharedEq,
+    speaker_eq: SharedEq,
     mixer: Arc<Mixer>,
 ) {
     // Drain audio_rx in background
@@ -314,7 +315,7 @@ pub async fn play_audio(
     );
 
     std::thread::spawn(move || {
-        if let Err(e) = run_cpal(stream, time_provider, format, eq, mixer) {
+        if let Err(e) = run_cpal(stream, time_provider, format, eq, speaker_eq, mixer) {
             tracing::error!(error = %e, "Audio output failed");
         }
     });
@@ -325,6 +326,7 @@ fn run_cpal(
     time_provider: Arc<Mutex<TimeProvider>>,
     format: snapcast_proto::SampleFormat,
     eq: SharedEq,
+    speaker_eq: SharedEq,
     mixer: Arc<Mixer>,
 ) -> anyhow::Result<()> {
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -403,6 +405,11 @@ fn run_cpal(
             // Apply EQ after PCM decode
             if let Ok(mut eq) = eq.try_lock() {
                 eq.process(data);
+            }
+
+            // Apply speaker correction after music EQ
+            if let Ok(mut spk) = speaker_eq.try_lock() {
+                spk.process(data);
             }
 
             // Apply software volume (no-op for hardware/none mixer)

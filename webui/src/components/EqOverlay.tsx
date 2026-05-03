@@ -51,12 +51,17 @@ interface EqOverlayProps {
 
 const DEFAULT_BAND: EqBand = { freq: 1000, gain: 0, q: 1.0, type: "peaking" };
 
+type Tab = "eq" | "speaker";
+
 export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) {
   const t = useTranslations("eq");
   const trapRef = useFocusTrap<HTMLDivElement>();
+  const [tab, setTab] = useState<Tab>("eq");
   const [config, setConfig] = useState<EqConfig>({ enabled: false, bands: [], preset: "flat" });
   const [abBypass, setAbBypass] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  const showTabs = clientId != null;
 
   const eqApi = useMemo(() => clientId
     ? { get: () => api.clientEq.get(clientId), set: (c: EqConfig) => api.clientEq.set(clientId, c), applyPreset: (n: string) => api.clientEq.applyPreset(clientId, n) }
@@ -110,8 +115,6 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
     eqApi.applyPreset(name).then(setConfig).catch(logApiError);
   };
 
-  // Off: send only enabled:false (bands stay persisted on server), clear UI
-  // On: reload from server (which has the bands), then enable
   const toggleEnabled = (on: boolean) => {
     if (on) {
       eqApi.get().then((c) => {
@@ -125,7 +128,6 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
     }
   };
 
-  // A/B: temporarily disable EQ, restore on deactivate
   const toggleAB = () => {
     const next = !abBypass;
     setAbBypass(next);
@@ -139,7 +141,6 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
     onClose(config.enabled);
   };
 
-  // Frequency response curve
   const response = useMemo(
     () => (config.bands.length > 0 ? computeResponse(config.bands) : []),
     [config.bands],
@@ -151,67 +152,172 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
     <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label={t("title", { zone: label })} onKeyDown={(e) => { if (e.key === "Escape") handleClose(); }}>
       <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={handleClose} role="presentation" />
       <div className="relative z-10 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-xl space-y-5" ref={trapRef}>
-        {/* Header: title + On/Off toggle (left), A/B + close (right) */}
+        {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h2 className="text-lg font-semibold">{t("title", { zone: label })}</h2>
-            <div className="inline-flex rounded-lg bg-muted p-0.5" role="radiogroup" aria-label={t("toggle")}>
-              <button role="radio" aria-checked={!config.enabled} className={`px-3 py-1 text-xs rounded-md transition-colors ${!config.enabled ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`} onClick={() => toggleEnabled(false)}>Off</button>
-              <button role="radio" aria-checked={config.enabled} className={`px-3 py-1 text-xs rounded-md transition-colors ${config.enabled ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`} onClick={() => toggleEnabled(true)}>On</button>
-            </div>
+            {tab === "eq" && (
+              <div className="inline-flex rounded-lg bg-muted p-0.5" role="radiogroup" aria-label={t("toggle")}>
+                <button role="radio" aria-checked={!config.enabled} className={`px-3 py-1 text-xs rounded-md transition-colors ${!config.enabled ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`} onClick={() => toggleEnabled(false)}>Off</button>
+                <button role="radio" aria-checked={config.enabled} className={`px-3 py-1 text-xs rounded-md transition-colors ${config.enabled ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`} onClick={() => toggleEnabled(true)}>On</button>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={toggleAB} disabled={!config.enabled} className={abBypass ? "text-orange-500 font-semibold" : "text-muted-foreground"} aria-pressed={abBypass}>
-              A/B
-            </Button>
+            {tab === "eq" && (
+              <Button variant="ghost" size="sm" onClick={toggleAB} disabled={!config.enabled} className={abBypass ? "text-orange-500 font-semibold" : "text-muted-foreground"} aria-pressed={abBypass}>
+                A/B
+              </Button>
+            )}
             <Button variant="ghost" size="sm" onClick={handleClose} aria-label={t("close")}>✕</Button>
           </div>
         </div>
 
-        {/* Curve + Presets + Bands — curve always visible, rest hidden when off, all dimmed when A/B */}
-        {config.enabled ? (
-          <div className={`space-y-5 transition-opacity ${abBypass ? 'opacity-50 pointer-events-none' : ''}`}>
-            <FrequencyResponseCurve response={response} curveLabel={t("curve")} />
-            {/* Preset chips */}
-            <div className="flex gap-1.5 overflow-x-auto scrollbar-none py-1 -mx-1 px-1" role="radiogroup" aria-label={t("presets")}>
-              {PRESETS.map((p) => (
-                <button
-                  key={p}
-                  onClick={() => applyPreset(p)}
-                  role="radio"
-                  aria-checked={config.preset === p}
-                  className={`shrink-0 px-3 py-1 text-xs rounded-full transition-colors ${
-                    config.preset === p
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted hover:bg-muted/80 text-foreground'
-                  }`}
-                >
-                  {PRESET_LABELS[p] || p}
-                </button>
-              ))}
-            </div>
-
-            {/* Band rows */}
-            <div className="space-y-3">
-              {config.bands.map((band, idx) => (
-                <BandRow
-                  key={idx}
-                  band={band}
-                  index={idx}
-                  onChange={(patch) => updateBand(idx, patch)}
-                  onRemove={() => removeBand(idx)}
-                />
-              ))}
-            </div>
-
-            {config.bands.length < MAX_EQ_BANDS && (
-              <Button variant="ghost" size="sm" onClick={addBand} className="w-full">
-                {t("addBand")}
-              </Button>
-            )}
+        {/* Segmented control tabs — only for client overlays */}
+        {showTabs && (
+          <div className="inline-flex rounded-lg bg-muted p-0.5 w-full" role="tablist">
+            <button role="tab" aria-selected={tab === "eq"} className={`flex-1 px-4 py-1.5 text-sm rounded-md transition-colors ${tab === "eq" ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`} onClick={() => setTab("eq")}>EQ</button>
+            <button role="tab" aria-selected={tab === "speaker"} className={`flex-1 px-4 py-1.5 text-sm rounded-md transition-colors ${tab === "speaker" ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`} onClick={() => setTab("speaker")}>Speaker</button>
           </div>
+        )}
+
+        {/* Tab content */}
+        {tab === "eq" ? (
+          <>
+            {config.enabled ? (
+              <div className={`space-y-5 transition-opacity ${abBypass ? 'opacity-50 pointer-events-none' : ''}`}>
+                <FrequencyResponseCurve response={response} curveLabel={t("curve")} />
+                <div className="flex gap-1.5 overflow-x-auto scrollbar-none py-1 -mx-1 px-1" role="radiogroup" aria-label={t("presets")}>
+                  {PRESETS.map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => applyPreset(p)}
+                      role="radio"
+                      aria-checked={config.preset === p}
+                      className={`shrink-0 px-3 py-1 text-xs rounded-full transition-colors ${
+                        config.preset === p
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted hover:bg-muted/80 text-foreground'
+                      }`}
+                    >
+                      {PRESET_LABELS[p] || p}
+                    </button>
+                  ))}
+                </div>
+                <div className="space-y-3">
+                  {config.bands.map((band, idx) => (
+                    <BandRow
+                      key={idx}
+                      band={band}
+                      index={idx}
+                      onChange={(patch) => updateBand(idx, patch)}
+                      onRemove={() => removeBand(idx)}
+                    />
+                  ))}
+                </div>
+                {config.bands.length < MAX_EQ_BANDS && (
+                  <Button variant="ghost" size="sm" onClick={addBand} className="w-full">
+                    {t("addBand")}
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <FrequencyResponseCurve response={[]} curveLabel={t("curve")} />
+            )}
+          </>
         ) : (
-          <FrequencyResponseCurve response={[]} curveLabel={t("curve")} />
+          <SpeakerTab clientId={clientId!} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Speaker Tab ───────────────────────────────────────────────
+
+function SpeakerTab({ clientId }: { clientId: number }) {
+  const [search, setSearch] = useState("");
+  const [speakers, setSpeakers] = useState<string[]>([]);
+  const [currentConfig, setCurrentConfig] = useState<EqConfig | null>(null);
+  const [appliedName, setAppliedName] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      api.speakers.list(),
+      api.speakers.get(clientId),
+    ]).then(([list, config]) => {
+      setSpeakers(list);
+      setCurrentConfig(config);
+      setAppliedName(config.preset ?? null);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, [clientId]);
+
+  const filtered = useMemo(() => {
+    if (!search) return speakers.slice(0, 50);
+    const q = search.toLowerCase();
+    return speakers.filter((s) => s.toLowerCase().includes(q)).slice(0, 50);
+  }, [speakers, search]);
+
+  const applySpeaker = (name: string) => {
+    api.speakers.apply(clientId, name).then((config) => {
+      setCurrentConfig(config);
+      setAppliedName(name);
+    }).catch(logApiError);
+  };
+
+  const clearSpeaker = () => {
+    api.speakers.apply(clientId, null).then((config) => {
+      setCurrentConfig(config);
+      setAppliedName(null);
+    }).catch(logApiError);
+  };
+
+  const response = useMemo(
+    () => (currentConfig?.bands.length ? computeResponse(currentConfig.bands) : []),
+    [currentConfig],
+  );
+
+  if (loading) return <div className="text-sm text-muted-foreground py-8 text-center">Loading speakers…</div>;
+
+  return (
+    <div className="space-y-4">
+      {/* Correction curve */}
+      <FrequencyResponseCurve response={response} curveLabel="Speaker correction curve" />
+
+      {/* Applied speaker + clear */}
+      {appliedName && (
+        <div className="flex items-center justify-between bg-muted/50 rounded-lg px-3 py-2">
+          <span className="text-sm font-medium truncate">{appliedName}</span>
+          <Button variant="ghost" size="sm" onClick={clearSpeaker} className="text-xs shrink-0">Clear</Button>
+        </div>
+      )}
+
+      {/* Search */}
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search speakers…"
+        className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+        aria-label="Search speakers"
+      />
+
+      {/* Results list */}
+      <div className="max-h-48 overflow-y-auto rounded-lg border border-border divide-y divide-border">
+        {filtered.length === 0 ? (
+          <div className="px-3 py-4 text-sm text-muted-foreground text-center">No speakers found</div>
+        ) : (
+          filtered.map((name) => (
+            <button
+              key={name}
+              onClick={() => applySpeaker(name)}
+              className={`w-full text-left px-3 py-2 text-sm hover:bg-muted/50 transition-colors ${name === appliedName ? 'bg-primary/10 font-medium' : ''}`}
+            >
+              {name}
+            </button>
+          ))
         )}
       </div>
     </div>
@@ -317,7 +423,6 @@ function FrequencyResponseCurve({ response, curveLabel }: { response: { freq: nu
 
   return (
     <svg viewBox={`0 0 ${width} ${height}`} className="w-full rounded-lg bg-muted/30 border border-border" style={{ minHeight: CURVE_MIN_HEIGHT }} role="img" aria-label={curveLabel}>
-      {/* Grid lines */}
       {gridFreqs.map((f) => (
         <line key={`f${f}`} x1={freqToX(f)} x2={freqToX(f)} y1={pad.top} y2={pad.top + plotH} stroke="currentColor" strokeOpacity={0.1} />
       ))}
@@ -327,20 +432,17 @@ function FrequencyResponseCurve({ response, curveLabel }: { response: { freq: nu
           <text x={pad.left - 4} y={dbToY(db) + 3} textAnchor="end" fontSize={9} fill="currentColor" opacity={0.4}>{db}</text>
         </g>
       ))}
-      {/* Freq labels */}
       {[100, 1000, 10000].map((f) => (
         <text key={`fl${f}`} x={freqToX(f)} y={height - 4} textAnchor="middle" fontSize={9} fill="currentColor" opacity={0.4}>
           {f >= 1000 ? `${f / 1000}k` : f}
         </text>
       ))}
-      {/* Response curve */}
       {path && (
         <>
           <path d={path + `L${freqToX(FREQ_MAX_HZ)},${dbToY(0)}L${freqToX(FREQ_MIN_HZ)},${dbToY(0)}Z`} fill="oklch(0.65 0.18 40)" fillOpacity={0.15} />
           <path d={path} fill="none" stroke="oklch(0.65 0.18 40)" strokeWidth={2} />
         </>
       )}
-      {/* 0 dB label */}
       <text x={pad.left - 4} y={dbToY(0) + 3} textAnchor="end" fontSize={9} fill="currentColor" opacity={0.6} fontWeight="bold">0</text>
     </svg>
   );

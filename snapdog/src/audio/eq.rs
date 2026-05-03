@@ -28,6 +28,8 @@ struct EqStoreData {
     zones: HashMap<usize, EqConfig>,
     #[serde(default)]
     clients: HashMap<usize, EqConfig>,
+    #[serde(default)]
+    speaker_corrections: HashMap<usize, EqConfig>,
 }
 
 /// Per-zone and per-client EQ store. Loads from / saves to eq.json.
@@ -85,6 +87,21 @@ impl EqStore {
     /// Set EQ config for a client and persist.
     pub fn set_client(&mut self, client: usize, config: EqConfig) {
         self.data.clients.insert(client, config);
+        self.save();
+    }
+
+    /// Get speaker correction config for a client.
+    pub fn get_speaker_correction(&self, client: usize) -> EqConfig {
+        self.data
+            .speaker_corrections
+            .get(&client)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// Set speaker correction config for a client and persist.
+    pub fn set_speaker_correction(&mut self, client: usize, config: EqConfig) {
+        self.data.speaker_corrections.insert(client, config);
         self.save();
     }
 

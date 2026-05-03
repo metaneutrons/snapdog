@@ -3,7 +3,10 @@
 
 //! Client-side parametric EQ — biquad filters applied in the cpal callback.
 
-pub use snapdog_common::{EqBand, EqConfig, FilterType, MSG_TYPE_EQ_CONFIG as TYPE_EQ_CONFIG};
+pub use snapdog_common::{
+    EqBand, EqConfig, FilterType, MSG_TYPE_EQ_CONFIG as TYPE_EQ_CONFIG,
+    MSG_TYPE_SPEAKER_EQ as TYPE_SPEAKER_EQ,
+};
 
 use biquad::{Biquad, Coefficients, DirectForm2Transposed, Hertz, Q_BUTTERWORTH_F32, ToHertz};
 

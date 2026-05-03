@@ -148,9 +148,28 @@ async fn handle_event(
                         if let Ok(payload) = serde_json::to_vec(&eq_config) {
                             let _ = backend
                                 .execute(SnapcastCmd::Client {
-                                    client_id: id,
+                                    client_id: id.clone(),
                                     action: ClientAction::SendCustom {
                                         type_id: TYPE_EQ_CONFIG,
+                                        payload,
+                                    },
+                                })
+                                .await;
+                        }
+                    }
+
+                    // Push persisted speaker correction config
+                    let speaker_config = eq_store
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .get_speaker_correction(client_index);
+                    if speaker_config.enabled && !speaker_config.bands.is_empty() {
+                        if let Ok(payload) = serde_json::to_vec(&speaker_config) {
+                            let _ = backend
+                                .execute(SnapcastCmd::Client {
+                                    client_id: id,
+                                    action: ClientAction::SendCustom {
+                                        type_id: snapdog_common::MSG_TYPE_SPEAKER_EQ,
                                         payload,
                                     },
                                 })

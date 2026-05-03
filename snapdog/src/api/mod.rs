@@ -49,6 +49,8 @@ pub struct AppState {
     /// Cached Subsonic playlist list with expiry timestamp.
     pub playlist_cache:
         tokio::sync::RwLock<Option<(std::time::Instant, Vec<crate::subsonic::PlaylistEntry>)>>,
+    /// Spinorama speaker profile database.
+    pub speaker_db: crate::spinorama::SpeakerDb,
 }
 
 /// Thread-safe shared reference to [`AppState`].
@@ -77,6 +79,7 @@ pub async fn serve(
         eq_store,
         knx_device_control,
         playlist_cache: tokio::sync::RwLock::new(None),
+        speaker_db: crate::spinorama::SpeakerDb::new(),
     });
 
     let api_keys = state.config.http.api_keys.clone();
@@ -90,11 +93,17 @@ pub async fn serve(
         )
         .nest(
             "/api/v1/clients",
-            routes::clients::router(state.clone()).merge(routes::client_eq::router(state.clone())),
+            routes::clients::router(state.clone())
+                .merge(routes::client_eq::router(state.clone()))
+                .merge(routes::speakers::client_speaker_router(state.clone())),
         )
         .nest("/api/v1/media", routes::media::router(state.clone()))
         .nest("/api/v1/system", routes::system::router(state.clone()))
-        .nest("/api/v1/knx", routes::knx::router(state.clone()));
+        .nest("/api/v1/knx", routes::knx::router(state.clone()))
+        .nest(
+            "/api/v1/speakers",
+            routes::speakers::speakers_router(state.clone()),
+        );
 
     if !api_keys.is_empty() {
         tracing::info!(keys = api_keys.len(), "API authentication enabled");
