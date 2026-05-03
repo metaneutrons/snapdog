@@ -24,8 +24,76 @@ const AID: &str = "M-00FA_A-FF01-01-0000";
 const MFR: &str = "M-00FA";
 
 fn main() {
+    let cmd = std::env::args().nth(1).unwrap_or_default();
+    match cmd.as_str() {
+        "ci" => ci(),
+        "knxprod" | "" => knxprod(),
+        _ => {
+            eprintln!("Usage: cargo xtask <command>");
+            eprintln!("Commands:");
+            eprintln!("  knxprod  Generate ETS XML and .knxprod (default)");
+            eprintln!("  ci       Run all CI checks locally");
+            std::process::exit(1);
+        }
+    }
+}
+
+/// Run all CI checks locally (mirrors .github/workflows/ci.yml).
+fn ci() {
+    let checks: &[(&str, &[&str])] = &[
+        ("Formatting", &["cargo", "fmt", "--all", "--check"]),
+        (
+            "Clippy",
+            &["cargo", "clippy", "--all-targets", "--", "-D", "warnings"],
+        ),
+        ("Unit tests", &["cargo", "test", "--workspace"]),
+        (
+            "Integration tests",
+            &[
+                "cargo",
+                "test",
+                "-p",
+                "snapdog",
+                "--no-default-features",
+                "--features",
+                "snapcast-process",
+                "--test",
+                "integration",
+                "--",
+                "--test-threads=1",
+            ],
+        ),
+        ("WebUI build", &["npm", "run", "build"]),
+    ];
+
+    let mut failed = Vec::new();
+    for (name, args) in checks {
+        eprintln!("\n\x1b[1;34m▶ {name}\x1b[0m");
+        let status = std::process::Command::new(args[0])
+            .args(&args[1..])
+            .current_dir(if *name == "WebUI build" { "webui" } else { "." })
+            .status();
+        match status {
+            Ok(s) if s.success() => eprintln!("\x1b[32m  ✓ {name}\x1b[0m"),
+            _ => {
+                eprintln!("\x1b[31m  ✗ {name}\x1b[0m");
+                failed.push(*name);
+            }
+        }
+    }
+
+    eprintln!();
+    if failed.is_empty() {
+        eprintln!("\x1b[1;32m✓ All CI checks passed\x1b[0m");
+    } else {
+        eprintln!("\x1b[1;31m✗ Failed: {}\x1b[0m", failed.join(", "));
+        std::process::exit(1);
+    }
+}
+
+fn knxprod() {
     let xml_path = std::env::args()
-        .nth(1)
+        .nth(2)
         .unwrap_or_else(|| "knx/snapdog.xml".into());
     let knxprod_path = xml_path.replace(".xml", ".knxprod");
 
