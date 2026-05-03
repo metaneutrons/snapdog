@@ -6,8 +6,7 @@ mod player;
 use clap::Parser;
 use snapcast_client::{ClientCommand, ClientConfig, ClientEvent, SnapClient};
 
-/// Client name used to identify SnapDog clients to the server.
-const SNAPDOG_CLIENT_NAME: &str = "SnapDog";
+use snapdog_common::CLIENT_NAME;
 
 fn main() -> anyhow::Result<()> {
     let cli = cli::Cli::parse();
@@ -59,7 +58,7 @@ fn main() -> anyhow::Result<()> {
         instance: settings.instance,
         host_id: settings.host_id.clone(),
         latency: settings.player.latency,
-        client_name: SNAPDOG_CLIENT_NAME.into(),
+        client_name: CLIENT_NAME.into(),
         ..ClientConfig::default()
     };
     let rt = tokio::runtime::Runtime::new()?;

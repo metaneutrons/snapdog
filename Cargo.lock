@@ -4005,6 +4005,7 @@ dependencies = [
  "shairplay",
  "snapcast-proto 0.9.0",
  "snapcast-server",
+ "snapdog-common",
  "symphonia",
  "tempfile",
  "thiserror 2.0.18",
@@ -4036,10 +4037,18 @@ dependencies = [
  "serde_json",
  "snapcast-client",
  "snapcast-proto 0.7.0",
+ "snapdog-common",
  "tokio",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "snapdog-common"
+version = "0.1.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

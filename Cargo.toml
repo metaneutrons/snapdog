@@ -3,6 +3,7 @@ resolver = "2"
 members = [
   "snapdog",
   "snapdog-client",
+  "snapdog-common",
   "xtask",
 ]
 
@@ -67,6 +68,9 @@ anyhow = "1"
 # Snapcast
 snapcast-server = { version = "0.9", features = ["flac", "encryption", "mdns", "custom-protocol"] }
 snapcast-proto = "0.9"
+
+# Shared
+snapdog-common = { path = "snapdog-common" }
 
 # Utilities
 md5 = "0.7"

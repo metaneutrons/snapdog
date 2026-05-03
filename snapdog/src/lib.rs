@@ -23,6 +23,6 @@ pub mod snapcast;
 pub const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
 /// Client name used by SnapDog clients to identify themselves to the server.
-pub const SNAPDOG_CLIENT_NAME: &str = "SnapDog";
+pub use snapdog_common::CLIENT_NAME as SNAPDOG_CLIENT_NAME;
 pub mod state;
 pub mod subsonic;

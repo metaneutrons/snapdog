@@ -54,6 +54,7 @@ librespot-metadata = { version = "0.8", optional = true }
 
 snapcast-server = { workspace = true, optional = true }
 snapcast-proto = { workspace = true }
+snapdog-common = { workspace = true }
 
 [features]
 default = ["snapcast-embedded", "spotify"]

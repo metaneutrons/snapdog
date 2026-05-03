@@ -15,6 +15,7 @@ alsa = "0.11"
 [dependencies]
 snapcast-client = "0.7"
 snapcast-proto = "0.7"
+snapdog-common = { workspace = true }
 tokio = { version = "1", features = ["full"] }
 clap = { version = "4", features = ["derive"] }
 tracing = "0.1"

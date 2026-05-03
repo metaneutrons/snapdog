@@ -3,38 +3,9 @@
 
 //! Client-side parametric EQ — biquad filters applied in the cpal callback.
 
-#[allow(dead_code)]
-pub const TYPE_EQ_CONFIG: u16 = 10;
+pub use snapdog_common::{EqBand, EqConfig, FilterType, MSG_TYPE_EQ_CONFIG as TYPE_EQ_CONFIG};
 
 use biquad::{Biquad, Coefficients, DirectForm2Transposed, Hertz, Q_BUTTERWORTH_F32, ToHertz};
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum FilterType {
-    LowShelf,
-    HighShelf,
-    Peaking,
-    LowPass,
-    HighPass,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EqBand {
-    pub freq: f32,
-    pub gain: f32,
-    pub q: f32,
-    #[serde(rename = "type")]
-    pub filter_type: FilterType,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct EqConfig {
-    pub enabled: bool,
-    pub bands: Vec<EqBand>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub preset: Option<String>,
-}
 
 /// Per-client EQ processor. Owns biquad filter instances for each band × channel.
 pub struct ZoneEq {

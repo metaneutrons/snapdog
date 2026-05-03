@@ -37,9 +37,7 @@ impl VolumeState {
         if self.muted.load(Ordering::Relaxed) {
             return 0.0;
         }
-        let pct = self.percent.load(Ordering::Relaxed) as f32 / 100.0;
-        // Perceptual volume curve (quadratic)
-        pct * pct
+        snapdog_common::perceptual_volume(self.percent.load(Ordering::Relaxed))
     }
 }
 
