@@ -26,7 +26,7 @@ const OVERSAMPLING_FACTOR: usize = 256;
 const F_CUTOFF: f32 = 0.95;
 
 /// Rubato parameters shared by both resamplers.
-fn sinc_params() -> SincInterpolationParameters {
+const fn sinc_params() -> SincInterpolationParameters {
     SincInterpolationParameters {
         sinc_len: SINC_LEN,
         f_cutoff: F_CUTOFF,
@@ -59,7 +59,7 @@ impl F32Resampler {
 
         let ch = channels as usize;
         let resampler = SincFixedIn::<f64>::new(
-            target_rate as f64 / source_rate as f64,
+            f64::from(target_rate) / f64::from(source_rate),
             2.0,
             sinc_params(),
             CHUNK_SIZE,
@@ -88,7 +88,7 @@ impl F32Resampler {
         let frames = samples.len() / self.channels;
         for frame in 0..frames {
             for ch in 0..self.channels {
-                self.buffer[ch].push(samples[frame * self.channels + ch] as f64);
+                self.buffer[ch].push(f64::from(samples[frame * self.channels + ch]));
             }
         }
 

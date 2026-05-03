@@ -137,7 +137,7 @@ async fn read_zone(state: &SharedState, idx: usize) -> Option<state::ZoneState> 
     state.store.read().await.zones.get(&idx).cloned()
 }
 
-fn zone_not_found() -> ApiError {
+const fn zone_not_found() -> ApiError {
     ApiError::NotFound("zone")
 }
 

@@ -49,7 +49,7 @@ async fn read_client(state: &SharedState, idx: usize) -> Option<state::ClientSta
     state.store.read().await.clients.get(&idx).cloned()
 }
 
-fn not_found() -> ApiError {
+const fn not_found() -> ApiError {
     ApiError::NotFound("client")
 }
 
@@ -258,7 +258,7 @@ async fn set_zone(
     // Wait for client fade-out to complete. No ack mechanism exists;
     // the sleep duration matches the fade the client is performing.
     if is_snapdog {
-        tokio::time::sleep(std::time::Duration::from_millis(fade_ms as u64)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(u64::from(fade_ms))).await;
     }
 
     // Update state (zone assignment is SnapDog-owned)

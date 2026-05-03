@@ -49,3 +49,6 @@ assets = [
   ["debian/snapdog-client.default", "etc/default/snapdog-client", "644"],
 ]
 systemd-units = { unit-name = "snapdog-client", enable = true, start = true }
+
+[lints]
+workspace = true

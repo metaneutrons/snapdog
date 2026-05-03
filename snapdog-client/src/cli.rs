@@ -43,6 +43,7 @@ pub struct Cli {
 
     /// Verify server with CA certificate (PEM format). Use without value for default certificates.
     #[arg(long = "server-cert")]
+    #[allow(clippy::option_option)]
     pub server_certificate: Option<Option<PathBuf>>,
 
     /// List PCM devices
@@ -78,6 +79,7 @@ pub struct Cli {
     /// Daemonize, optional process priority [-20..19]
     #[cfg(unix)]
     #[arg(short, long)]
+    #[allow(clippy::option_option)]
     pub daemon: Option<Option<i32>>,
 
     /// The `user[:group]` to run snapclient as when daemonized
@@ -153,8 +155,7 @@ impl Cli {
             "software" => MixerMode::Software,
             "hardware" => MixerMode::Hardware,
             "script" => MixerMode::Script,
-            "none" => MixerMode::None,
-            "midi" => MixerMode::None, // handled by snapdog-client Mixer
+            "none" | "midi" => MixerMode::None, // midi handled by snapdog-client Mixer
             other => bail!("unknown mixer mode: {other}"),
         };
 
@@ -231,7 +232,6 @@ fn parse_url(url: &str) -> Result<ServerSettings> {
 
 fn default_port(scheme: &str) -> u16 {
     match scheme {
-        "tcp" => snapcast_proto::DEFAULT_STREAM_PORT,
         "ws" => snapcast_proto::DEFAULT_HTTP_PORT,
         "wss" => snapcast_proto::DEFAULT_WSS_PORT,
         _ => snapcast_proto::DEFAULT_STREAM_PORT,

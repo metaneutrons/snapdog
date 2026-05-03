@@ -191,7 +191,7 @@ fn main() -> anyhow::Result<()> {
                                 last_speaker_config = Some(config);
                             }
                             Err(e) => {
-                                tracing::warn!(error = %e, "Invalid speaker EQ payload")
+                                tracing::warn!(error = %e, "Invalid speaker EQ payload");
                             }
                         }
                     }
@@ -245,6 +245,7 @@ fn list_devices(player: &str) {
 }
 
 #[cfg(unix)]
+#[allow(unsafe_code)]
 fn daemonize(daemon: &snapcast_client::config::DaemonSettings) -> anyhow::Result<()> {
     if let Some(priority) = daemon.priority {
         let priority = priority.clamp(-20, 19);

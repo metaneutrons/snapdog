@@ -29,7 +29,7 @@ fn convert_filter(filter: &str) -> String {
             } else {
                 let tag_lower = tag.to_lowercase();
                 let module = match tag_lower.as_str() {
-                    "stream" => "snapdog_client::stream",
+                    "stream" | "stats" | "latency" => "snapdog_client::stream",
                     "controller" => "snapdog_client::controller",
                     "connection" => "snapdog_client::connection",
                     "timeprovider" => "snapdog_client::time_provider",
@@ -39,7 +39,6 @@ fn convert_filter(filter: &str) -> String {
                     "flac" | "flacdecoder" => "snapdog_client::decoder::flac",
                     "opus" | "opusdecoder" => "snapdog_client::decoder::opus",
                     "ogg" | "oggdecoder" => "snapdog_client::decoder::vorbis",
-                    "stats" | "latency" => "snapdog_client::stream",
                     other => other,
                 };
                 format!("{module}={level}")

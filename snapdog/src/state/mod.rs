@@ -139,13 +139,13 @@ pub struct ClientState {
 /// Default initial volume for zones and clients.
 pub const DEFAULT_VOLUME: i32 = 50;
 
-fn default_volume() -> i32 {
+const fn default_volume() -> i32 {
     DEFAULT_VOLUME
 }
 use crate::config::{default_auto_off_delay, default_max_volume, default_true};
 
 /// Zone playback state.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum PlaybackState {
     /// No audio source active.
@@ -168,7 +168,7 @@ impl std::fmt::Display for PlaybackState {
 }
 
 /// Active audio source type for a zone.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum SourceType {
     /// No source active.
@@ -333,7 +333,7 @@ impl Store {
     fn load(&mut self, path: &Path) -> Result<()> {
         let json = std::fs::read_to_string(path)
             .with_context(|| format!("Failed to read {}", path.display()))?;
-        let saved: Store = serde_json::from_str(&json)
+        let saved: Self = serde_json::from_str(&json)
             .with_context(|| format!("Failed to parse {}", path.display()))?;
 
         // Merge: only restore runtime state for zones/clients that still exist in config

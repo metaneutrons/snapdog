@@ -20,7 +20,7 @@ pub enum KnxRole {
 
 impl KnxRole {
     /// String representation for matching and display.
-    pub fn as_str(self) -> &'static str {
+    pub const fn as_str(self) -> &'static str {
         match self {
             Self::Client => "client",
             Self::Device => "device",
@@ -43,7 +43,7 @@ pub enum AudioCodec {
 
 impl AudioCodec {
     /// String representation for Snapcast protocol.
-    pub fn as_str(self) -> &'static str {
+    pub const fn as_str(self) -> &'static str {
         match self {
             Self::Flac => "flac",
             Self::F32lz4 => "f32lz4",
@@ -104,7 +104,7 @@ pub enum SubsonicFormat {
 
 impl SubsonicFormat {
     /// String representation for Subsonic API URL parameter.
-    pub fn as_str(self) -> &'static str {
+    pub const fn as_str(self) -> &'static str {
         match self {
             Self::Raw => "raw",
             Self::Flac => "flac",
@@ -200,8 +200,8 @@ impl GroupVolumeMode {
             Self::Absolute => z.min(max),
             Self::Relative => (base * z / 100).clamp(0, max),
             Self::Compressed => {
-                let factor = (z as f64 / 100.0).sqrt();
-                (base as f64 * factor).round().min(max as f64) as i32
+                let factor = (f64::from(z) / 100.0).sqrt();
+                (f64::from(base) * factor).round().min(f64::from(max)) as i32
             }
         }
     }
@@ -276,7 +276,7 @@ pub struct PresenceConfig {
 /// Default auto-off delay in seconds (15 minutes).
 pub(crate) const DEFAULT_AUTO_OFF_DELAY: u16 = 900;
 
-pub(crate) fn default_auto_off_delay() -> u16 {
+pub(crate) const fn default_auto_off_delay() -> u16 {
     DEFAULT_AUTO_OFF_DELAY
 }
 
@@ -330,7 +330,7 @@ pub struct AudioConfig {
     pub source_switch_fade_ms: u16,
 }
 
-fn default_zone_switch_fade_ms() -> u16 {
+const fn default_zone_switch_fade_ms() -> u16 {
     snapdog_common::DEFAULT_FADE_MS
 }
 
@@ -478,7 +478,7 @@ impl SpotifyConfig {
 
     /// Convert the bitrate u32 to librespot's Bitrate enum.
     #[cfg(feature = "spotify")]
-    pub fn bitrate_enum(&self) -> librespot_playback::config::Bitrate {
+    pub const fn bitrate_enum(&self) -> librespot_playback::config::Bitrate {
         match self.bitrate {
             96 => librespot_playback::config::Bitrate::Bitrate96,
             160 => librespot_playback::config::Bitrate::Bitrate160,
@@ -487,7 +487,7 @@ impl SpotifyConfig {
     }
 }
 
-fn default_spotify_bitrate() -> u32 {
+const fn default_spotify_bitrate() -> u32 {
     320
 }
 
@@ -959,25 +959,25 @@ impl From<RawRadioConfig> for RadioConfig {
 
 // ── Defaults ──────────────────────────────────────────────────
 
-fn default_sample_rate() -> u32 {
+const fn default_sample_rate() -> u32 {
     snapdog_common::DEFAULT_SAMPLE_RATE
 }
-fn default_bit_depth() -> u16 {
+const fn default_bit_depth() -> u16 {
     16
 }
-fn default_channels() -> u16 {
+const fn default_channels() -> u16 {
     2
 }
-fn default_http_port() -> u16 {
+const fn default_http_port() -> u16 {
     5555
 }
 fn default_snapcast_address() -> String {
     "127.0.0.1".into()
 }
-fn default_jsonrpc_port() -> u16 {
+const fn default_jsonrpc_port() -> u16 {
     1705
 }
-fn default_streaming_port() -> u16 {
+const fn default_streaming_port() -> u16 {
     1704
 }
 fn default_mdns_service_type() -> String {
@@ -995,9 +995,9 @@ fn default_zone_icon() -> String {
 fn default_client_icon() -> String {
     "🎵".into()
 }
-pub(crate) fn default_max_volume() -> i32 {
+pub(crate) const fn default_max_volume() -> i32 {
     100
 }
-pub(crate) fn default_true() -> bool {
+pub(crate) const fn default_true() -> bool {
     true
 }

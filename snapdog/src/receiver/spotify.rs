@@ -55,7 +55,7 @@ pub struct SpotifyReceiver {
 
 impl SpotifyReceiver {
     /// Create a new (stopped) Spotify Connect receiver for the given zone.
-    pub fn new(config: SpotifyConfig, zone_index: usize) -> Self {
+    pub const fn new(config: SpotifyConfig, zone_index: usize) -> Self {
         Self {
             config,
             zone_index,
@@ -102,12 +102,11 @@ impl RemoteControl for SpircRemote {
     fn send_command(&self, cmd: RemoteCommand) -> Result<()> {
         match cmd {
             RemoteCommand::Play => self.0.play()?,
-            RemoteCommand::Pause => self.0.pause()?,
+            RemoteCommand::Pause | RemoteCommand::Stop => self.0.pause()?, // Spirc has no stop
             RemoteCommand::NextTrack => self.0.next()?,
             RemoteCommand::PreviousTrack => self.0.prev()?,
-            RemoteCommand::Stop => self.0.pause()?, // Spirc has no stop, pause is closest
             RemoteCommand::SetVolume(v) => {
-                let volume = (v as u16 * u16::MAX) / 100;
+                let volume = (u16::from(v) * u16::MAX) / 100;
                 self.0.set_volume(volume)?;
             }
             RemoteCommand::ToggleShuffle => {
@@ -257,7 +256,7 @@ async fn handle_player_event(
                 ),
             };
 
-            *last_duration_ms = audio_item.duration_ms as u64;
+            *last_duration_ms = u64::from(audio_item.duration_ms);
 
             let _ = event_tx.try_send(ReceiverEvent::Metadata {
                 title: audio_item.name.clone(),
@@ -273,30 +272,18 @@ async fn handle_player_event(
             }
         }
 
-        PlayerEvent::Playing { position_ms, .. } => {
-            let _ = event_tx.try_send(ReceiverEvent::Progress {
-                position_ms: position_ms as u64,
-                duration_ms: *last_duration_ms,
-            });
-        }
-
-        PlayerEvent::Paused { position_ms, .. } => {
-            let _ = event_tx.try_send(ReceiverEvent::Progress {
-                position_ms: position_ms as u64,
-                duration_ms: *last_duration_ms,
-            });
-        }
-
-        PlayerEvent::Seeked { position_ms, .. }
+        PlayerEvent::Playing { position_ms, .. }
+        | PlayerEvent::Paused { position_ms, .. }
+        | PlayerEvent::Seeked { position_ms, .. }
         | PlayerEvent::PositionCorrection { position_ms, .. } => {
             let _ = event_tx.try_send(ReceiverEvent::Progress {
-                position_ms: position_ms as u64,
+                position_ms: u64::from(position_ms),
                 duration_ms: *last_duration_ms,
             });
         }
 
         PlayerEvent::VolumeChanged { volume } => {
-            let percent = (volume as i32 * 100) / u16::MAX as i32;
+            let percent = (i32::from(volume) * 100) / i32::from(u16::MAX);
             let _ = event_tx.try_send(ReceiverEvent::Volume { percent });
         }
 
@@ -311,7 +298,7 @@ struct ChannelSink {
 }
 
 impl ChannelSink {
-    fn new(tx: AudioSender) -> Self {
+    const fn new(tx: AudioSender) -> Self {
         Self { tx }
     }
 }

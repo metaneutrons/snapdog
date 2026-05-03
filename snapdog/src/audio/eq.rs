@@ -285,7 +285,7 @@ pub fn preset(name: &str) -> Option<Vec<EqBand>> {
 }
 
 /// List all available preset names.
-pub fn preset_names() -> &'static [&'static str] {
+pub const fn preset_names() -> &'static [&'static str] {
     &[
         "flat",
         "bass_boost",
@@ -317,7 +317,7 @@ struct BandPair {
 
 impl ZoneEq {
     /// Create a new EQ processor.
-    pub fn new(sample_rate: u32, channels: u16) -> Self {
+    pub const fn new(sample_rate: u32, channels: u16) -> Self {
         Self {
             bands: vec![],
             enabled: false,

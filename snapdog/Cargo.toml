@@ -81,3 +81,6 @@ assets = [
   ["debian/snapdog.default", "etc/default/snapdog", "644"],
 ]
 systemd-units = { unit-name = "snapdog", enable = false, start = false }
+
+[lints]
+workspace = true

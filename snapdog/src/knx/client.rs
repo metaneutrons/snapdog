@@ -16,7 +16,7 @@ pub(crate) struct ClientPublisher {
 }
 
 impl ClientPublisher {
-    pub(crate) fn new(handle: MultiplexHandle) -> Self {
+    pub(crate) const fn new(handle: MultiplexHandle) -> Self {
         Self { handle }
     }
 }
@@ -35,7 +35,7 @@ pub(crate) struct ClientListener {
 }
 
 impl ClientListener {
-    pub(crate) fn new(handle: MultiplexHandle) -> Self {
+    pub(crate) const fn new(handle: MultiplexHandle) -> Self {
         Self { handle }
     }
 }

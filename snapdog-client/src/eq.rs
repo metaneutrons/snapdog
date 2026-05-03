@@ -19,7 +19,7 @@ pub struct ZoneEq {
 }
 
 impl ZoneEq {
-    pub fn new(sample_rate: u32, channels: u16) -> Self {
+    pub const fn new(sample_rate: u32, channels: u16) -> Self {
         Self {
             bands: vec![],
             enabled: false,

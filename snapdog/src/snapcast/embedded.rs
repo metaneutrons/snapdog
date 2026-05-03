@@ -204,7 +204,7 @@ impl EmbeddedBackend {
                 muted,
             } => Some(SnapcastEvent::ClientVolumeChanged {
                 id: client_id,
-                volume: volume as i32,
+                volume: i32::from(volume),
                 muted,
             }),
             ServerEvent::ClientLatencyChanged { client_id, latency } => {

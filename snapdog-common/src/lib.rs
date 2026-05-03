@@ -33,7 +33,7 @@ pub const MAX_EQ_BANDS: usize = 10;
 // ── EQ types ──────────────────────────────────────────────────
 
 /// Filter type for an EQ band.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum FilterType {
     /// Boosts or cuts frequencies below the cutoff.
@@ -100,7 +100,7 @@ pub fn fade_gain(remaining: u32, total: u32, fading_out: bool) -> f32 {
 /// Perceptual (quadratic) volume curve: maps linear 0–100 to 0.0–1.0.
 /// Input: linear percentage (0–100). Output: gain factor (0.0–1.0).
 pub fn perceptual_volume(linear: u8) -> f32 {
-    let normalized = linear as f32 / 100.0;
+    let normalized = f32::from(linear) / 100.0;
     normalized * normalized
 }
 

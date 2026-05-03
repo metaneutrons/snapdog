@@ -37,7 +37,7 @@ pub struct FadeState {
 
 impl FadeState {
     /// Create idle fade state.
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             fade_samples: AtomicU32::new(0),
             remaining: AtomicU32::new(0),
@@ -48,7 +48,7 @@ impl FadeState {
 
     /// Trigger a fade-out over the given duration at the given sample rate.
     pub fn trigger_fade_out(&self, duration_ms: u16, sample_rate: u32) {
-        let samples = (sample_rate as u64 * duration_ms as u64 / 1000) as u32;
+        let samples = (u64::from(sample_rate) * u64::from(duration_ms) / 1000) as u32;
         self.fade_samples.store(samples, Ordering::Relaxed);
         self.remaining.store(samples, Ordering::Relaxed);
         self.fading_out.store(true, Ordering::Release);
@@ -151,7 +151,7 @@ impl Mixer {
     pub fn from_cli(raw: &str, volume: Arc<VolumeState>) -> Self {
         let (mode, param) = raw.split_once(':').unwrap_or((raw, ""));
         match mode {
-            "software" | "" => Mixer::Software(volume),
+            "software" | "" => Self::Software(volume),
             #[cfg(target_os = "linux")]
             "hardware" => {
                 let control = if param.is_empty() {
@@ -178,12 +178,12 @@ impl Mixer {
                 tracing::warn!(
                     "Hardware mixer not supported on this platform, falling back to software"
                 );
-                Mixer::Software(volume)
+                Self::Software(volume)
             }
             "midi" => match parse_midi_param(param) {
                 Ok((conn, channel, cc)) => {
                     tracing::info!(channel = channel + 1, cc, "MIDI mixer connected");
-                    Mixer::Midi {
+                    Self::Midi {
                         conn: Mutex::new(conn),
                         channel,
                         cc,
@@ -191,13 +191,13 @@ impl Mixer {
                 }
                 Err(e) => {
                     tracing::error!(error = %e, "MIDI mixer init failed, falling back to software");
-                    Mixer::Software(volume)
+                    Self::Software(volume)
                 }
             },
-            "none" => Mixer::None,
+            "none" => Self::None,
             other => {
                 tracing::warn!(mode = other, "Unknown mixer mode, using software");
-                Mixer::Software(volume)
+                Self::Software(volume)
             }
         }
     }
@@ -205,23 +205,24 @@ impl Mixer {
     /// Apply a volume change.
     pub fn set_volume(&self, percent: u8, muted: bool) {
         match self {
-            Mixer::Software(vol) => {
+            Self::Software(vol) => {
                 vol.percent.store(percent, Ordering::Relaxed);
                 vol.muted.store(muted, Ordering::Relaxed);
             }
             #[cfg(target_os = "linux")]
-            Mixer::Hardware {
+            Self::Hardware {
                 control, volume, ..
             } => {
                 volume.percent.store(percent, Ordering::Relaxed);
                 volume.muted.store(muted, Ordering::Relaxed);
                 set_alsa_volume(control, percent, muted);
             }
-            Mixer::Midi { conn, channel, cc } => {
+            Self::Midi { conn, channel, cc } => {
                 let value = if muted {
                     0
                 } else {
-                    (percent as u16 * MIDI_CC_MAX as u16 / 100).min(MIDI_CC_MAX as u16) as u8
+                    (u16::from(percent) * u16::from(MIDI_CC_MAX) / 100).min(u16::from(MIDI_CC_MAX))
+                        as u8
                 };
                 if let Ok(mut conn) = conn.lock() {
                     // CC message: 0xB0 | channel, cc, value
@@ -230,7 +231,7 @@ impl Mixer {
                     }
                 }
             }
-            Mixer::None => {}
+            Self::None => {}
         }
     }
 
@@ -238,7 +239,7 @@ impl Mixer {
     /// Returns 1.0 for hardware/midi/none (volume is handled elsewhere).
     pub fn software_gain(&self) -> f32 {
         match self {
-            Mixer::Software(vol) => vol.gain(),
+            Self::Software(vol) => vol.gain(),
             _ => 1.0,
         }
     }
@@ -445,7 +446,7 @@ fn run_cpal(
                 .duration_since(&info.timestamp().callback)
                 .map(|d| d.as_micros() as i64)
                 .unwrap_or(0)
-                + (num_frames as i64 * 1_000_000) / format.rate() as i64;
+                + (num_frames as i64 * 1_000_000) / i64::from(format.rate());
 
             let server_now = {
                 let tp = time_provider.lock().unwrap_or_else(|e| e.into_inner());
@@ -475,8 +476,8 @@ fn run_cpal(
                 2 => {
                     for (i, chunk) in pcm_buf.chunks_exact(2).enumerate() {
                         if i < data.len() {
-                            data[i] =
-                                i16::from_le_bytes([chunk[0], chunk[1]]) as f32 / i16::MAX as f32;
+                            data[i] = f32::from(i16::from_le_bytes([chunk[0], chunk[1]]))
+                                / f32::from(i16::MAX);
                         }
                     }
                 }

@@ -40,7 +40,7 @@ pub struct AirPlayReceiver {
 
 impl AirPlayReceiver {
     /// Create a new (stopped) AirPlay receiver for the given zone.
-    pub fn new(config: AirplayConfig, zone_index: usize, airplay_name: String) -> Self {
+    pub const fn new(config: AirplayConfig, zone_index: usize, airplay_name: String) -> Self {
         Self {
             config,
             zone_index,
@@ -127,7 +127,7 @@ impl shairplay::AudioHandler for BridgeHandler {
         let _ = self.event_tx.try_send(ReceiverEvent::SessionStarted {
             format: AudioFormat {
                 sample_rate: format.sample_rate,
-                channels: format.channels as u16,
+                channels: u16::from(format.channels),
             },
         });
         Box::new(BridgeSession {
@@ -166,9 +166,9 @@ impl shairplay::AudioHandler for BridgeHandler {
     }
 
     fn on_progress(&self, start: u32, current: u32, end: u32) {
-        let sample_rate = self.sample_rate.load(Ordering::Relaxed) as u64;
-        let position_ms = ((current - start) as u64 * 1000) / sample_rate;
-        let duration_ms = ((end - start) as u64 * 1000) / sample_rate;
+        let sample_rate = u64::from(self.sample_rate.load(Ordering::Relaxed));
+        let position_ms = (u64::from(current - start) * 1000) / sample_rate;
+        let duration_ms = (u64::from(end - start) * 1000) / sample_rate;
         let _ = self.event_tx.try_send(ReceiverEvent::Progress {
             position_ms,
             duration_ms,

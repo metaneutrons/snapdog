@@ -97,7 +97,7 @@ async fn fade_transition(
     let mut fade = ZoneFade::new(fade_ms, sample_rate);
     if let Some(rx) = decode_rx.as_mut() {
         let deadline =
-            tokio::time::Instant::now() + std::time::Duration::from_millis(fade_ms as u64);
+            tokio::time::Instant::now() + std::time::Duration::from_millis(u64::from(fade_ms));
         loop {
             let timeout = tokio::time::timeout_at(deadline, rx.recv());
             match timeout.await {
@@ -128,7 +128,10 @@ async fn fade_transition(
 
 /// Check if a receiver (AirPlay/Spotify) is active and the source conflict
 /// policy blocks local playback. Returns `true` if the command should proceed.
-fn may_start_local_playback(source: &ActiveSource, policy: crate::config::SourceConflict) -> bool {
+const fn may_start_local_playback(
+    source: &ActiveSource,
+    policy: crate::config::SourceConflict,
+) -> bool {
     if !matches!(source, ActiveSource::AirPlay | ActiveSource::Spotify) {
         return true;
     }
@@ -147,7 +150,7 @@ struct ZoneFade {
 
 impl ZoneFade {
     fn new(duration_ms: u16, sample_rate: u32) -> Self {
-        let total = (sample_rate as u64 * duration_ms as u64 / 1000) as u32;
+        let total = (u64::from(sample_rate) * u64::from(duration_ms) / 1000) as u32;
         Self {
             total,
             remaining: total,
@@ -175,7 +178,7 @@ impl ZoneFade {
     }
 
     /// Switch from fade-out to fade-in (resets remaining to total).
-    fn start_fade_in(&mut self) {
+    const fn start_fade_in(&mut self) {
         self.fading_out = false;
         self.remaining = self.total;
     }
@@ -621,7 +624,6 @@ async fn run(
                         // Determine current unified index
                         let has_radio = config.has_radio_playlist();
                         let current_unified = match &source {
-                            ActiveSource::Radio { .. } => 0,
                             ActiveSource::SubsonicPlaylist { playlist_id, .. } => {
                                 let sub_idx = subsonic_playlists.iter().position(|p| p.id == *playlist_id).unwrap_or(0);
                                 if has_radio { sub_idx + 1 } else { sub_idx }
@@ -812,7 +814,7 @@ async fn run(
                             update_and_notify(store, zone_index, notify, |z| z.presence = false).await;
                             if should_timer {
                                 let delay = store.read().await.zones.get(&zone_index).map_or(crate::config::DEFAULT_AUTO_OFF_DELAY, |z| z.auto_off_delay);
-                                auto_off_timer.as_mut().reset(tokio::time::Instant::now() + std::time::Duration::from_secs(delay as u64)); auto_off_armed = true;
+                                auto_off_timer.as_mut().reset(tokio::time::Instant::now() + std::time::Duration::from_secs(u64::from(delay))); auto_off_armed = true;
                                 update_and_notify(store, zone_index, notify, |z| z.auto_off_active = true).await;
                                 tracing::debug!(zone = zone_index, delay, "Presence auto-off timer started");
                             }

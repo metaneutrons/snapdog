@@ -271,10 +271,6 @@ pub async fn handle_previous(ds: &mut DecodeState<'_>, ctx: &PlaybackCtx<'_>) {
                 advance_playlist_track(ds, &playlist_id, track_index - 1, track_count, ctx).await;
             }
         }
-        ActiveSource::SubsonicTrack { .. } => {
-            // Single track: restart from beginning
-            // (handled by seek to 0 via self_tx in the caller if needed)
-        }
         _ => {}
     }
 }

@@ -519,7 +519,7 @@ pub(crate) async fn handle_incoming(
                 "shuffle" => Some(ZoneCommand::SetShuffle(decode_bool(data))),
                 "repeat" => Some(ZoneCommand::SetRepeat(decode_bool(data))),
                 "track_repeat" => Some(ZoneCommand::SetTrackRepeat(decode_bool(data))),
-                "volume" => decode_percent(data).map(|v| ZoneCommand::SetVolume(v as i32)),
+                "volume" => decode_percent(data).map(|v| ZoneCommand::SetVolume(i32::from(v))),
                 "volume_dim" => decode_dim(data).map(ZoneCommand::AdjustVolume),
                 "playlist" => decode_u8(data).map(|v| ZoneCommand::SetPlaylist(v as usize, 0)),
                 "playlist_next" => Some(ZoneCommand::NextPlaylist),
@@ -553,9 +553,9 @@ pub(crate) async fn handle_incoming(
                 let cmd = match action {
                     "mute_toggle" => Some(ClientAction::Mute(!client.muted)),
                     "mute" => Some(ClientAction::Mute(decode_bool(data))),
-                    "volume" => decode_percent(data).map(|v| ClientAction::Volume(v as i32)),
+                    "volume" => decode_percent(data).map(|v| ClientAction::Volume(i32::from(v))),
                     "volume_dim" => decode_dim(data).map(ClientAction::AdjustVolume),
-                    "latency" => decode_u8(data).map(|v| ClientAction::Latency(v as i32)),
+                    "latency" => decode_u8(data).map(|v| ClientAction::Latency(i32::from(v))),
                     "zone" => {
                         if let Some(target_zone) = decode_u8(data) {
                             drop(s);
