@@ -251,7 +251,7 @@ impl Store {
                     ZoneState {
                         name: z.name.clone(),
                         icon: z.icon.clone(),
-                        volume: 50,
+                        volume: DEFAULT_VOLUME,
                         muted: false,
                         playback: PlaybackState::Stopped,
                         shuffle: false,
@@ -289,8 +289,8 @@ impl Store {
                         icon: c.icon.clone(),
                         mac: c.mac.clone(),
                         zone_index: c.zone_index,
-                        volume: 50,
-                        base_volume: 50,
+                        volume: DEFAULT_VOLUME,
+                        base_volume: DEFAULT_VOLUME,
                         max_volume: c.max_volume,
                         muted: false,
                         latency_ms: 0,
@@ -418,7 +418,7 @@ mod tests {
         assert_eq!(store.zones.len(), 1);
         assert_eq!(store.clients.len(), 1);
         assert_eq!(store.zones[&1].name, "Ground Floor");
-        assert_eq!(store.zones[&1].volume, 50);
+        assert_eq!(store.zones[&1].volume, DEFAULT_VOLUME);
         assert_eq!(store.clients[&1].zone_index, 1);
     }
 

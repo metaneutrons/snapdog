@@ -7,6 +7,8 @@ use axum::Router;
 
 /// WebSocket ping interval to detect dead connections.
 const WS_PING_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
+/// Capacity of the notification broadcast channel.
+const NOTIFICATION_CHANNEL_SIZE: usize = 256;
 use axum::extract::State;
 
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
@@ -116,7 +118,7 @@ pub fn notification_channel() -> (
     broadcast::Sender<Notification>,
     broadcast::Receiver<Notification>,
 ) {
-    broadcast::channel(256)
+    broadcast::channel(NOTIFICATION_CHANNEL_SIZE)
 }
 
 /// Build the WebSocket router.

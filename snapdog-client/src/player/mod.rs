@@ -11,6 +11,11 @@ use tokio::sync::mpsc;
 
 use crate::eq::ZoneEq;
 
+/// Maximum MIDI CC value (7-bit).
+const MIDI_CC_MAX: u8 = 127;
+/// Polling interval while waiting for audio format from the stream.
+const FORMAT_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
+
 /// Shared EQ processor, updated from the event loop, read from the audio thread.
 pub type SharedEq = Arc<Mutex<ZoneEq>>;
 
@@ -132,7 +137,7 @@ impl Mixer {
                 let value = if muted {
                     0
                 } else {
-                    (percent as u16 * 127 / 100).min(127) as u8
+                    (percent as u16 * MIDI_CC_MAX as u16 / 100).min(MIDI_CC_MAX as u16) as u8
                 };
                 if let Ok(mut conn) = conn.lock() {
                     // CC message: 0xB0 | channel, cc, value
@@ -300,7 +305,7 @@ pub async fn play_audio(
                 break f;
             }
         }
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        tokio::time::sleep(FORMAT_POLL_INTERVAL).await;
     };
 
     tracing::info!(
@@ -417,7 +422,8 @@ fn run_cpal(
     cpal_stream.play()?;
     tracing::info!("Audio playback started");
 
-    loop {
-        std::thread::sleep(std::time::Duration::from_secs(60));
-    }
+    // Park the thread indefinitely — cpal callback runs on its own thread.
+    // The thread will be cleaned up when the process exits.
+    std::thread::park();
+    Ok(())
 }

@@ -19,6 +19,8 @@ use crate::state;
 const MQTT_KEEP_ALIVE: std::time::Duration = std::time::Duration::from_secs(60);
 /// Delay before MQTT reconnection attempt.
 const MQTT_RECONNECT_DELAY: std::time::Duration = std::time::Duration::from_secs(5);
+/// Event loop channel capacity for MQTT messages.
+const MQTT_EVENT_CAPACITY: usize = 64;
 
 /// MQTT bridge: receives commands, publishes status.
 pub struct MqttBridge {
@@ -41,7 +43,7 @@ impl MqttBridge {
             opts.set_credentials(&config.username, &config.password);
         }
 
-        let (client, eventloop) = AsyncClient::new(opts, 64);
+        let (client, eventloop) = AsyncClient::new(opts, MQTT_EVENT_CAPACITY);
         tracing::info!("MQTT connected");
 
         Ok(Self {

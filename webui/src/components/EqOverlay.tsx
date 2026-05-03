@@ -11,6 +11,20 @@ import { computeResponse } from "@/lib/eq-response";
 const FILTER_TYPES = ["low_shelf", "high_shelf", "peaking", "low_pass", "high_pass"] as const;
 const PRESETS = ['flat', 'bass_boost', 'treble_boost', 'vocal', 'rock', 'jazz', 'classical', 'electronic', 'loudness', 'late_night'] as const;
 
+const MAX_EQ_BANDS = 10;
+const FREQ_MIN_HZ = 20;
+const FREQ_MAX_HZ = 20000;
+const GAIN_MIN_DB = -12;
+const GAIN_MAX_DB = 12;
+const GAIN_STEP_DB = 0.5;
+const Q_MIN = 0.1;
+const Q_MAX = 10;
+const Q_STEP = 0.1;
+const CURVE_WIDTH = 600;
+const CURVE_HEIGHT = 160;
+const CURVE_DB_RANGE = 15;
+const CURVE_MIN_HEIGHT = 120;
+
 const PRESET_LABELS: Record<string, string> = {
   flat: 'Flat',
   bass_boost: 'Bass Boost',
@@ -40,19 +54,20 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
   const [abBypass, setAbBypass] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const eqApi = clientId
+  const eqApi = useMemo(() => clientId
     ? { get: () => api.clientEq.get(clientId), set: (c: EqConfig) => api.clientEq.set(clientId, c), applyPreset: (n: string) => api.clientEq.applyPreset(clientId, n) }
-    : { get: () => api.eq.get(zoneId!), set: (c: EqConfig) => api.eq.set(zoneId!, c), applyPreset: (n: string) => api.eq.applyPreset(zoneId!, n) };
+    : { get: () => api.eq.get(zoneId!), set: (c: EqConfig) => api.eq.set(zoneId!, c), applyPreset: (n: string) => api.eq.applyPreset(zoneId!, n) },
+    [zoneId, clientId]);
 
   // Load current EQ
   useEffect(() => {
     eqApi.get().then((c) => { setConfig(c); setLoading(false); }).catch(() => setLoading(false));
-  }, [zoneId, clientId]);
+  }, [eqApi]);
 
   // Push to server
   const pushConfig = useCallback(
     (c: EqConfig) => { eqApi.set(c).catch((e: unknown) => console.error("API error", e)); },
-    [zoneId, clientId],
+    [eqApi],
   );
 
   const update = useCallback(
@@ -79,7 +94,7 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
   );
 
   const addBand = () => {
-    if (config.bands.length >= 10) return;
+    if (config.bands.length >= MAX_EQ_BANDS) return;
     update({ bands: [...config.bands, { ...DEFAULT_BAND }] });
   };
 
@@ -183,7 +198,7 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
               ))}
             </div>
 
-            {config.bands.length < 10 && (
+            {config.bands.length < MAX_EQ_BANDS && (
               <Button variant="ghost" size="sm" onClick={addBand} className="w-full">
                 {t("addBand")}
               </Button>
@@ -229,8 +244,8 @@ function BandRow({
           <span className="w-8 text-xs text-muted-foreground">Hz</span>
           <Slider
             value={[Math.log10(band.freq)]}
-            min={Math.log10(20)}
-            max={Math.log10(20000)}
+            min={Math.log10(FREQ_MIN_HZ)}
+            max={Math.log10(FREQ_MAX_HZ)}
             step={0.01}
             onValueChange={([v]) => onChange({ freq: Math.round(Math.pow(10, v)) })}
             className="flex-1"
@@ -242,9 +257,9 @@ function BandRow({
           <span className="w-8 text-xs text-muted-foreground">dB</span>
           <Slider
             value={[band.gain]}
-            min={-12}
-            max={12}
-            step={0.5}
+            min={GAIN_MIN_DB}
+            max={GAIN_MAX_DB}
+            step={GAIN_STEP_DB}
             onValueChange={([v]) => onChange({ gain: v })}
             className="flex-1"
             aria-label={t("gain")}
@@ -255,9 +270,9 @@ function BandRow({
           <span className="w-8 text-xs text-muted-foreground">Q</span>
           <Slider
             value={[band.q]}
-            min={0.1}
-            max={10}
-            step={0.1}
+            min={Q_MIN}
+            max={Q_MAX}
+            step={Q_STEP}
             onValueChange={([v]) => onChange({ q: Math.round(v * 10) / 10 })}
             className="flex-1"
             aria-label={t("qFactor")}
@@ -273,14 +288,14 @@ function BandRow({
 // ── Frequency Response Curve ──────────────────────────────────
 
 function FrequencyResponseCurve({ response, curveLabel }: { response: { freq: number; db: number }[]; curveLabel: string }) {
-  const width = 600;
-  const height = 160;
+  const width = CURVE_WIDTH;
+  const height = CURVE_HEIGHT;
   const pad = { top: 10, right: 10, bottom: 20, left: 35 };
   const plotW = width - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
-  const dbRange = 15; // ±15 dB
+  const dbRange = CURVE_DB_RANGE;
 
-  const freqToX = (f: number) => pad.left + ((Math.log10(f) - Math.log10(20)) / (Math.log10(20000) - Math.log10(20))) * plotW;
+  const freqToX = (f: number) => pad.left + ((Math.log10(f) - Math.log10(FREQ_MIN_HZ)) / (Math.log10(FREQ_MAX_HZ) - Math.log10(FREQ_MIN_HZ))) * plotW;
   const dbToY = (db: number) => pad.top + plotH / 2 - (db / dbRange) * (plotH / 2);
 
   const path = response.length > 0
@@ -295,7 +310,7 @@ function FrequencyResponseCurve({ response, curveLabel }: { response: { freq: nu
   const gridDbs = [-12, -6, 0, 6, 12];
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="w-full rounded-lg bg-muted/30 border border-border" style={{ minHeight: 120 }} role="img" aria-label={curveLabel}>
+    <svg viewBox={`0 0 ${width} ${height}`} className="w-full rounded-lg bg-muted/30 border border-border" style={{ minHeight: CURVE_MIN_HEIGHT }} role="img" aria-label={curveLabel}>
       {/* Grid lines */}
       {gridFreqs.map((f) => (
         <line key={`f${f}`} x1={freqToX(f)} x2={freqToX(f)} y1={pad.top} y2={pad.top + plotH} stroke="currentColor" strokeOpacity={0.1} />
@@ -315,7 +330,7 @@ function FrequencyResponseCurve({ response, curveLabel }: { response: { freq: nu
       {/* Response curve */}
       {path && (
         <>
-          <path d={path + `L${freqToX(20000)},${dbToY(0)}L${freqToX(20)},${dbToY(0)}Z`} fill="oklch(0.65 0.18 40)" fillOpacity={0.15} />
+          <path d={path + `L${freqToX(FREQ_MAX_HZ)},${dbToY(0)}L${freqToX(FREQ_MIN_HZ)},${dbToY(0)}Z`} fill="oklch(0.65 0.18 40)" fillOpacity={0.15} />
           <path d={path} fill="none" stroke="oklch(0.65 0.18 40)" strokeWidth={2} />
         </>
       )}

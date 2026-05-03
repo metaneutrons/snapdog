@@ -44,7 +44,7 @@ async fn handle_event(
 ) {
     match event {
         SnapcastEvent::ClientConnected { id, hello } => {
-            let is_snapdog = hello.client_name == "SnapDog";
+            let is_snapdog = hello.client_name == crate::SNAPDOG_CLIENT_NAME;
             let zone_index = {
                 let mut s = store.write().await;
                 let matched = if hello.mac.is_empty() {

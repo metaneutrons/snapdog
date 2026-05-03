@@ -67,7 +67,7 @@ pub async fn start_subsonic_track_decode(
     ctx: &PlaybackCtx<'_>,
 ) {
     let url = sub.stream_url(&track.id);
-    let (tx, rx) = audio::pcm_channel(64);
+    let (tx, rx) = audio::pcm_channel(super::runner::PCM_DECODE_CHANNEL_SIZE);
     *ds.decode_rx = Some(rx);
     if let Some(ref cover_id) = track.cover_art {
         let cover_url = sub.cover_art_fetch_url(cover_id);
@@ -126,7 +126,7 @@ pub async fn start_radio_decode(
     ds: &mut DecodeState<'_>,
     ctx: &PlaybackCtx<'_>,
 ) {
-    let (tx, rx) = audio::pcm_channel(64);
+    let (tx, rx) = audio::pcm_channel(super::runner::PCM_DECODE_CHANNEL_SIZE);
     *ds.decode_rx = Some(rx);
     let (icy_tx, mut icy_rx) = mpsc::channel::<audio::icy::IcyMetadata>(4);
     let icy_store = ctx.store.clone();

@@ -43,7 +43,7 @@ async function get<T>(path: string): Promise<T> {
   return res.json();
 }
 
-async function put<T>(path: string, body: unknown): Promise<T> {
+async function putJson<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json", ...authHeaders() },
@@ -51,10 +51,20 @@ async function put<T>(path: string, body: unknown): Promise<T> {
   });
   if (!res.ok) { check401(res); throw new ApiError(res.status, `PUT ${path}: ${res.status}`); }
   const text = await res.text();
-  return text ? JSON.parse(text) : (undefined as T);
+  if (!text) throw new ApiError(res.status, `PUT ${path}: expected JSON response but got empty body`);
+  return JSON.parse(text);
 }
 
-async function post<T = void>(path: string, body?: unknown): Promise<T> {
+async function putVoid(path: string, body: unknown): Promise<void> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) { check401(res); throw new ApiError(res.status, `PUT ${path}: ${res.status}`); }
+}
+
+async function postJson<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: "POST",
     headers: { ...(body !== undefined ? { "Content-Type": "application/json" } : {}), ...authHeaders() },
@@ -62,7 +72,17 @@ async function post<T = void>(path: string, body?: unknown): Promise<T> {
   });
   if (!res.ok) { check401(res); throw new ApiError(res.status, `POST ${path}: ${res.status}`); }
   const text = await res.text();
-  return text ? JSON.parse(text) : (undefined as T);
+  if (!text) throw new ApiError(res.status, `POST ${path}: expected JSON response but got empty body`);
+  return JSON.parse(text);
+}
+
+async function postVoid(path: string, body?: unknown): Promise<void> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: "POST",
+    headers: { ...(body !== undefined ? { "Content-Type": "application/json" } : {}), ...authHeaders() },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) { check401(res); throw new ApiError(res.status, `POST ${path}: ${res.status}`); }
 }
 
 // ── Zones ─────────────────────────────────────────────────────
@@ -76,55 +96,55 @@ export const zones = {
 
   // Volume
   getVolume: (id: number) => get<number>(`${Z}/${id}/volume`),
-  setVolume: (id: number, v: VolumeValue) => put<number>(`${Z}/${id}/volume`, v),
+  setVolume: (id: number, v: VolumeValue) => putJson<number>(`${Z}/${id}/volume`, v),
 
   // Mute
   getMute: (id: number) => get<boolean>(`${Z}/${id}/mute`),
-  setMute: (id: number, v: boolean) => put<void>(`${Z}/${id}/mute`, v),
-  toggleMute: (id: number) => post(`${Z}/${id}/mute/toggle`),
+  setMute: (id: number, v: boolean) => putVoid(`${Z}/${id}/mute`, v),
+  toggleMute: (id: number) => postVoid(`${Z}/${id}/mute/toggle`),
 
   // Transport
-  play: (id: number) => post(`${Z}/${id}/play`),
-  pause: (id: number) => post(`${Z}/${id}/pause`),
-  stop: (id: number) => post(`${Z}/${id}/stop`),
-  next: (id: number) => post(`${Z}/${id}/next`),
-  previous: (id: number) => post(`${Z}/${id}/previous`),
+  play: (id: number) => postVoid(`${Z}/${id}/play`),
+  pause: (id: number) => postVoid(`${Z}/${id}/pause`),
+  stop: (id: number) => postVoid(`${Z}/${id}/stop`),
+  next: (id: number) => postVoid(`${Z}/${id}/next`),
+  previous: (id: number) => postVoid(`${Z}/${id}/previous`),
 
   // Shuffle
   getShuffle: (id: number) => get<boolean>(`${Z}/${id}/shuffle`),
-  setShuffle: (id: number, v: boolean) => put<void>(`${Z}/${id}/shuffle`, v),
-  toggleShuffle: (id: number) => post(`${Z}/${id}/shuffle/toggle`),
+  setShuffle: (id: number, v: boolean) => putVoid(`${Z}/${id}/shuffle`, v),
+  toggleShuffle: (id: number) => postVoid(`${Z}/${id}/shuffle/toggle`),
 
   // Repeat (playlist)
   getRepeat: (id: number) => get<boolean>(`${Z}/${id}/repeat`),
-  setRepeat: (id: number, v: boolean) => put<void>(`${Z}/${id}/repeat`, v),
-  toggleRepeat: (id: number) => post(`${Z}/${id}/repeat/toggle`),
+  setRepeat: (id: number, v: boolean) => putVoid(`${Z}/${id}/repeat`, v),
+  toggleRepeat: (id: number) => postVoid(`${Z}/${id}/repeat/toggle`),
 
   // Track repeat
   getTrackRepeat: (id: number) => get<boolean>(`${Z}/${id}/track/repeat`),
-  setTrackRepeat: (id: number, v: boolean) => put<void>(`${Z}/${id}/track/repeat`, v),
-  toggleTrackRepeat: (id: number) => post(`${Z}/${id}/track/repeat/toggle`),
+  setTrackRepeat: (id: number, v: boolean) => putVoid(`${Z}/${id}/track/repeat`, v),
+  toggleTrackRepeat: (id: number) => postVoid(`${Z}/${id}/track/repeat/toggle`),
 
   // Track info
   getTrackMetadata: (id: number) => get<TrackMetadata>(`${Z}/${id}/track/metadata`),
   getTrackPosition: (id: number) => get<number>(`${Z}/${id}/track/position`),
-  seekPosition: (id: number, ms: number) => put<void>(`${Z}/${id}/track/position`, ms),
+  seekPosition: (id: number, ms: number) => putVoid(`${Z}/${id}/track/position`, ms),
   getTrackProgress: (id: number) => get<number>(`${Z}/${id}/track/progress`),
-  seekProgress: (id: number, v: number) => put<void>(`${Z}/${id}/track/progress`, v),
+  seekProgress: (id: number, v: number) => putVoid(`${Z}/${id}/track/progress`, v),
 
   // Play specific content
-  playTrack: (id: number, track: number) => post(`${Z}/${id}/play/track`, track),
-  playUrl: (id: number, url: string) => post(`${Z}/${id}/play/url`, url),
+  playTrack: (id: number, track: number) => postVoid(`${Z}/${id}/play/track`, track),
+  playUrl: (id: number, url: string) => postVoid(`${Z}/${id}/play/url`, url),
   playPlaylist: (id: number, playlistIndex: number, track?: number) =>
-    post(`${Z}/${id}/play/playlist`, { id: playlistIndex, track: track ?? 0 }),
+    postVoid(`${Z}/${id}/play/playlist`, { id: playlistIndex, track: track ?? 0 }),
   playPlaylistTrack: (zoneId: number, playlistId: number, track: number) =>
-    post(`${Z}/${zoneId}/play/playlist/${playlistId}/track`, track),
+    postVoid(`${Z}/${zoneId}/play/playlist/${playlistId}/track`, track),
 
   // Playlist navigation
   getPlaylist: (id: number) => get<number>(`${Z}/${id}/playlist`),
-  setPlaylist: (id: number, v: number) => put<void>(`${Z}/${id}/playlist`, v),
-  nextPlaylist: (id: number) => post(`${Z}/${id}/next/playlist`),
-  previousPlaylist: (id: number) => post(`${Z}/${id}/previous/playlist`),
+  setPlaylist: (id: number, v: number) => putVoid(`${Z}/${id}/playlist`, v),
+  nextPlaylist: (id: number) => postVoid(`${Z}/${id}/next/playlist`),
+  previousPlaylist: (id: number) => postVoid(`${Z}/${id}/previous/playlist`),
   getPlaylistInfo: (id: number) => get<PlaylistState>(`${Z}/${id}/playlist/info`),
 
   // Zone info
@@ -145,20 +165,20 @@ export const clients = {
   count: () => get<number>(`${C}/count`),
 
   getVolume: (id: number) => get<number>(`${C}/${id}/volume`),
-  setVolume: (id: number, v: VolumeValue) => put<number>(`${C}/${id}/volume`, v),
+  setVolume: (id: number, v: VolumeValue) => putJson<number>(`${C}/${id}/volume`, v),
 
   getMute: (id: number) => get<boolean>(`${C}/${id}/mute`),
-  setMute: (id: number, v: boolean) => put<void>(`${C}/${id}/mute`, v),
-  toggleMute: (id: number) => post(`${C}/${id}/mute/toggle`),
+  setMute: (id: number, v: boolean) => putVoid(`${C}/${id}/mute`, v),
+  toggleMute: (id: number) => postVoid(`${C}/${id}/mute/toggle`),
 
   getLatency: (id: number) => get<number>(`${C}/${id}/latency`),
-  setLatency: (id: number, v: number) => put<void>(`${C}/${id}/latency`, v),
+  setLatency: (id: number, v: number) => putVoid(`${C}/${id}/latency`, v),
 
   getZone: (id: number) => get<number>(`${C}/${id}/zone`),
-  setZone: (id: number, zoneId: number) => put<void>(`${C}/${id}/zone`, zoneId),
+  setZone: (id: number, zoneId: number) => putVoid(`${C}/${id}/zone`, zoneId),
 
   getName: (id: number) => get<string>(`${C}/${id}/name`),
-  setName: (id: number, name: string) => put<void>(`${C}/${id}/name`, name),
+  setName: (id: number, name: string) => putVoid(`${C}/${id}/name`, name),
 
   getIcon: (id: number) => get<string>(`${C}/${id}/icon`),
   getConnected: (id: number) => get<boolean>(`${C}/${id}/connected`),
@@ -207,21 +227,21 @@ export interface EqConfig {
 
 export const eq = {
   get: (zoneId: number) => get<EqConfig>(`${Z}/${zoneId}/eq`),
-  set: (zoneId: number, config: EqConfig) => put<EqConfig>(`${Z}/${zoneId}/eq`, config),
-  setBand: (zoneId: number, idx: number, band: EqBand) => put<EqConfig>(`${Z}/${zoneId}/eq/${idx}`, band),
-  applyPreset: (zoneId: number, name: string) => post<EqConfig>(`${Z}/${zoneId}/eq/preset`, name),
+  set: (zoneId: number, config: EqConfig) => putJson<EqConfig>(`${Z}/${zoneId}/eq`, config),
+  setBand: (zoneId: number, idx: number, band: EqBand) => putJson<EqConfig>(`${Z}/${zoneId}/eq/${idx}`, band),
+  applyPreset: (zoneId: number, name: string) => postJson<EqConfig>(`${Z}/${zoneId}/eq/preset`, name),
 };
 
 export const clientEq = {
   get: (clientId: number) => get<EqConfig>(`${C}/${clientId}/eq`),
-  set: (clientId: number, config: EqConfig) => put<EqConfig>(`${C}/${clientId}/eq`, config),
-  setBand: (clientId: number, idx: number, band: EqBand) => put<EqConfig>(`${C}/${clientId}/eq/${idx}`, band),
-  applyPreset: (clientId: number, name: string) => post<EqConfig>(`${C}/${clientId}/eq/preset`, name),
+  set: (clientId: number, config: EqConfig) => putJson<EqConfig>(`${C}/${clientId}/eq`, config),
+  setBand: (clientId: number, idx: number, band: EqBand) => putJson<EqConfig>(`${C}/${clientId}/eq/${idx}`, band),
+  applyPreset: (clientId: number, name: string) => postJson<EqConfig>(`${C}/${clientId}/eq/preset`, name),
 };
 
 const knx = {
   getProgrammingMode: () => get<boolean>("/api/v1/knx/programming-mode"),
-  setProgrammingMode: (enabled: boolean) => put<boolean>("/api/v1/knx/programming-mode", enabled),
+  setProgrammingMode: (enabled: boolean) => putJson<boolean>("/api/v1/knx/programming-mode", enabled),
 };
 
 export const api = { zones, clients, media, system, health, eq, clientEq, knx };

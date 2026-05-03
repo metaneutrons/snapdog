@@ -21,6 +21,15 @@ use crate::state::{PlaybackState, SourceType, TrackInfo};
 use crate::subsonic::SubsonicClient;
 use chrono::Timelike;
 
+/// Channel capacity for zone player commands.
+const ZONE_CMD_CHANNEL_SIZE: usize = 32;
+/// Channel capacity for receiver events (AirPlay, Spotify).
+const RECEIVER_EVENT_CHANNEL_SIZE: usize = 32;
+/// Channel capacity for receiver audio frames.
+const RECEIVER_AUDIO_CHANNEL_SIZE: usize = 128;
+/// Channel capacity for PCM decode buffers.
+pub(super) const PCM_DECODE_CHANNEL_SIZE: usize = 64;
+
 /// Spawn a ZonePlayer task for each configured zone. Returns command senders.
 pub async fn spawn_zone_players(
     ctx: ZonePlayerContext,
@@ -29,7 +38,7 @@ pub async fn spawn_zone_players(
     let ctx = Arc::new(ctx);
 
     for zone in &ctx.config.zones {
-        let (cmd_tx, cmd_rx) = mpsc::channel(32); // zone command backlog
+        let (cmd_tx, cmd_rx) = mpsc::channel(ZONE_CMD_CHANNEL_SIZE); // zone command backlog
         senders.insert(zone.index, cmd_tx.clone());
 
         let ctx = ctx.clone();
@@ -76,9 +85,10 @@ async fn run(
     let subsonic = config.subsonic.as_ref().map(SubsonicClient::new);
 
     // AirPlay: F32 audio channel + event channel + receiver instance
-    let (airplay_audio_tx, mut airplay_audio_rx) = crate::receiver::audio_channel(128);
+    let (airplay_audio_tx, mut airplay_audio_rx) =
+        crate::receiver::audio_channel(RECEIVER_AUDIO_CHANNEL_SIZE);
     let (airplay_event_tx, mut airplay_event_rx) =
-        mpsc::channel::<crate::receiver::ReceiverEvent>(32);
+        mpsc::channel::<crate::receiver::ReceiverEvent>(RECEIVER_EVENT_CHANNEL_SIZE);
     let mut _airplay_receiver = {
         let ap_config = crate::config::AirplayConfig {
             password: config.airplay.password.clone(),
@@ -102,8 +112,9 @@ async fn run(
     // Spotify Connect: F32 audio channel + event channel + receiver instance
     #[cfg(feature = "spotify")]
     let (mut spotify_audio_rx, mut spotify_event_rx, mut _spotify_receiver) = {
-        let (audio_tx, audio_rx) = crate::receiver::audio_channel(128);
-        let (event_tx, event_rx) = mpsc::channel::<crate::receiver::ReceiverEvent>(32);
+        let (audio_tx, audio_rx) = crate::receiver::audio_channel(RECEIVER_AUDIO_CHANNEL_SIZE);
+        let (event_tx, event_rx) =
+            mpsc::channel::<crate::receiver::ReceiverEvent>(RECEIVER_EVENT_CHANNEL_SIZE);
         let receiver = if let Some(ref sp_config) = config.spotify {
             let mut sp = crate::receiver::spotify::SpotifyReceiver::new(
                 crate::config::SpotifyConfig {
@@ -307,7 +318,7 @@ async fn run(
                         stop_decode(&mut current_decode, &mut decode_rx).await; position_offset_ms = 0;
                         if let Some(sub) = &subsonic {
                             let url = sub.stream_url(&track_id);
-                            let (tx, rx) = audio::pcm_channel(64);
+                            let (tx, rx) = audio::pcm_channel(PCM_DECODE_CHANNEL_SIZE);
                             decode_rx = Some(rx);
                             let ac = audio_config.clone();
                             current_decode = Some(tokio::spawn(async move {
@@ -321,7 +332,7 @@ async fn run(
                     }
                     ZoneCommand::PlayUrl(url) => {
                         stop_decode(&mut current_decode, &mut decode_rx).await; position_offset_ms = 0;
-                        let (tx, rx) = audio::pcm_channel(64);
+                        let (tx, rx) = audio::pcm_channel(PCM_DECODE_CHANNEL_SIZE);
                         decode_rx = Some(rx);
                         let ac = audio_config.clone();
                         let u = url.clone();

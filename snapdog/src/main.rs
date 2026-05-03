@@ -76,6 +76,9 @@ struct Cli {
 const VOLUME_COALESCE_MS: u64 = 50;
 /// Channel capacity for Snapcast commands from zone players, API, MQTT, KNX.
 const SNAPCAST_CMD_CHANNEL_SIZE: usize = 64;
+/// Delay after starting snapserver before connecting.
+#[cfg(feature = "snapcast-process")]
+const SNAPSERVER_STARTUP_DELAY: std::time::Duration = std::time::Duration::from_secs(1);
 /// Path for persisted zone/client state.
 const STATE_FILE: &str = "state.json";
 /// Path for persisted EQ configuration.
@@ -228,7 +231,7 @@ async fn main() -> Result<()> {
     let mut snapserver = process::SnapserverHandle::start(&config).await?;
     #[cfg(feature = "snapcast-process")]
     if config.snapcast.managed {
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        tokio::time::sleep(SNAPSERVER_STARTUP_DELAY).await;
     }
 
     #[cfg(feature = "snapcast-process")]

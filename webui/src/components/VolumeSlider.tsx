@@ -12,6 +12,9 @@ import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { useOptimisticValue } from "@/hooks/useOptimisticValue";
 
+const VOLUME_DEBOUNCE_MS = 50;
+const VOLUME_HIGH_THRESHOLD = 50;
+
 interface VolumeSliderProps {
   volume: number;
   muted: boolean;
@@ -42,7 +45,7 @@ export function VolumeSlider({
 
   const volumeIcon = muted
     ? VolumeMute02Icon
-    : localVolume > 50
+    : localVolume > VOLUME_HIGH_THRESHOLD
       ? VolumeHighIcon
       : VolumeLowIcon;
 
@@ -52,7 +55,7 @@ export function VolumeSlider({
       setOptimistic(v);
       if (muted) onUnmute();
       clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => onVolumeChange(v), 50);
+      timerRef.current = setTimeout(() => onVolumeChange(v), VOLUME_DEBOUNCE_MS);
     },
     [muted, onVolumeChange, onUnmute, setOptimistic],
   );
