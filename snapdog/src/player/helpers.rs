@@ -136,11 +136,13 @@ pub async fn start_radio_decode(
     let fallback_cover = radio.cover.clone();
     tokio::spawn(async move {
         while let Some(meta) = icy_rx.recv().await {
-            if let Some(title) = meta.title {
-                tracing::debug!(zone = zone_index, title = %title, "ICY metadata");
+            if let Some(raw_title) = meta.title {
+                tracing::debug!(zone = zone_index, title = %raw_title, "ICY metadata");
+                let (artist, title) = parse_icy_title(&raw_title);
                 update_and_notify(&icy_store, zone_index, &icy_notify, |z| {
                     if let Some(ref mut track) = z.track {
-                        track.artist = title.clone();
+                        track.artist = artist.clone();
+                        track.title = title.clone();
                     }
                 })
                 .await;
@@ -381,4 +383,77 @@ async fn is_image_url(url: &str) -> bool {
         .get("content-type")
         .and_then(|v| v.to_str().ok())
         .is_some_and(|ct| ct.starts_with("image/"))
+}
+
+/// Parse ICY StreamTitle into (artist, title).
+///
+/// Strips station prefixes (before `|` or `:`) and splits on ` - `.
+/// Examples:
+///   "SWR3: Coldplay - Yellow"       → ("Coldplay", "Yellow")
+///   "ANTENNE | Ed Sheeran - Shape"  → ("Ed Sheeran", "Shape")
+///   "Coldplay - Yellow"             → ("Coldplay", "Yellow")
+///   "Nachrichten"                   → ("", "Nachrichten")
+fn parse_icy_title(raw: &str) -> (String, String) {
+    // Strip station prefix: take content after last `|` or after first `:` followed by space
+    let stripped = raw
+        .rsplit_once('|')
+        .map(|(_, rest)| rest.trim())
+        .or_else(|| raw.split_once(": ").map(|(_, rest)| rest))
+        .unwrap_or(raw)
+        .trim();
+
+    // Split artist - title on ` - ` (most common separator)
+    if let Some((artist, title)) = stripped.split_once(" - ") {
+        (artist.trim().to_string(), title.trim().to_string())
+    } else if let Some((artist, title)) = stripped.split_once(" – ") {
+        // En-dash variant
+        (artist.trim().to_string(), title.trim().to_string())
+    } else {
+        (String::new(), stripped.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_icy_title_basic() {
+        assert_eq!(
+            parse_icy_title("Coldplay - Yellow"),
+            ("Coldplay".into(), "Yellow".into())
+        );
+    }
+
+    #[test]
+    fn parse_icy_title_with_station_pipe() {
+        assert_eq!(
+            parse_icy_title("ANTENNE BAYERN | Ed Sheeran - Shape Of You"),
+            ("Ed Sheeran".into(), "Shape Of You".into())
+        );
+    }
+
+    #[test]
+    fn parse_icy_title_with_station_colon() {
+        assert_eq!(
+            parse_icy_title("SWR3: Coldplay - Yellow"),
+            ("Coldplay".into(), "Yellow".into())
+        );
+    }
+
+    #[test]
+    fn parse_icy_title_no_separator() {
+        assert_eq!(
+            parse_icy_title("Nachrichten"),
+            ("".into(), "Nachrichten".into())
+        );
+    }
+
+    #[test]
+    fn parse_icy_title_en_dash() {
+        assert_eq!(
+            parse_icy_title("Adele \u{2013} Hello"),
+            ("Adele".into(), "Hello".into())
+        );
+    }
 }
