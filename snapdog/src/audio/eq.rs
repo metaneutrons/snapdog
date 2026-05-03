@@ -90,10 +90,16 @@ impl EqStore {
     /// Load from file, or create empty.
     pub fn load(path: &Path) -> Self {
         let data: EqStoreData = if path.exists() {
-            std::fs::read_to_string(path)
-                .ok()
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default()
+            match std::fs::read_to_string(path) {
+                Ok(s) => serde_json::from_str(&s).unwrap_or_else(|e| {
+                    tracing::warn!(path = %path.display(), error = %e, "Failed to parse EQ config, using defaults");
+                    EqStoreData::default()
+                }),
+                Err(e) => {
+                    tracing::warn!(path = %path.display(), error = %e, "Failed to read EQ config, using defaults");
+                    EqStoreData::default()
+                }
+            }
         } else {
             EqStoreData::default()
         };

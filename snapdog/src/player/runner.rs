@@ -45,8 +45,10 @@ pub async fn spawn_zone_players(
         let zone_index = zone.index;
 
         tokio::spawn(async move {
-            if let Err(e) = run(zone_index, cmd_rx, cmd_tx, ctx).await {
-                tracing::error!(zone = zone_index, error = %e, "ZonePlayer crashed");
+            let mut cmd_rx = cmd_rx;
+            while let Err(e) = run(zone_index, &mut cmd_rx, cmd_tx.clone(), ctx.clone()).await {
+                tracing::error!(zone = zone_index, error = %e, "Zone player crashed, restarting in 5s");
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
             }
         });
 
@@ -56,10 +58,20 @@ pub async fn spawn_zone_players(
     Ok(senders)
 }
 
+/// Stop any active decode task and reset the playback position to zero.
+async fn reset_playback(
+    current_decode: &mut Option<JoinHandle<()>>,
+    decode_rx: &mut Option<mpsc::Receiver<audio::PcmMessage>>,
+    position_offset_ms: &mut i64,
+) {
+    stop_decode(current_decode, decode_rx).await;
+    *position_offset_ms = 0;
+}
+
 /// Main ZonePlayer loop.
 async fn run(
     zone_index: usize,
-    mut commands: mpsc::Receiver<ZoneCommand>,
+    commands: &mut mpsc::Receiver<ZoneCommand>,
     self_tx: mpsc::Sender<ZoneCommand>,
     ctx: Arc<ZonePlayerContext>,
 ) -> Result<()> {
@@ -172,7 +184,7 @@ async fn run(
     macro_rules! handle_receiver_audio {
         ($samples:expr, $active:path, $source_type:expr, $label:literal) => {{
             if !matches!(source, $active) {
-                stop_decode(&mut current_decode, &mut decode_rx).await; position_offset_ms = 0;
+                reset_playback(&mut current_decode, &mut decode_rx, &mut position_offset_ms).await;
                 source = $active;
                 update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Playing; z.source = $source_type; }).await;
             }
@@ -294,7 +306,7 @@ async fn run(
             Some(cmd) = commands.recv() => {
                 match cmd {
                     ZoneCommand::PlaySubsonicPlaylist(playlist_id, track_idx) => {
-                        stop_decode(&mut current_decode, &mut decode_rx).await; position_offset_ms = 0;
+                        reset_playback(&mut current_decode, &mut decode_rx, &mut position_offset_ms).await;
                         if let Some(sub) = &subsonic {
                             if let Ok(playlist) = sub.get_playlist(&playlist_id).await {
                                 let track_count = playlist.entry.len();
@@ -315,7 +327,7 @@ async fn run(
                         }
                     }
                     ZoneCommand::PlaySubsonicTrack(track_id) => {
-                        stop_decode(&mut current_decode, &mut decode_rx).await; position_offset_ms = 0;
+                        reset_playback(&mut current_decode, &mut decode_rx, &mut position_offset_ms).await;
                         if let Some(sub) = &subsonic {
                             let url = sub.stream_url(&track_id);
                             let (tx, rx) = audio::pcm_channel(PCM_DECODE_CHANNEL_SIZE);
@@ -331,7 +343,7 @@ async fn run(
                         }
                     }
                     ZoneCommand::PlayUrl(url) => {
-                        stop_decode(&mut current_decode, &mut decode_rx).await; position_offset_ms = 0;
+                        reset_playback(&mut current_decode, &mut decode_rx, &mut position_offset_ms).await;
                         let (tx, rx) = audio::pcm_channel(PCM_DECODE_CHANNEL_SIZE);
                         decode_rx = Some(rx);
                         let ac = audio_config.clone();
@@ -346,7 +358,7 @@ async fn run(
                         if let ActiveSource::Radio { .. } = source {
                             if track_idx < config.radios.len() {
                                 if let Some(radio) = config.radios.get(track_idx) {
-                                    stop_decode(&mut current_decode, &mut decode_rx).await; position_offset_ms = 0;
+                                    reset_playback(&mut current_decode, &mut decode_rx, &mut position_offset_ms).await;
                                     start_radio_decode(radio, &mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers }).await;
                                     source = ActiveSource::Radio { index: track_idx };
                                     update_and_notify(store, zone_index, notify, |z| {
@@ -360,7 +372,7 @@ async fn run(
                         } else if let ActiveSource::SubsonicPlaylist { ref playlist_id, track_count, .. } = source {
                             if track_idx < track_count {
                                 let pid = playlist_id.clone();
-                                stop_decode(&mut current_decode, &mut decode_rx).await; position_offset_ms = 0;
+                                reset_playback(&mut current_decode, &mut decode_rx, &mut position_offset_ms).await;
                                 if let Some(sub) = &subsonic {
                                     if let Ok(playlist) = sub.get_playlist(&pid).await {
                                         if let Some(track) = playlist.entry.get(track_idx) {
@@ -417,7 +429,7 @@ async fn run(
                             };
                             drop(z_state);
                             if let Some(radio) = config.radios.get(radio_idx) {
-                                stop_decode(&mut current_decode, &mut decode_rx).await; position_offset_ms = 0;
+                                reset_playback(&mut current_decode, &mut decode_rx, &mut position_offset_ms).await;
                                 let (tx, rx) = audio::pcm_channel(64);
                                 decode_rx = Some(rx);
                                 let url = radio.url.clone();
@@ -436,12 +448,12 @@ async fn run(
                                 if let Err(e) = rc.send_command(crate::receiver::RemoteCommand::Pause) { tracing::warn!(error = %e, "Remote pause failed"); }
                             }
                         } else {
-                            stop_decode(&mut current_decode, &mut decode_rx).await; position_offset_ms = 0;
+                            reset_playback(&mut current_decode, &mut decode_rx, &mut position_offset_ms).await;
                             update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Paused; }).await;
                         }
                     }
                     ZoneCommand::Stop => {
-                        stop_decode(&mut current_decode, &mut decode_rx).await; position_offset_ms = 0;
+                        reset_playback(&mut current_decode, &mut decode_rx, &mut position_offset_ms).await;
                         source = ActiveSource::Idle;
                         update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Stopped; z.source = SourceType::Idle; z.track = None; z.cover_url = None; }).await;
                     }
@@ -493,7 +505,7 @@ async fn run(
                         match config.resolve_playlist_index(target_unified, subsonic_playlists.len()) {
                             Some(crate::config::ResolvedPlaylist::Radio) => {
                             let radio_idx = start_track.min(config.radios.len().saturating_sub(1));
-                            stop_decode(&mut current_decode, &mut decode_rx).await; position_offset_ms = 0;
+                            reset_playback(&mut current_decode, &mut decode_rx, &mut position_offset_ms).await;
                             if let Some(radio) = config.radios.get(radio_idx) {
                                 start_radio_decode(radio, &mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers }).await;
                                 source = ActiveSource::Radio { index: radio_idx };
@@ -513,7 +525,7 @@ async fn run(
                             if let Some(sub) = &subsonic {
                                 if let Some(pl) = subsonic_playlists.get(sub_idx) {
                                     tracing::info!(zone = %zone_config.name, playlist = %pl.name, "Playlist set");
-                                    stop_decode(&mut current_decode, &mut decode_rx).await; position_offset_ms = 0;
+                                    reset_playback(&mut current_decode, &mut decode_rx, &mut position_offset_ms).await;
                                     if let Ok(playlist) = sub.get_playlist(&pl.id).await {
                                         let track_idx = start_track.min(playlist.entry.len().saturating_sub(1));
                                         if let Some(track) = playlist.entry.get(track_idx) {
