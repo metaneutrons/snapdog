@@ -229,8 +229,8 @@ async fn set_zone(
     }
 
     // Send fade-out to client before switching zones (only SnapDog clients support it)
-    let fade_ms = snapdog_common::DEFAULT_FADE_MS;
-    let is_snapdog = {
+    let fade_ms = state.config.audio.zone_switch_fade_ms;
+    let is_snapdog = if fade_ms > 0 {
         let s = state.store.read().await;
         if let Some(client) = s.clients.get(&idx) {
             if client.is_snapdog {
@@ -251,6 +251,8 @@ async fn set_zone(
         } else {
             false
         }
+    } else {
+        false
     };
 
     // Wait for fade-out to complete (only if client supports it)

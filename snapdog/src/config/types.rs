@@ -320,6 +320,14 @@ pub struct AudioConfig {
     /// playback (radio/subsonic) is requested.
     #[serde(default)]
     pub source_conflict: SourceConflict,
+    /// Fade duration in milliseconds when a client switches zones.
+    /// Set to 0 to disable. Only applies to SnapDog clients.
+    #[serde(default = "default_zone_switch_fade_ms")]
+    pub zone_switch_fade_ms: u16,
+}
+
+fn default_zone_switch_fade_ms() -> u16 {
+    snapdog_common::DEFAULT_FADE_MS
 }
 
 /// Source conflict resolution policy.
@@ -343,6 +351,7 @@ impl Default for AudioConfig {
             encryption_psk: None,
             group_volume_mode: GroupVolumeMode::default(),
             source_conflict: SourceConflict::default(),
+            zone_switch_fade_ms: default_zone_switch_fade_ms(),
         }
     }
 }
