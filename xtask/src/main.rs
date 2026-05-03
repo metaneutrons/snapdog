@@ -28,11 +28,12 @@ fn main() {
     match cmd.as_str() {
         "ci" => ci(),
         "knxprod" | "" => knxprod(),
+        arg if arg.ends_with(".xml") => knxprod(), // backward compat: `cargo xtask path.xml`
         _ => {
             eprintln!("Usage: cargo xtask <command>");
             eprintln!("Commands:");
-            eprintln!("  knxprod  Generate ETS XML and .knxprod (default)");
-            eprintln!("  ci       Run all CI checks locally");
+            eprintln!("  knxprod [path]  Generate ETS XML and .knxprod (default)");
+            eprintln!("  ci              Run all CI checks locally");
             std::process::exit(1);
         }
     }
@@ -92,8 +93,10 @@ fn ci() {
 }
 
 fn knxprod() {
+    // Accept path as: `cargo xtask knxprod path.xml` (arg 2) or `cargo xtask path.xml` (arg 1)
     let xml_path = std::env::args()
         .nth(2)
+        .or_else(|| std::env::args().nth(1).filter(|a| a.ends_with(".xml")))
         .unwrap_or_else(|| "knx/snapdog.xml".into());
     let knxprod_path = xml_path.replace(".xml", ".knxprod");
 
