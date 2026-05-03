@@ -11,6 +11,7 @@ import { useTranslations } from "next-intl";
 import type { ZoneState } from "@/stores/useAppStore";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
+import { logApiError } from "@/lib/log-api-error";
 
 interface TransportControlsProps {
   zone: ZoneState;
@@ -29,11 +30,11 @@ export function TransportControls({ zone }: TransportControlsProps) {
 
   const cmd = (action: string) => {
     switch (action) {
-      case "play": api.zones.play(index).catch((e: unknown) => console.error("API error", e)); break;
-      case "pause": api.zones.pause(index).catch((e: unknown) => console.error("API error", e)); break;
-      case "stop": api.zones.stop(index).catch((e: unknown) => console.error("API error", e)); break;
-      case "next": api.zones.next(index).catch((e: unknown) => console.error("API error", e)); break;
-      case "previous": api.zones.previous(index).catch((e: unknown) => console.error("API error", e)); break;
+      case "play": api.zones.play(index).catch(logApiError); break;
+      case "pause": api.zones.pause(index).catch(logApiError); break;
+      case "stop": api.zones.stop(index).catch(logApiError); break;
+      case "next": api.zones.next(index).catch(logApiError); break;
+      case "previous": api.zones.previous(index).catch(logApiError); break;
     }
   };
 

@@ -5,6 +5,8 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
 import { useTranslations } from "next-intl";
 import { api } from "@/lib/api";
+import { logApiError } from "@/lib/log-api-error";
+import { useEqEnabled } from "@/hooks/useEqEnabled";
 import { useAppStore, type ZoneState } from "@/stores/useAppStore";
 import type { ClientInfo } from "@/lib/types";
 import { VolumeSlider } from "@/components/VolumeSlider";
@@ -16,13 +18,7 @@ function ClientCard({ client }: { client: ClientInfo }) {
   const otherZones = Array.from(zones.values()).filter((z) => z.index !== client.zone_index);
   const [menuOpen, setMenuOpen] = useState(false);
   const [showEq, setShowEq] = useState(false);
-  const [eqEnabled, setEqEnabled] = useState(false);
-
-  useEffect(() => {
-    if (client.is_snapdog) {
-      api.clientEq.get(client.index).then((c) => setEqEnabled(c.enabled)).catch(() => {});
-    }
-  }, [client.index, client.is_snapdog]);
+  const [eqEnabled, setEqEnabled] = useEqEnabled(client.is_snapdog ? { clientId: client.index } : {});
 
   // Close menu on Escape
   useEffect(() => {
@@ -36,6 +32,7 @@ function ClientCard({ client }: { client: ClientInfo }) {
     <div
       className="relative flex items-stretch gap-2 px-3 py-2.5 rounded-lg bg-muted shadow-[inset_0_2px_4px_rgba(0,0,0,0.15)] border border-border/50 cursor-grab hover:border-primary/30 transition-colors"
       draggable
+      aria-roledescription="draggable client"
       onDragStart={(e) => {
         if ((e.target as HTMLElement).closest("[data-slot=slider]") || (e.target as HTMLElement).closest("[data-menu]")) {
           e.preventDefault();
@@ -46,7 +43,7 @@ function ClientCard({ client }: { client: ClientInfo }) {
       }}
     >
       {/* Drag handle — visual indicator */}
-      <div className="shrink-0 flex items-center text-muted-foreground/30">        <div className="flex flex-col gap-[3px]">
+      <div className="shrink-0 flex items-center text-muted-foreground/30" aria-hidden="true">        <div className="flex flex-col gap-[3px]">
           <div className="flex gap-[3px]"><div className="size-[3px] rounded-full bg-current" /><div className="size-[3px] rounded-full bg-current" /></div>
           <div className="flex gap-[3px]"><div className="size-[3px] rounded-full bg-current" /><div className="size-[3px] rounded-full bg-current" /></div>
           <div className="flex gap-[3px]"><div className="size-[3px] rounded-full bg-current" /><div className="size-[3px] rounded-full bg-current" /></div>
@@ -78,7 +75,7 @@ function ClientCard({ client }: { client: ClientInfo }) {
                       <button
                         key={z.index}
                         onClick={() => {
-                          api.clients.setZone(client.index, z.index).catch((e: unknown) => console.error("API error", e));
+                          api.clients.setZone(client.index, z.index).catch(logApiError);
                           setMenuOpen(false);
                         }}
                         className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent transition-colors"
@@ -99,9 +96,9 @@ function ClientCard({ client }: { client: ClientInfo }) {
             <VolumeSlider
               volume={client.volume}
               muted={client.muted}
-              onVolumeChange={(v) => api.clients.setVolume(client.index, v).catch((e: unknown) => console.error("API error", e))}
-              onMuteToggle={() => api.clients.toggleMute(client.index).catch((e: unknown) => console.error("API error", e))}
-              onUnmute={() => api.clients.setMute(client.index, false).catch((e: unknown) => console.error("API error", e))}
+              onVolumeChange={(v) => api.clients.setVolume(client.index, v).catch(logApiError)}
+              onMuteToggle={() => api.clients.toggleMute(client.index).catch(logApiError)}
+              onUnmute={() => api.clients.setMute(client.index, false).catch(logApiError)}
               max={client.max_volume}
               compact
             />

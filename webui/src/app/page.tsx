@@ -1,27 +1,18 @@
 "use client";
 
-import { useEffect, useCallback, useState, Component, type ReactNode } from "react";
+import { useEffect, useCallback, Component, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { useAppStore, type ZoneState } from "@/stores/useAppStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useClientDrop } from "@/hooks/useClientDrop";
-import { api } from "@/lib/api";
 import type { WsNotification } from "@/lib/types";
 import { ApiKeyPrompt } from "@/components/ApiKeyPrompt";
 import { Skeleton } from "@/components/ui/skeleton";
-import { NowPlaying } from "@/components/NowPlaying";
-import { TransportControls } from "@/components/TransportControls";
-import { EqOverlay } from "@/components/EqOverlay";
-import { Button } from "@/components/ui/button";
-import { VolumeSlider } from "@/components/VolumeSlider";
-import { SeekBar } from "@/components/SeekBar";
-import { ShuffleRepeat } from "@/components/ShuffleRepeat";
-import { PlaylistBrowser } from "@/components/PlaylistBrowser";
-import { ClientList } from "@/components/ClientList";
-import { Marquee } from "@/components/Marquee";
 import { ConnectionStatus } from "@/components/ConnectionStatus";
 import { LocalePicker } from "@/components/LocalePicker";
 import { ProgrammingMode } from "@/components/ProgrammingMode";
+import { ZoneRailItem } from "@/components/ZoneRailItem";
+import { ZoneDetail } from "@/components/ZoneDetail";
 
 // ── Error Boundary ────────────────────────────────────────────
 
@@ -49,62 +40,7 @@ class ZoneErrorBoundary extends Component<{ children: ReactNode }, { error: Erro
   }
 }
 
-// ── Zone Rail Item (tablet/desktop sidebar) ───────────────────
-
-function ZoneRailItem({ zone, selected, onSelect }: {
-  zone: ZoneState;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  const [imgError, setImgError] = useState(false);
-  const { dragOver, dragHandlers } = useClientDrop(zone.index);
-  const t = useTranslations();
-  const isPlaying = zone.playback === "playing";
-  const hasCover = zone.track?.cover_url && zone.source !== "idle" && !imgError;
-  return (
-    <button
-      onClick={onSelect}
-      {...dragHandlers}
-      aria-current={selected ? "true" : undefined}
-      className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left transition-colors ${
-        dragOver
-          ? "bg-primary/20 ring-2 ring-primary"
-          : selected
-            ? "bg-primary/10 text-primary"
-            : "hover:bg-muted text-foreground"
-      }`}
-    >
-      {/* Cover thumbnail or zone icon */}
-      <div className="relative size-10 rounded-md bg-muted flex items-center justify-center overflow-hidden shrink-0">
-        {hasCover ? (
-          <img
-            src={zone.track!.cover_url!}
-            alt=""
-            className="size-full object-cover"
-            onError={() => setImgError(true)}
-          />
-        ) : (
-          <span className="text-lg">{zone.icon || "🔊"}</span>
-        )}
-        {isPlaying && (
-          <>
-            <div className="absolute bottom-0.5 right-0.5 size-2 rounded-full bg-primary animate-pulse" />
-            <span className="sr-only">{t("zone.playing")}</span>
-          </>
-        )}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium truncate">{zone.name}</div>
-        <div className="text-xs text-muted-foreground truncate">
-          {zone.track && zone.source !== "idle"
-            ? `${zone.track.artist} — ${zone.track.title}`
-            : t("zone.idle")}
-        </div>
-      </div>
-      <div className="text-xs text-muted-foreground tabular-nums">{zone.volume}</div>
-    </button>
-  );
-}
+// ── Mobile Zone Tab ───────────────────────────────────────────
 
 function MobileZoneTab({ zone, selected, onSelect }: { zone: ZoneState; selected: boolean; onSelect: () => void }) {
   const { dragOver, dragHandlers } = useClientDrop(zone.index);
@@ -127,44 +63,7 @@ function MobileZoneTab({ zone, selected, onSelect }: { zone: ZoneState; selected
   );
 }
 
-// ── Zone Detail — composes all control components ─────────────
-
-const SOURCE_KEYS: Record<string, string> = {
-  radio: "radio",
-  subsonic_playlist: "subsonic_playlist",
-  subsonic_track: "subsonic_track",
-  airplay: "airplay",
-  spotify: "spotify",
-  url: "url",
-};
-
-function ZoneHeader({ zone }: { zone: ZoneState }) {
-  const t = useTranslations();
-  const sourceKey = SOURCE_KEYS[zone.source];
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <h2 className="text-sm font-semibold truncate">{zone.name}</h2>
-      <div className="flex items-center gap-1.5 shrink-0">
-        {zone.presence && (
-          <span
-            className="text-[10px] px-1 py-0.5 rounded-full bg-green-500/15 text-green-600"
-            role="status"
-            aria-label={zone.presenceTimerActive ? t("zone.presenceTimerActive") : t("zone.presenceDetected")}
-          >
-            {zone.presenceTimerActive ? "⏱️" : "🟢"}
-          </span>
-        )}
-        {sourceKey ? (
-        <span className="text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
-          {t(`source.${sourceKey}`)}
-        </span>
-      ) : (
-        <span className="text-[10px] text-muted-foreground">{t("zone.idle")}</span>
-      )}
-      </div>
-    </div>
-  );
-}
+// ── Zone Drop Target ──────────────────────────────────────────
 
 function ZoneDropTarget({ zoneIndex, children }: { zoneIndex: number; children: ReactNode }) {
   const { dragOver, dragHandlers } = useClientDrop(zoneIndex);
@@ -175,64 +74,6 @@ function ZoneDropTarget({ zoneIndex, children }: { zoneIndex: number; children: 
       {...dragHandlers}
     >
       {children}
-    </div>
-  );
-}
-
-function TrackInfo({ zone }: { zone: ZoneState }) {
-  const t = useTranslations("zone");
-  const track = zone.track;
-  const isIdle = zone.source === "idle" || !track;
-
-  return (
-    <div className="text-center sm:text-left space-y-0.5 w-full">
-      <Marquee className="text-base font-bold leading-snug">{isIdle ? "\u00A0" : (track.title || t("unknownTitle"))}</Marquee>
-      <Marquee className="text-sm text-muted-foreground">{isIdle ? t("noAudio") : (track.artist || t("unknownArtist"))}</Marquee>
-      <Marquee className="text-xs text-muted-foreground/70">{isIdle ? "\u00A0" : (track.album || "\u00A0")}</Marquee>
-    </div>
-  );
-}
-
-function ZoneDetail({ zone }: { zone: ZoneState }) {
-  const [showEq, setShowEq] = useState(false);
-  const [eqEnabled, setEqEnabled] = useState(false);
-  const t = useTranslations();
-
-  useEffect(() => {
-    api.eq.get(zone.index).then((c) => setEqEnabled(c.enabled)).catch(() => {});
-  }, [zone.index]);
-  return (
-    <div className="flex flex-1 flex-col overflow-y-auto">
-      <div className="w-full max-w-[calc(100%-2rem)] mx-auto sm:max-w-[600px] space-y-3 px-4 py-4 sm:px-5 sm:py-4">
-        <div className="hidden sm:block"><ZoneHeader zone={zone} /></div>
-        {/* Compact+: horizontal layout for cover + controls */}
-        <div className="sm:flex sm:gap-5 sm:items-start">
-          <div className="sm:w-48 lg:w-56 sm:shrink-0">
-            <NowPlaying zone={zone} />
-          </div>
-          <div className="space-y-3 sm:flex-1 sm:min-w-0 sm:max-w-sm sm:min-h-56 sm:justify-between">
-            <TrackInfo zone={zone} />
-            <SeekBar zone={zone} />
-            <div className="flex items-center gap-2">
-              <div className="flex-1"><TransportControls zone={zone} /></div>
-              <Button variant="ghost" size="sm" onClick={() => setShowEq(true)} className={`text-xs px-2 ${eqEnabled ? "text-orange-500 font-bold" : ""}`} aria-label={t("eq.title", { zone: zone.name })}>
-                EQ
-              </Button>
-            </div>
-            <ShuffleRepeat zone={zone} />
-            <VolumeSlider
-              volume={zone.volume}
-              muted={zone.muted}
-              onVolumeChange={(v) => api.zones.setVolume(zone.index, v).catch((e: unknown) => console.error("API error", e))}
-              onMuteToggle={() => api.zones.toggleMute(zone.index).catch((e: unknown) => console.error("API error", e))}
-              onUnmute={() => api.zones.setMute(zone.index, false).catch((e: unknown) => console.error("API error", e))}
-            />
-          </div>
-        </div>
-        <ClientList zone={zone} />
-        <PlaylistBrowser zone={zone} />
-      </div>
-      {showEq && <EqOverlay zoneId={zone.index} label={zone.name} onClose={(enabled) => { setShowEq(false); setEqEnabled(enabled); }} />}
     </div>
   );
 }
@@ -289,7 +130,6 @@ export default function Home() {
           updateZonePresence(n.zone, n.presence, n.enabled, n.timer_active);
           break;
         case "zone_eq_changed":
-          // EqOverlay manages its own state; this ensures exhaustive switch coverage
           break;
       }
     },

@@ -6,9 +6,10 @@ import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { api, type EqBand, type EqConfig } from "@/lib/api";
+import { logApiError } from "@/lib/log-api-error";
 import { computeResponse } from "@/lib/eq-response";
 
-const FILTER_TYPES = ["low_shelf", "high_shelf", "peaking", "low_pass", "high_pass"] as const;
+const FILTER_TYPES: readonly EqBand["type"][] = ["low_shelf", "high_shelf", "peaking", "low_pass", "high_pass"] as const;
 const PRESETS = ['flat', 'bass_boost', 'treble_boost', 'vocal', 'rock', 'jazz', 'classical', 'electronic', 'loudness', 'late_night'] as const;
 
 const MAX_EQ_BANDS = 10;
@@ -66,7 +67,7 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
 
   // Push to server
   const pushConfig = useCallback(
-    (c: EqConfig) => { eqApi.set(c).catch((e: unknown) => console.error("API error", e)); },
+    (c: EqConfig) => { eqApi.set(c).catch(logApiError); },
     [eqApi],
   );
 
@@ -103,7 +104,7 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
   };
 
   const applyPreset = (name: string) => {
-    eqApi.applyPreset(name).then(setConfig).catch((e: unknown) => console.error("API error", e));
+    eqApi.applyPreset(name).then(setConfig).catch(logApiError);
   };
 
   // Off: send only enabled:false (bands stay persisted on server), clear UI
@@ -114,9 +115,9 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
         const next = { ...c, enabled: true };
         setConfig(next);
         pushConfig(next);
-      }).catch((e: unknown) => console.error("API error", e));
+      }).catch(logApiError);
     } else {
-      eqApi.set({ ...config, enabled: false }).catch((e: unknown) => console.error("API error", e));
+      eqApi.set({ ...config, enabled: false }).catch(logApiError);
       setConfig((prev) => ({ ...prev, enabled: false }));
     }
   };
@@ -151,13 +152,13 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h2 className="text-lg font-semibold">{t("title", { zone: label })}</h2>
-            <div className="inline-flex rounded-lg bg-muted p-0.5">
-              <button className={`px-3 py-1 text-xs rounded-md transition-colors ${!config.enabled ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`} onClick={() => toggleEnabled(false)}>Off</button>
-              <button className={`px-3 py-1 text-xs rounded-md transition-colors ${config.enabled ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`} onClick={() => toggleEnabled(true)}>On</button>
+            <div className="inline-flex rounded-lg bg-muted p-0.5" role="radiogroup" aria-label={t("toggle")}>
+              <button role="radio" aria-checked={!config.enabled} className={`px-3 py-1 text-xs rounded-md transition-colors ${!config.enabled ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`} onClick={() => toggleEnabled(false)}>Off</button>
+              <button role="radio" aria-checked={config.enabled} className={`px-3 py-1 text-xs rounded-md transition-colors ${config.enabled ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`} onClick={() => toggleEnabled(true)}>On</button>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={toggleAB} disabled={!config.enabled} className={abBypass ? "text-orange-500 font-semibold" : "text-muted-foreground"}>
+            <Button variant="ghost" size="sm" onClick={toggleAB} disabled={!config.enabled} className={abBypass ? "text-orange-500 font-semibold" : "text-muted-foreground"} aria-pressed={abBypass}>
               A/B
             </Button>
             <Button variant="ghost" size="sm" onClick={handleClose} aria-label={t("close")}>✕</Button>
@@ -169,11 +170,13 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
           <div className={`space-y-5 transition-opacity ${abBypass ? 'opacity-50 pointer-events-none' : ''}`}>
             <FrequencyResponseCurve response={response} curveLabel={t("curve")} />
             {/* Preset chips */}
-            <div className="flex gap-1.5 overflow-x-auto scrollbar-none py-1 -mx-1 px-1">
+            <div className="flex gap-1.5 overflow-x-auto scrollbar-none py-1 -mx-1 px-1" role="radiogroup" aria-label={t("presets")}>
               {PRESETS.map((p) => (
                 <button
                   key={p}
                   onClick={() => applyPreset(p)}
+                  role="radio"
+                  aria-checked={config.preset === p}
                   className={`shrink-0 px-3 py-1 text-xs rounded-full transition-colors ${
                     config.preset === p
                       ? 'bg-primary text-primary-foreground'

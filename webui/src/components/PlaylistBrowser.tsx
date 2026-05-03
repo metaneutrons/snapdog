@@ -5,6 +5,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { PlayIcon, MusicNote03Icon } from "@hugeicons/core-free-icons";
 import { useTranslations } from "next-intl";
 import { api } from "@/lib/api";
+import { logApiError } from "@/lib/log-api-error";
 import type { PlaylistInfo, TrackInfo } from "@/lib/types";
 import type { ZoneState } from "@/stores/useAppStore";
 
@@ -22,7 +23,7 @@ export function PlaylistBrowser({ zone }: PlaylistBrowserProps) {
   useEffect(() => {
     api.media.playlists()
       .then(setPlaylists)
-      .catch((e: unknown) => console.error("API error", e))
+      .catch(logApiError)
       .finally(() => setLoading(false));
   }, []);
 
@@ -40,7 +41,7 @@ export function PlaylistBrowser({ zone }: PlaylistBrowserProps) {
   };
 
   const playTrack = (playlistId: number, trackIndex: number) => {
-    api.zones.playPlaylist(zone.index, playlistId, trackIndex).catch((e: unknown) => console.error("API error", e));
+    api.zones.playPlaylist(zone.index, playlistId, trackIndex).catch(logApiError);
   };
 
   if (loading) {

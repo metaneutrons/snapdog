@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { Slider } from "@/components/ui/slider";
 import { api } from "@/lib/api";
+import { logApiError } from "@/lib/log-api-error";
 import type { ZoneState } from "@/stores/useAppStore";
 
 function formatTime(ms: number): string {
@@ -66,7 +67,7 @@ export function SeekBar({ zone }: { zone: ZoneState }) {
       if (!canSeek) return;
       setDragging(false);
       lastServerRef.current = value[0];
-      api.zones.seekPosition(zone.index, value[0]).catch((e: unknown) => console.error("API error", e));
+      api.zones.seekPosition(zone.index, value[0]).catch(logApiError);
     },
     [zone.index, canSeek],
   );

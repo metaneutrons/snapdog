@@ -57,6 +57,8 @@
   "eq": {
     "title": "EQ — {zone}",
     "close": "Cerrar ecualizador",
+    "toggle": "EQ on/off",
+    "presets": "Presets de EQ",
     "preset": "Presets",
     "enabled": "Activado",
     "addBand": "+ Añadir banda",
