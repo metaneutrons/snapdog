@@ -1,0 +1,7 @@
+Origin: SnapDog
+Label: SnapDog
+Suite: stable
+Codename: stable
+Architectures: amd64 arm64
+Components: main
+Description: SnapDog multi-room audio system
