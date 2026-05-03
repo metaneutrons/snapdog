@@ -430,7 +430,7 @@ async fn run(
                             tracing::info!(zone = zone_index, "Playback blocked: receiver has priority");
                             continue;
                         }
-                        fade_transition(&mut current_decode, &mut decode_rx, &mut position_offset_ms, &mut zone_fade, config.audio.zone_switch_fade_ms, config.audio.sample_rate, &mut zone_eq, ctx.backend.as_ref(), zone_index, config.audio.channels, &mut resampler).await;
+                        fade_transition(&mut current_decode, &mut decode_rx, &mut position_offset_ms, &mut zone_fade, config.audio.source_switch_fade_ms, config.audio.sample_rate, &mut zone_eq, ctx.backend.as_ref(), zone_index, config.audio.channels, &mut resampler).await;
                         if let Some(sub) = &subsonic {
                             if let Ok(playlist) = sub.get_playlist(&playlist_id).await {
                                 let track_count = playlist.entry.len();
@@ -455,7 +455,7 @@ async fn run(
                             tracing::info!(zone = zone_index, "Playback blocked: receiver has priority");
                             continue;
                         }
-                        fade_transition(&mut current_decode, &mut decode_rx, &mut position_offset_ms, &mut zone_fade, config.audio.zone_switch_fade_ms, config.audio.sample_rate, &mut zone_eq, ctx.backend.as_ref(), zone_index, config.audio.channels, &mut resampler).await;
+                        fade_transition(&mut current_decode, &mut decode_rx, &mut position_offset_ms, &mut zone_fade, config.audio.source_switch_fade_ms, config.audio.sample_rate, &mut zone_eq, ctx.backend.as_ref(), zone_index, config.audio.channels, &mut resampler).await;
                         if let Some(sub) = &subsonic {
                             let url = sub.stream_url(&track_id);
                             let (tx, rx) = audio::pcm_channel(PCM_DECODE_CHANNEL_SIZE);
@@ -475,7 +475,7 @@ async fn run(
                             tracing::info!(zone = zone_index, "Playback blocked: receiver has priority");
                             continue;
                         }
-                        fade_transition(&mut current_decode, &mut decode_rx, &mut position_offset_ms, &mut zone_fade, config.audio.zone_switch_fade_ms, config.audio.sample_rate, &mut zone_eq, ctx.backend.as_ref(), zone_index, config.audio.channels, &mut resampler).await;
+                        fade_transition(&mut current_decode, &mut decode_rx, &mut position_offset_ms, &mut zone_fade, config.audio.source_switch_fade_ms, config.audio.sample_rate, &mut zone_eq, ctx.backend.as_ref(), zone_index, config.audio.channels, &mut resampler).await;
                         let (tx, rx) = audio::pcm_channel(PCM_DECODE_CHANNEL_SIZE);
                         decode_rx = Some(rx);
                         let ac = audio_config.clone();

@@ -324,6 +324,10 @@ pub struct AudioConfig {
     /// Set to 0 to disable. Only applies to SnapDog clients.
     #[serde(default = "default_zone_switch_fade_ms")]
     pub zone_switch_fade_ms: u16,
+    /// Fade duration in milliseconds when switching audio sources within a zone
+    /// (e.g., radio → subsonic). Set to 0 to disable.
+    #[serde(default = "default_zone_switch_fade_ms")]
+    pub source_switch_fade_ms: u16,
 }
 
 fn default_zone_switch_fade_ms() -> u16 {
@@ -352,6 +356,7 @@ impl Default for AudioConfig {
             group_volume_mode: GroupVolumeMode::default(),
             source_conflict: SourceConflict::default(),
             zone_switch_fade_ms: default_zone_switch_fade_ms(),
+            source_switch_fade_ms: default_zone_switch_fade_ms(),
         }
     }
 }

@@ -32,7 +32,7 @@ SnapDog turns a Linux box (or Mac) into a synchronized multi-room audio system w
 | 🏢 **KNX** | Building automation — client mode (tunnel/router) or device mode (ETS-programmable, 460 group objects, presence detection) |
 | 🎛️ **Parametric EQ** | Per-zone and per-client, genre presets, real-time via custom protocol |
 | 🔊 **Speaker Correction** | Per-client Spinorama profiles (1000+ speakers from spinorama.org) |
-| 🔀 **Zone Switching** | Configurable audio fade (fade-out → fade-in) for SnapDog clients |
+| 🔀 **Audio Fade** | Smooth transitions: zone switch (client-side) and source switch (server-side) |
 | ⚡ **Source Conflict** | Configurable priority: `last_wins` or `receiver_wins` (AirPlay/Spotify vs local) |
 | 🌐 **REST API** | ~90 endpoints, full zone/client/media control |
 | 📡 **WebSocket** | Real-time state push notifications |
@@ -134,7 +134,8 @@ sample_rate = 48000
 bit_depth = 16
 channels = 2
 source_conflict = "last_wins"        # last_wins | receiver_wins
-zone_switch_fade_ms = 300            # 0 to disable
+zone_switch_fade_ms = 300            # Client zone switch fade (0 to disable)
+source_switch_fade_ms = 300          # Source change fade within a zone (0 to disable)
 
 [system]
 base_url = "http://192.168.1.10:5555"  # For absolute URLs in MQTT cover art
