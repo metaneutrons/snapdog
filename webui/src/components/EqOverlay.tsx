@@ -265,6 +265,7 @@ function SpeakerTab({ clientId }: { clientId: number }) {
       setCurrentConfig(config);
       const name = config.preset?.startsWith("spinorama:") ? config.preset.slice("spinorama:".length) : null;
       setAppliedName(name);
+      setEnabled(config.enabled || name != null);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [clientId]);
@@ -289,13 +290,18 @@ function SpeakerTab({ clientId }: { clientId: number }) {
     }).catch(logApiError);
   };
 
+  const [enabled, setEnabled] = useState(false);
+
   const toggleEnabled = (on: boolean) => {
-    if (on && appliedName) {
-      api.speakers.apply(clientId, appliedName).then((config) => {
+    setEnabled(on);
+    if (!on && appliedName) {
+      // Disable: clear correction on server
+      api.speakers.apply(clientId, null).then((config) => {
         setCurrentConfig(config);
       }).catch(logApiError);
-    } else if (!on) {
-      api.speakers.apply(clientId, null).then((config) => {
+    } else if (on && appliedName) {
+      // Re-enable: re-apply the speaker
+      api.speakers.apply(clientId, appliedName).then((config) => {
         setCurrentConfig(config);
       }).catch(logApiError);
     }
@@ -320,7 +326,7 @@ function SpeakerTab({ clientId }: { clientId: number }) {
 
   if (loading) return <div className="text-sm text-muted-foreground py-8 text-center">Loading speakers…</div>;
 
-  const isEnabled = currentConfig?.enabled ?? false;
+  const isEnabled = enabled;
 
   return (
     <div className="space-y-4">
