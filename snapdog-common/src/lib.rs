@@ -17,6 +17,13 @@ pub const MSG_TYPE_EQ_CONFIG: u16 = 10;
 /// Snapcast custom message type ID for speaker correction EQ.
 pub const MSG_TYPE_SPEAKER_EQ: u16 = 11;
 
+/// Snapcast custom message type ID for audio fade-out trigger.
+/// Payload: fade duration in milliseconds as u16 little-endian.
+pub const MSG_TYPE_FADE_OUT: u16 = 12;
+
+/// Default crossfade duration in milliseconds.
+pub const DEFAULT_FADE_MS: u16 = 300;
+
 /// Maximum number of EQ bands per zone/client.
 pub const MAX_EQ_BANDS: usize = 10;
 

@@ -71,6 +71,9 @@ fn main() -> anyhow::Result<()> {
         let eq = std::sync::Arc::new(std::sync::Mutex::new(eq::ZoneEq::new(48000, 2)));
         let speaker_eq = std::sync::Arc::new(std::sync::Mutex::new(eq::ZoneEq::new(48000, 2)));
 
+        // Fade state — shared between event loop (trigger) and audio thread (apply)
+        let fade = std::sync::Arc::new(player::FadeState::new());
+
         // Mixer — dispatches volume to software, hardware, midi, or none
         let volume = player::VolumeState::new();
         let mixer = std::sync::Arc::new(player::Mixer::from_cli(&mixer_raw, volume));
@@ -81,6 +84,7 @@ fn main() -> anyhow::Result<()> {
         let player_eq = eq.clone();
         let player_speaker_eq = speaker_eq.clone();
         let player_mixer = mixer.clone();
+        let player_fade = fade.clone();
         if null_player {
             tracing::info!("Null player — audio output disabled");
             tokio::spawn(async move {
@@ -96,6 +100,7 @@ fn main() -> anyhow::Result<()> {
                     player_eq,
                     player_speaker_eq,
                     player_mixer,
+                    player_fade,
                 )
                 .await;
             });
@@ -104,6 +109,7 @@ fn main() -> anyhow::Result<()> {
         // Event handler
         let event_eq = eq.clone();
         let event_speaker_eq = speaker_eq.clone();
+        let event_fade = fade.clone();
         let event_mixer = mixer.clone();
         tokio::spawn(async move {
             #[allow(unused_mut)]
@@ -173,6 +179,18 @@ fn main() -> anyhow::Result<()> {
                                 tracing::warn!(error = %e, "Invalid speaker EQ payload")
                             }
                         }
+                    }
+                    #[cfg(feature = "custom-protocol")]
+                    ClientEvent::CustomMessage(msg)
+                        if msg.type_id == snapdog_common::MSG_TYPE_FADE_OUT =>
+                    {
+                        let duration_ms = if msg.payload.len() >= 2 {
+                            u16::from_le_bytes([msg.payload[0], msg.payload[1]])
+                        } else {
+                            snapdog_common::DEFAULT_FADE_MS
+                        };
+                        tracing::info!(duration_ms, "Fade-out triggered");
+                        event_fade.trigger_fade_out(duration_ms, 48000);
                     }
                     _ => {}
                 }

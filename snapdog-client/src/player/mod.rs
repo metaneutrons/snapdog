@@ -1,6 +1,6 @@
 //! Audio output — cpal callback reads from Stream directly.
 
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use snapcast_client::AudioFrame;
@@ -18,6 +18,94 @@ const FORMAT_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_mill
 
 /// Shared EQ processor, updated from the event loop, read from the audio thread.
 pub type SharedEq = Arc<Mutex<ZoneEq>>;
+
+/// Shared fade state for crossfade on zone switch.
+///
+/// Lock-free (atomics only) for safe use in the real-time audio callback.
+pub struct FadeState {
+    /// Total fade duration in samples (set when fade-out is triggered).
+    fade_samples: AtomicU32,
+    /// Remaining samples in the current fade (counts down).
+    remaining: AtomicU32,
+    /// true = fading out, false = fading in (or idle).
+    fading_out: AtomicBool,
+    /// true = fully faded out, waiting for new stream to trigger fade-in.
+    faded_out: AtomicBool,
+}
+
+impl FadeState {
+    /// Create idle fade state.
+    pub fn new() -> Self {
+        Self {
+            fade_samples: AtomicU32::new(0),
+            remaining: AtomicU32::new(0),
+            fading_out: AtomicBool::new(false),
+            faded_out: AtomicBool::new(false),
+        }
+    }
+
+    /// Trigger a fade-out over the given duration at the given sample rate.
+    pub fn trigger_fade_out(&self, duration_ms: u16, sample_rate: u32) {
+        let samples = (sample_rate as u64 * duration_ms as u64 / 1000) as u32;
+        self.fade_samples.store(samples, Ordering::Relaxed);
+        self.remaining.store(samples, Ordering::Relaxed);
+        self.fading_out.store(true, Ordering::Release);
+        self.faded_out.store(false, Ordering::Relaxed);
+    }
+
+    /// Apply fade gain to a buffer. Called from the audio callback.
+    /// Returns the gain applied to the last sample (for diagnostics).
+    pub fn process(&self, data: &mut [f32], channels: usize) {
+        if self.faded_out.load(Ordering::Relaxed) {
+            // Fully faded out — check if new audio arrived (non-silent)
+            let has_audio = data.iter().any(|&s| s.abs() > 1e-6);
+            if has_audio {
+                // New stream detected — start fade-in
+                let total = self.fade_samples.load(Ordering::Relaxed);
+                self.remaining.store(total, Ordering::Relaxed);
+                self.fading_out.store(false, Ordering::Release);
+                self.faded_out.store(false, Ordering::Relaxed);
+            } else {
+                data.fill(0.0);
+                return;
+            }
+        }
+
+        let total = self.fade_samples.load(Ordering::Relaxed);
+        if total == 0 {
+            return;
+        }
+
+        let fading_out = self.fading_out.load(Ordering::Acquire);
+        let mut remaining = self.remaining.load(Ordering::Relaxed);
+
+        if remaining == 0 && fading_out {
+            // Fade-out complete
+            self.faded_out.store(true, Ordering::Release);
+            data.fill(0.0);
+            return;
+        }
+        if remaining == 0 && !fading_out {
+            // Fade-in complete — reset state
+            self.fade_samples.store(0, Ordering::Relaxed);
+            return;
+        }
+
+        let num_frames = data.len() / channels;
+        for frame in 0..num_frames {
+            let gain = if fading_out {
+                remaining as f32 / total as f32
+            } else {
+                1.0 - (remaining as f32 / total as f32)
+            };
+            for ch in 0..channels {
+                data[frame * channels + ch] *= gain;
+            }
+            remaining = remaining.saturating_sub(1);
+        }
+        self.remaining.store(remaining, Ordering::Relaxed);
+    }
+}
 
 /// Shared volume state, updated from the event loop, read from the audio thread.
 pub struct VolumeState {
@@ -288,6 +376,7 @@ pub async fn play_audio(
     eq: SharedEq,
     speaker_eq: SharedEq,
     mixer: Arc<Mixer>,
+    fade: Arc<FadeState>,
 ) {
     // Drain audio_rx in background
     tokio::spawn(async move {
@@ -315,7 +404,7 @@ pub async fn play_audio(
     );
 
     std::thread::spawn(move || {
-        if let Err(e) = run_cpal(stream, time_provider, format, eq, speaker_eq, mixer) {
+        if let Err(e) = run_cpal(stream, time_provider, format, eq, speaker_eq, mixer, fade) {
             tracing::error!(error = %e, "Audio output failed");
         }
     });
@@ -328,6 +417,7 @@ fn run_cpal(
     eq: SharedEq,
     speaker_eq: SharedEq,
     mixer: Arc<Mixer>,
+    fade: Arc<FadeState>,
 ) -> anyhow::Result<()> {
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
@@ -411,6 +501,9 @@ fn run_cpal(
             if let Ok(mut spk) = speaker_eq.try_lock() {
                 spk.process(data);
             }
+
+            // Apply crossfade (fade-out/fade-in on zone switch)
+            fade.process(data, channels);
 
             // Apply software volume (no-op for hardware/none mixer)
             let gain = mixer.software_gain();

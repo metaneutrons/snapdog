@@ -228,6 +228,29 @@ async fn set_zone(
         return Err(not_found());
     }
 
+    // Send fade-out to client before switching zones
+    let fade_ms = snapdog_common::DEFAULT_FADE_MS;
+    {
+        let s = state.store.read().await;
+        if let Some(client) = s.clients.get(&idx) {
+            if let Some(ref snap_id) = client.snapcast_id {
+                let _ = state
+                    .snap_tx
+                    .send(SnapcastCmd::Client {
+                        client_id: snap_id.clone(),
+                        action: ClientAction::SendCustom {
+                            type_id: snapdog_common::MSG_TYPE_FADE_OUT,
+                            payload: fade_ms.to_le_bytes().to_vec(),
+                        },
+                    })
+                    .await;
+            }
+        }
+    }
+
+    // Wait for fade-out to complete
+    tokio::time::sleep(std::time::Duration::from_millis(fade_ms as u64)).await;
+
     // Update state (zone assignment is SnapDog-owned)
     crate::state::update_client_and_notify(&state.store, idx, &state.notifications, |c| {
         c.zone_index = target_zone;
