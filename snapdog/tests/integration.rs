@@ -99,7 +99,7 @@ fn subsonic_config() -> Option<config::SubsonicConfig> {
         url,
         username,
         password,
-        format: "flac".into(),
+        format: snapdog::config::SubsonicFormat::Flac,
         tls_skip_verify: false,
     })
 }
@@ -430,7 +430,7 @@ mod broken_tests {
             url,
             username,
             password,
-            format: "flac".into(),
+            format: snapdog::config::SubsonicFormat::Flac,
             tls_skip_verify: false,
         })
     }

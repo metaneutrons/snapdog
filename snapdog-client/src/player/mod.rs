@@ -214,7 +214,7 @@ fn set_alsa_volume(control: &str, percent: u8, muted: bool) {
 
 #[cfg(target_os = "linux")]
 fn set_alsa_volume_inner(control: &str, percent: u8) -> anyhow::Result<()> {
-    use alsa::mixer::{Mixer, SelemChannelId, SelemId};
+    use alsa::mixer::{Mixer, SelemId};
     let mixer = Mixer::new("default", false)?;
     let selem_id = SelemId::new(control, 0);
     let selem = mixer
