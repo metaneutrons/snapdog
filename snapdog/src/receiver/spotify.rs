@@ -43,6 +43,9 @@ use crate::config::SpotifyConfig;
 /// Spotify Connect always outputs 44.1 kHz.
 const SPOTIFY_SAMPLE_RATE: u32 = 44100;
 
+/// Interval for polling session validity.
+const SESSION_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
+
 /// Spotify Connect receiver wrapping librespot.
 pub struct SpotifyReceiver {
     config: SpotifyConfig,
@@ -165,9 +168,11 @@ async fn run_spotify(
 
         let mut event_rx = player.get_player_event_channel();
 
-        let mixer =
-            librespot_playback::mixer::find(None).expect("default mixer")(MixerConfig::default())
-                .map_err(|e| anyhow::anyhow!("Mixer failed: {e}"))?;
+        let mixer = librespot_playback::mixer::find(None)
+            .ok_or_else(|| anyhow::anyhow!("No default mixer available"))?(
+            MixerConfig::default()
+        )
+        .map_err(|e| anyhow::anyhow!("Mixer failed: {e}"))?;
 
         let (spirc, spirc_task) = Spirc::new(
             ConnectConfig {
@@ -210,7 +215,7 @@ async fn run_spotify(
                         None => break,
                     }
                 }
-                _ = tokio::time::sleep(std::time::Duration::from_secs(1)) => {
+                _ = tokio::time::sleep(SESSION_POLL_INTERVAL) => {
                     if player.is_invalid() {
                         tracing::info!(zone = zone_index, "Spotify session ended");
                         break;

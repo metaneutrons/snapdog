@@ -10,6 +10,9 @@ mod routes;
 mod webui;
 pub mod ws;
 
+/// Cache-Control header value for immutable assets cached for 1 day.
+pub(crate) const CACHE_CONTROL_1DAY: &str = "public, max-age=86400";
+
 use std::collections::HashMap;
 use std::sync::Arc;
 

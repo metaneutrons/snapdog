@@ -7,6 +7,7 @@
 //! channel-based receiver model. Audio is delivered as F32 interleaved PCM.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use anyhow::Result;
 
@@ -21,6 +22,11 @@ use crate::config::AirplayConfig;
 
 /// Base port for AirPlay receivers (each zone gets base + zone_index).
 const AIRPLAY_BASE_PORT: u16 = 7000;
+
+/// AirPlay volume minimum in dB (silence).
+const AIRPLAY_VOLUME_MIN_DB: f32 = -144.0;
+/// AirPlay volume maximum in dB.
+const AIRPLAY_VOLUME_MAX_DB: f32 = 30.0;
 
 // ── AirPlayReceiver ───────────────────────────────────────────
 
@@ -53,7 +59,11 @@ impl ReceiverProvider for AirPlayReceiver {
         let mut hwaddr = detect_hwaddr();
         hwaddr[5] = hwaddr[5].wrapping_add(self.zone_index as u8);
 
-        let handler = Arc::new(BridgeHandler { audio_tx, event_tx });
+        let handler = Arc::new(BridgeHandler {
+            audio_tx,
+            event_tx,
+            sample_rate: AtomicU32::new(44100),
+        });
 
         let mut builder = RaopServer::builder()
             .name(&self.airplay_name)
@@ -102,6 +112,7 @@ impl ReceiverProvider for AirPlayReceiver {
 struct BridgeHandler {
     audio_tx: AudioSender,
     event_tx: ReceiverEventTx,
+    sample_rate: AtomicU32,
 }
 
 impl shairplay::AudioHandler for BridgeHandler {
@@ -111,6 +122,8 @@ impl shairplay::AudioHandler for BridgeHandler {
             sample_rate = format.sample_rate,
             "Session started"
         );
+        self.sample_rate
+            .store(format.sample_rate, Ordering::Relaxed);
         let _ = self.event_tx.try_send(ReceiverEvent::SessionStarted {
             format: AudioFormat {
                 sample_rate: format.sample_rate,
@@ -123,10 +136,11 @@ impl shairplay::AudioHandler for BridgeHandler {
     }
 
     fn on_volume(&self, volume: f32) {
-        let percent = if volume <= -144.0 {
+        let percent = if volume <= AIRPLAY_VOLUME_MIN_DB {
             0
         } else {
-            ((volume + 30.0) / 30.0 * 100.0).clamp(0.0, 100.0) as i32
+            ((volume + AIRPLAY_VOLUME_MAX_DB) / AIRPLAY_VOLUME_MAX_DB * 100.0).clamp(0.0, 100.0)
+                as i32
         };
         tracing::debug!(percent, "AirPlay volume");
         let _ = self.event_tx.try_send(ReceiverEvent::Volume { percent });
@@ -152,8 +166,9 @@ impl shairplay::AudioHandler for BridgeHandler {
     }
 
     fn on_progress(&self, start: u32, current: u32, end: u32) {
-        let position_ms = ((current - start) as u64 * 1000) / 44100;
-        let duration_ms = ((end - start) as u64 * 1000) / 44100;
+        let sample_rate = self.sample_rate.load(Ordering::Relaxed) as u64;
+        let position_ms = ((current - start) as u64 * 1000) / sample_rate;
+        let duration_ms = ((end - start) as u64 * 1000) / sample_rate;
         let _ = self.event_tx.try_send(ReceiverEvent::Progress {
             position_ms,
             duration_ms,

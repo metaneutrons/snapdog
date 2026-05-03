@@ -30,6 +30,9 @@ const RECEIVER_AUDIO_CHANNEL_SIZE: usize = 128;
 /// Channel capacity for PCM decode buffers.
 pub(super) const PCM_DECODE_CHANNEL_SIZE: usize = 64;
 
+/// Delay before restarting a crashed zone player.
+const ZONE_RESTART_DELAY: std::time::Duration = std::time::Duration::from_secs(5);
+
 /// Spawn a ZonePlayer task for each configured zone. Returns command senders.
 pub async fn spawn_zone_players(
     ctx: ZonePlayerContext,
@@ -48,7 +51,7 @@ pub async fn spawn_zone_players(
             let mut cmd_rx = cmd_rx;
             while let Err(e) = run(zone_index, &mut cmd_rx, cmd_tx.clone(), ctx.clone()).await {
                 tracing::error!(zone = zone_index, error = %e, "Zone player crashed, restarting in 5s");
-                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                tokio::time::sleep(ZONE_RESTART_DELAY).await;
             }
         });
 
@@ -170,7 +173,11 @@ async fn run(
     // Per-zone EQ
     let mut zone_eq = audio::eq::ZoneEq::new(config.audio.sample_rate, config.audio.channels);
     {
-        let eq_config = ctx.eq_store.lock().unwrap().get(zone_index);
+        let eq_config = ctx
+            .eq_store
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(zone_index);
         zone_eq.set_config(&eq_config);
     }
 
@@ -630,7 +637,7 @@ async fn run(
                     ZoneCommand::ToggleTrackRepeat => { update_and_notify(store, zone_index, notify, |z| z.track_repeat = !z.track_repeat).await; }
                     ZoneCommand::SetEq(eq_config) => {
                         zone_eq.set_config(&eq_config);
-                        ctx.eq_store.lock().unwrap().set(zone_index, eq_config.clone());
+                        ctx.eq_store.lock().unwrap_or_else(|e| e.into_inner()).set(zone_index, eq_config.clone());
                         let _ = notify.send(crate::api::ws::Notification::ZoneEqChanged {
                             zone: zone_index,
                             config: eq_config,

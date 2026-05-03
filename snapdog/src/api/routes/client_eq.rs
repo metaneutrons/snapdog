@@ -10,8 +10,10 @@ use axum::{Json, Router};
 
 use crate::api::SharedState;
 use crate::api::error::ApiError;
-use crate::audio::eq::{self, EqBand, EqConfig, TYPE_EQ_CONFIG};
+use crate::audio::eq::{EqBand, EqConfig, TYPE_EQ_CONFIG};
 use crate::player::{ClientAction, SnapcastCmd};
+
+use super::eq::resolve_preset;
 
 pub fn router(state: SharedState) -> Router {
     Router::new()
@@ -65,7 +67,11 @@ async fn send_eq(state: &SharedState, idx: usize, config: &EqConfig) -> Result<(
 
 async fn get_eq(State(state): State<SharedState>, Path(idx): Path<usize>) -> impl IntoResponse {
     require_snapdog(&state, idx).await?;
-    let config = state.eq_store.lock().unwrap().get_client(idx);
+    let config = state
+        .eq_store
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get_client(idx);
     Ok::<_, ApiError>(Json(config))
 }
 
@@ -75,13 +81,13 @@ async fn set_eq(
     Json(config): Json<EqConfig>,
 ) -> impl IntoResponse {
     require_snapdog(&state, idx).await?;
-    if config.bands.len() > 10 {
+    if config.bands.len() > snapdog_common::MAX_EQ_BANDS {
         return Err(ApiError::BadRequest("Maximum 10 EQ bands".into()));
     }
     state
         .eq_store
         .lock()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .set_client(idx, config.clone());
     send_eq(&state, idx, &config).await?;
     Ok::<_, ApiError>(Json(config))
@@ -93,7 +99,11 @@ async fn set_band(
     Json(band): Json<EqBand>,
 ) -> impl IntoResponse {
     require_snapdog(&state, idx).await?;
-    let mut config = state.eq_store.lock().unwrap().get_client(idx);
+    let mut config = state
+        .eq_store
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get_client(idx);
     if band_idx >= config.bands.len() {
         return Err(ApiError::NotFound("band"));
     }
@@ -102,7 +112,7 @@ async fn set_band(
     state
         .eq_store
         .lock()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .set_client(idx, config.clone());
     send_eq(&state, idx, &config).await?;
     Ok::<_, ApiError>(Json(config))
@@ -114,22 +124,11 @@ async fn apply_preset(
     Json(name): Json<String>,
 ) -> impl IntoResponse {
     require_snapdog(&state, idx).await?;
-    let bands = eq::preset(&name).ok_or_else(|| {
-        ApiError::BadRequest(format!(
-            "Unknown preset '{}'. Available: {:?}",
-            name,
-            eq::preset_names()
-        ))
-    })?;
-    let config = EqConfig {
-        enabled: true,
-        bands,
-        preset: Some(name),
-    };
+    let config = resolve_preset(&name)?;
     state
         .eq_store
         .lock()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .set_client(idx, config.clone());
     send_eq(&state, idx, &config).await?;
     Ok::<_, ApiError>(Json(config))

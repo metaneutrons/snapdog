@@ -69,6 +69,10 @@ const RETRY_BASE_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
 const PIPE_BUFFER_SIZE: usize = 64 * 1024;
 /// Maximum consecutive HLS segment failures before giving up.
 const MAX_HLS_FAILURES: u32 = 5;
+/// Default HLS target duration (seconds) when not specified in the playlist.
+const HLS_DEFAULT_TARGET_DURATION: u64 = 6;
+/// Number of trailing segments to keep when joining a live HLS stream.
+const HLS_LIVE_EDGE_SEGMENTS: usize = 3;
 
 /// Build a reqwest client with User-Agent and timeout.
 fn http_client() -> Result<reqwest::Client> {
@@ -291,11 +295,11 @@ async fn decode_hls_stream(
                         .strip_prefix("#EXT-X-TARGETDURATION:")
                         .and_then(|v| v.trim().parse().ok())
                 })
-                .unwrap_or(6);
+                .unwrap_or(HLS_DEFAULT_TARGET_DURATION);
 
             let is_live = !body.contains("#EXT-X-ENDLIST");
-            let skip = if first_fetch && is_live && segments.len() > 3 {
-                segments.len() - 3
+            let skip = if first_fetch && is_live && segments.len() > HLS_LIVE_EDGE_SEGMENTS {
+                segments.len() - HLS_LIVE_EDGE_SEGMENTS
             } else {
                 0
             };

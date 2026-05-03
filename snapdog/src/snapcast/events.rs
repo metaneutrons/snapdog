@@ -140,7 +140,10 @@ async fn handle_event(
 
                 // Push persisted client EQ config (only to SnapDog clients)
                 if is_snapdog {
-                    let eq_config = eq_store.lock().unwrap().get_client(client_index);
+                    let eq_config = eq_store
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .get_client(client_index);
                     if eq_config.enabled && !eq_config.bands.is_empty() {
                         if let Ok(payload) = serde_json::to_vec(&eq_config) {
                             let _ = backend

@@ -9,6 +9,7 @@ use axum::routing::get;
 use axum::{Json, Router};
 use serde::Serialize;
 
+use crate::api::CACHE_CONTROL_1DAY;
 use crate::api::SharedState;
 use crate::api::error::ApiError;
 use crate::config::ResolvedPlaylist;
@@ -299,7 +300,7 @@ async fn get_track_cover_art(
                     (axum::http::header::CONTENT_TYPE, mime),
                     (
                         axum::http::header::CACHE_CONTROL,
-                        "public, max-age=86400".to_string(),
+                        CACHE_CONTROL_1DAY.to_string(),
                     ),
                 ],
                 bytes,
@@ -330,7 +331,7 @@ async fn get_track_cover_art(
                     (axum::http::header::CONTENT_TYPE, mime.to_string()),
                     (
                         axum::http::header::CACHE_CONTROL,
-                        "public, max-age=86400".to_string(),
+                        CACHE_CONTROL_1DAY.to_string(),
                     ),
                 ],
                 bytes,
