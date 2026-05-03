@@ -38,7 +38,7 @@ jobs:
           cache-dependency-path: webui/package-lock.json
       - name: Build WebUI
         working-directory: webui
-        run: npm ci && npm run build
+        run: npm ci --omit=optional && npm run build
       - run: cargo clippy --all-targets -- -D warnings
 
   unit-tests:
@@ -56,7 +56,7 @@ jobs:
           cache-dependency-path: webui/package-lock.json
       - name: Build WebUI
         working-directory: webui
-        run: npm ci && npm run build
+        run: npm ci --omit=optional && npm run build
       - run: cargo test --lib
 
   integration-tests:
@@ -81,7 +81,7 @@ jobs:
           cache-dependency-path: webui/package-lock.json
       - name: Build WebUI
         working-directory: webui
-        run: npm ci && npm run build
+        run: npm ci --omit=optional && npm run build
       - name: Install snapserver + mosquitto
         run: |
           sudo apt-get update
