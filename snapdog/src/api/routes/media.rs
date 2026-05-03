@@ -167,16 +167,16 @@ async fn get_playlist_cover(
         .find(|p| p.id == id)
         .and_then(|p| p.cover_art.clone())
         .ok_or(ApiError::NotFound("resource"))?;
-    match sub.get_cover_art(&cover_id).await {
-        Ok(bytes) => {
+    sub.get_cover_art(&cover_id).await.map_or_else(
+        |_| Err(ApiError::NotFound("resource")),
+        |bytes| {
             let mime = crate::state::cover::detect_mime(&bytes);
             Ok((
                 [(axum::http::header::CONTENT_TYPE, mime.to_string())],
                 bytes,
             ))
-        }
-        Err(_) => Err(ApiError::NotFound("resource")),
-    }
+        },
+    )
 }
 
 async fn get_playlist_tracks(
@@ -256,18 +256,20 @@ async fn get_playlist_track(
             let id = resolve_subsonic_id(&state, index).await?;
             let sub = subsonic(&state)?;
             match sub.get_playlist(&id).await {
-                Ok(playlist) => match playlist.entry.get(track_index) {
-                    Some(t) => Ok(Json(serde_json::json!({
-                        "id": t.id,
-                        "title": t.title,
-                        "artist": t.artist,
-                        "album": t.album,
-                        "duration": t.duration,
-                        "track": t.track,
-                        "cover_art": t.cover_art,
-                    }))),
-                    None => Err(ApiError::NotFound("resource")),
-                },
+                Ok(playlist) => playlist.entry.get(track_index).map_or(
+                    Err(ApiError::NotFound("resource")),
+                    |t| {
+                        Ok(Json(serde_json::json!({
+                            "id": t.id,
+                            "title": t.title,
+                            "artist": t.artist,
+                            "album": t.album,
+                            "duration": t.duration,
+                            "track": t.track,
+                            "cover_art": t.cover_art,
+                        })))
+                    },
+                ),
                 Err(_) => Err(ApiError::BadGateway("upstream request failed".into())),
             }
         }
@@ -294,7 +296,7 @@ async fn get_track_cover_art(
             let cover_url = radio.cover.as_ref().ok_or(ApiError::NotFound("resource"))?;
             let (bytes, mime) = crate::state::cover::fetch_cover(cover_url)
                 .await
-                .ok_or(ApiError::BadGateway("cover fetch failed".into()))?;
+                .ok_or_else(|| ApiError::BadGateway("cover fetch failed".into()))?;
             Ok((
                 [
                     (axum::http::header::CONTENT_TYPE, mime),

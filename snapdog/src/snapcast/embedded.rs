@@ -305,8 +305,7 @@ impl SnapcastBackend for EmbeddedBackend {
                         .clients
                         .values()
                         .find(|c| c.snapcast_id.as_deref() == Some(client_id))
-                        .map(|c| c.volume.clamp(0, 100) as u16)
-                        .unwrap_or(100);
+                        .map_or(100, |c| c.volume.clamp(0, 100) as u16);
                     drop(s);
                     vec![ServerCommand::SetClientVolume {
                         client_id: client_id.clone(),
@@ -326,15 +325,16 @@ impl SnapcastBackend for EmbeddedBackend {
                         .values()
                         .find(|c| c.snapcast_id.as_deref() == Some(client_id))
                         .map(|c| (c.zone_index, c.muted, c.max_volume));
-                    let (zone_vol, mode) = client_zone
-                        .map(|(zi, _, _)| {
-                            let zv = s.zones.get(&zi).map(|z| z.volume).unwrap_or(100);
+                    let (zone_vol, mode) = client_zone.map_or_else(
+                        || (100, crate::config::GroupVolumeMode::default()),
+                        |(zi, _, _)| {
+                            let zv = s.zones.get(&zi).map_or(100, |z| z.volume);
                             let m = self.volume_modes.get(&zi).copied().unwrap_or_default();
                             (zv, m)
-                        })
-                        .unwrap_or((100, Default::default()));
-                    let muted = client_zone.map(|(_, m, _)| m).unwrap_or(false);
-                    let max_vol = client_zone.map(|(_, _, mv)| mv).unwrap_or(100);
+                        },
+                    );
+                    let muted = client_zone.is_some_and(|(_, m, _)| m);
+                    let max_vol = client_zone.map_or(100, |(_, _, mv)| mv);
                     // Now mutate
                     if let Some(c) = s
                         .clients

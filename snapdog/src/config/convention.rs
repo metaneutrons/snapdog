@@ -5,18 +5,21 @@
 
 use anyhow::{Context, Result};
 
-use super::types::*;
+use super::types::{
+    AudioConfig, ClientConfig, ClientKnxAddresses, RawClientConfig, RawClientKnxConfig,
+    RawZoneConfig, RawZoneKnxConfig, ZoneConfig, ZoneKnxAddresses,
+};
 
 const TCP_SOURCE_BASE_PORT: u16 = 4952;
 
 /// Resolve a raw zone config into a fully populated ZoneConfig.
-pub fn resolve_zone(index: usize, raw: RawZoneConfig, audio: &AudioConfig) -> Result<ZoneConfig> {
+pub fn resolve_zone(index: usize, raw: RawZoneConfig, audio: &AudioConfig) -> ZoneConfig {
     let n = index;
     let _ = audio; // Reserved for future sample format in stream name
 
     let airplay_name = raw.airplay_name.unwrap_or_else(|| raw.name.clone());
 
-    Ok(ZoneConfig {
+    ZoneConfig {
         index,
         name: raw.name,
         icon: raw.icon,
@@ -27,7 +30,7 @@ pub fn resolve_zone(index: usize, raw: RawZoneConfig, audio: &AudioConfig) -> Re
         knx: resolve_zone_knx(n, raw.knx),
         group_volume_mode: raw.group_volume_mode.unwrap_or(audio.group_volume_mode),
         presence: raw.presence,
-    })
+    }
 }
 
 /// Resolve a raw client config into a fully populated ClientConfig.

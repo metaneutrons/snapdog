@@ -274,6 +274,5 @@ pub(crate) fn detect_hwaddr() -> [u8; 6] {
     mac_address::get_mac_address()
         .ok()
         .flatten()
-        .map(|mac| mac.bytes())
-        .unwrap_or([0x02, 0x42, 0xAA, 0xBB, 0xCC, 0x00])
+        .map_or([0x02, 0x42, 0xAA, 0xBB, 0xCC, 0x00], |mac| mac.bytes())
 }

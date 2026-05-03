@@ -172,8 +172,8 @@ async fn get_all(State(state): State<SharedState>) -> Json<Vec<ZoneInfo>> {
                     icon: z.icon.clone(),
                     volume: zs.map_or(crate::state::DEFAULT_VOLUME, |s| s.volume),
                     muted: zs.is_some_and(|s| s.muted),
-                    playback: zs.map_or("stopped".into(), |s| s.playback.to_string()),
-                    source: zs.map_or("idle".into(), |s| s.source.to_string()),
+                    playback: zs.map_or_else(|| "stopped".into(), |s| s.playback.to_string()),
+                    source: zs.map_or_else(|| "idle".into(), |s| s.source.to_string()),
                     shuffle: zs.is_some_and(|s| s.shuffle),
                     repeat: zs.is_some_and(|s| s.repeat),
                     track_repeat: zs.is_some_and(|s| s.track_repeat),
@@ -196,8 +196,8 @@ async fn get_zone(State(state): State<SharedState>, Path(idx): Path<usize>) -> i
         icon: cfg.icon.clone(),
         volume: zs.map_or(crate::state::DEFAULT_VOLUME, |s| s.volume),
         muted: zs.is_some_and(|s| s.muted),
-        playback: zs.map_or("stopped".into(), |s| s.playback.to_string()),
-        source: zs.map_or("idle".into(), |s| s.source.to_string()),
+        playback: zs.map_or_else(|| "stopped".into(), |s| s.playback.to_string()),
+        source: zs.map_or_else(|| "idle".into(), |s| s.source.to_string()),
         shuffle: zs.is_some_and(|s| s.shuffle),
         repeat: zs.is_some_and(|s| s.repeat),
         track_repeat: zs.is_some_and(|s| s.track_repeat),
@@ -394,17 +394,18 @@ async fn get_zone_cover(
     Path(idx): Path<usize>,
 ) -> impl IntoResponse {
     let cache = state.covers.read().await;
-    match cache.get(idx) {
-        Some(entry) => Ok((
-            [
-                ("content-type", entry.mime.clone()),
-                ("cache-control", "public, max-age=86400, immutable".into()),
-                ("etag", format!("\"{}\"", entry.hash)),
-            ],
-            entry.bytes.clone(),
-        )),
-        None => Err(ApiError::NotFound("zone")),
-    }
+    cache
+        .get(idx)
+        .map_or(Err(ApiError::NotFound("zone")), |entry| {
+            Ok((
+                [
+                    ("content-type", entry.mime.clone()),
+                    ("cache-control", "public, max-age=86400, immutable".into()),
+                    ("etag", format!("\"{}\"", entry.hash)),
+                ],
+                entry.bytes.clone(),
+            ))
+        })
 }
 async fn get_track_title(
     State(state): State<SharedState>,

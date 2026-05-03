@@ -268,8 +268,7 @@ fn parse_midi_param(param: &str) -> anyhow::Result<(midir::MidiOutputConnection,
         .find(|p| {
             midi_out
                 .port_name(p)
-                .map(|n| n.to_lowercase().contains(&interface.to_lowercase()))
-                .unwrap_or(false)
+                .is_ok_and(|n| n.to_lowercase().contains(&interface.to_lowercase()))
         })
         .ok_or_else(|| {
             let available: Vec<_> = midir::MidiOutput::new("probe")
@@ -444,8 +443,7 @@ fn run_cpal(
                 .timestamp()
                 .playback
                 .duration_since(&info.timestamp().callback)
-                .map(|d| d.as_micros() as i64)
-                .unwrap_or(0)
+                .map_or(0, |d| d.as_micros() as i64)
                 + (num_frames as i64 * 1_000_000) / i64::from(format.rate());
 
             let server_now = {

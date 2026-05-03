@@ -140,9 +140,8 @@ async fn handle_socket(mut socket: WebSocket, state: SharedState) {
     loop {
         tokio::select! {
             Ok(notification) = rx.recv() => {
-                let json = match serde_json::to_string(&notification) {
-                    Ok(j) => j,
-                    Err(_) => continue,
+                let Ok(json) = serde_json::to_string(&notification) else {
+                    continue;
                 };
                 if socket.send(Message::Text(json.into())).await.is_err() {
                     break;

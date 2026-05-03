@@ -40,7 +40,7 @@ pub fn load_raw(raw: RawConfig) -> Result<AppConfig> {
         .into_iter()
         .enumerate()
         .map(|(i, z)| convention::resolve_zone(i + 1, z, &raw.audio))
-        .collect::<Result<_>>()?;
+        .collect::<Vec<_>>();
 
     let zone_names: Vec<&str> = zones.iter().map(|z| z.name.as_str()).collect();
 

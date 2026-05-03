@@ -82,8 +82,10 @@ async fn handle_event(
                             .default_zone
                             .as_ref()
                             .and_then(|name| config.zones.iter().find(|z| z.name == *name))
-                            .map(|z| z.index)
-                            .unwrap_or_else(|| config.zones.first().map(|z| z.index).unwrap_or(1));
+                            .map_or_else(
+                                || config.zones.first().map_or(1, |z| z.index),
+                                |z| z.index,
+                            );
                         let client_index = {
                             let mut s = store.write().await;
                             let next_idx = s.clients.keys().max().copied().unwrap_or(0) + 1;
@@ -246,9 +248,8 @@ async fn setup_zone_group(
     backend: &dyn SnapcastBackend,
     store: &state::SharedState,
 ) {
-    let zone_config = match config.zones.get(zone_index - 1) {
-        Some(z) => z,
-        None => return,
+    let Some(zone_config) = config.zones.get(zone_index - 1) else {
+        return;
     };
 
     // Get current server status to find group IDs
@@ -260,9 +261,8 @@ async fn setup_zone_group(
         }
     };
 
-    let groups = match status.get("server").and_then(|s| s.get("groups")) {
-        Some(g) => g,
-        None => return,
+    let Some(groups) = status.get("server").and_then(|s| s.get("groups")) else {
+        return;
     };
 
     // Find all Snapcast client IDs that belong to this zone
@@ -384,18 +384,16 @@ async fn merge_client_into_group(
     backend: &dyn SnapcastBackend,
     store: &state::SharedState,
 ) {
-    let status = match backend.get_status().await {
-        Ok(s) => s,
-        Err(_) => return,
+    let Ok(status) = backend.get_status().await else {
+        return;
     };
 
-    let groups = match status
+    let Some(groups) = status
         .get("server")
         .and_then(|s| s.get("groups"))
         .and_then(|g| g.as_array())
-    {
-        Some(g) => g,
-        None => return,
+    else {
+        return;
     };
 
     // Check if client is already in the zone's group
@@ -444,21 +442,17 @@ async fn sync_group_ids(
     backend: &dyn SnapcastBackend,
     store: &state::SharedState,
 ) {
-    let status = match backend.get_status().await {
-        Ok(s) => s,
-        Err(e) => {
-            tracing::warn!(error = %e, "Failed to get server status for group sync");
-            return;
-        }
+    let Ok(status) = backend.get_status().await else {
+        tracing::warn!("Failed to get server status for group sync");
+        return;
     };
 
-    let groups = match status
+    let Some(groups) = status
         .get("server")
         .and_then(|s| s.get("groups"))
         .and_then(|g| g.as_array())
-    {
-        Some(g) => g,
-        None => return,
+    else {
+        return;
     };
 
     let mut s = store.write().await;
@@ -470,8 +464,7 @@ async fn sync_group_ids(
             .max_by_key(|g| {
                 g.get("clients")
                     .and_then(|c| c.as_array())
-                    .map(|c| c.len())
-                    .unwrap_or(0)
+                    .map_or(0, |c| c.len())
             });
 
         if let Some(group) = best_group {
@@ -500,7 +493,7 @@ const fn client_notification(idx: usize, client: &state::ClientState) -> api::ws
 
 async fn broadcast_all_clients(store: &state::SharedState, notify: &api::ws::NotifySender) {
     let s = store.read().await;
-    for (&idx, client) in s.clients.iter() {
+    for (&idx, client) in &s.clients {
         let _ = notify.send(client_notification(idx, client));
     }
 }

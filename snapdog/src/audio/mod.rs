@@ -16,7 +16,7 @@ use anyhow::{Context, Result};
 use symphonia::core::audio::SampleBuffer;
 use symphonia::core::codecs::DecoderOptions;
 use symphonia::core::formats::FormatOptions;
-use symphonia::core::io::{MediaSource, MediaSourceStream};
+use symphonia::core::io::{MediaSource, MediaSourceStream, MediaSourceStreamOptions};
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 use tokio::sync::mpsc;
@@ -165,7 +165,7 @@ pub async fn decode_http_stream(
             "Buffered MP4 stream for seekable decode"
         );
         let cursor = std::io::Cursor::new(bytes.to_vec());
-        tokio::task::spawn_blocking(move || decode_to_pcm(cursor, &content_type, tx))
+        tokio::task::spawn_blocking(move || decode_to_pcm(cursor, &content_type, &tx))
             .await
             .context("Decoder task panicked")??;
         return Ok(());
@@ -206,7 +206,7 @@ pub async fn decode_http_stream(
     // Decode in blocking thread (symphonia is sync + CPU-bound)
     let decode_task = tokio::task::spawn_blocking(move || {
         let reader = SyncReader(tokio::runtime::Handle::current(), pipe_rx);
-        decode_to_pcm(reader, &content_type, tx)
+        decode_to_pcm(reader, &content_type, &tx)
     });
 
     // Wait for either task to finish
@@ -356,7 +356,7 @@ async fn decode_hls_stream(
 
     let decode_task = tokio::task::spawn_blocking(move || {
         let reader = SyncReader(tokio::runtime::Handle::current(), pipe_rx);
-        decode_to_pcm(reader, &content_type, tx)
+        decode_to_pcm(reader, &content_type, &tx)
     });
 
     tokio::select! {
@@ -371,7 +371,7 @@ async fn decode_hls_stream(
 fn decode_to_pcm(
     reader: impl MediaSource + 'static,
     content_type: &str,
-    tx: PcmSender,
+    tx: &PcmSender,
 ) -> Result<()> {
     let mut hint = Hint::new();
     match content_type {
@@ -383,7 +383,7 @@ fn decode_to_pcm(
         _ => &mut hint,
     };
 
-    let mss = MediaSourceStream::new(Box::new(reader), Default::default());
+    let mss = MediaSourceStream::new(Box::new(reader), MediaSourceStreamOptions::default());
     let probed = symphonia::default::get_probe()
         .format(
             &hint,
@@ -629,8 +629,7 @@ fn resolve_relative(base: &url::Url, target: &str) -> String {
         target.to_string()
     } else {
         base.join(target)
-            .map(|u| u.to_string())
-            .unwrap_or_else(|_| target.to_string())
+            .map_or_else(|_| target.to_string(), |u| u.to_string())
     }
 }
 

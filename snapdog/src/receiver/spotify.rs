@@ -141,9 +141,8 @@ async fn run_spotify(
             .map_err(|e| anyhow::anyhow!("Discovery failed: {e}"))?;
 
         use futures_util::StreamExt;
-        let credentials = match discovery.next().await {
-            Some(creds) => creds,
-            None => return Ok(()),
+        let Some(credentials) = discovery.next().await else {
+            return Ok(());
         };
 
         tracing::info!(zone = zone_index, "Spotify client connected");

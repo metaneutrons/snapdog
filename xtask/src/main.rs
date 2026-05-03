@@ -117,9 +117,7 @@ fn knxprod() {
     let knxprod_file = std::path::Path::new(&knxprod_path);
     match knx_rs_prod::generate_knxprod(xml_file, knxprod_file) {
         Ok(metadata) => {
-            let size = std::fs::metadata(knxprod_file)
-                .map(|m| m.len())
-                .unwrap_or(0);
+            let size = std::fs::metadata(knxprod_file).map_or(0, |m| m.len());
             eprintln!(
                 "✅ Generated {knxprod_path} ({size} bytes, app: {})",
                 metadata.application_id

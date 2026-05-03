@@ -17,7 +17,9 @@ use anyhow::Result;
 use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
-use snapdog::*;
+#[cfg(feature = "snapcast-process")]
+use snapdog::process;
+use snapdog::{api, audio, config, knx, mqtt, player, snapcast, state};
 
 /// Multi-zone audio controller with AirPlay, Snapcast, MQTT, and KNX integration.
 #[derive(Parser)]
@@ -200,8 +202,7 @@ async fn main() -> Result<()> {
     let config_label = cli
         .config
         .as_deref()
-        .map(|p| p.display().to_string())
-        .unwrap_or_else(|| "defaults".into());
+        .map_or_else(|| "defaults".into(), |p| p.display().to_string());
 
     let config = Arc::new(app_config);
 
@@ -401,7 +402,7 @@ async fn main() -> Result<()> {
                 let cmd = if let player::SnapcastCmd::Client { ref client_id, action: player::ClientAction::AdjustVolume(delta) } = cmd {
                     let current = store.read().await.clients.values()
                         .find(|c| c.snapcast_id.as_deref() == Some(client_id))
-                        .map_or(crate::state::DEFAULT_VOLUME, |c| c.base_volume);
+                        .map_or(state::DEFAULT_VOLUME, |c| c.base_volume);
                     player::SnapcastCmd::Client {
                         client_id: client_id.clone(),
                         action: player::ClientAction::Volume((current + delta).clamp(0, 100)),

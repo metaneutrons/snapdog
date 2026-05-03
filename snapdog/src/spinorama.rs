@@ -158,14 +158,13 @@ fn parse_autoeq(text: &str, speaker: &str) -> EqConfig {
                 .iter()
                 .position(|&p| p == "ON")
                 .and_then(|i| parts.get(i + 1))
-                .map(|&t| match t {
+                .map_or(FilterType::Peaking, |&t| match t {
                     "LSC" | "LS" => FilterType::LowShelf,
                     "HSC" | "HS" => FilterType::HighShelf,
                     "LP" => FilterType::LowPass,
                     "HP" => FilterType::HighPass,
                     _ => FilterType::Peaking,
-                })
-                .unwrap_or(FilterType::Peaking);
+                });
 
             bands.push(EqBand {
                 freq,

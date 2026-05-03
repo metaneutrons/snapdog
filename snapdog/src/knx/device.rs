@@ -35,8 +35,7 @@ fn device_serial() -> [u8; 6] {
     let mac = mac_address::get_mac_address()
         .ok()
         .flatten()
-        .map(|m| m.bytes())
-        .unwrap_or([0x01, 0x02, 0x03, 0x04, 0x05, 0x06]);
+        .map_or([0x01, 0x02, 0x03, 0x04, 0x05, 0x06], |m| m.bytes());
     [0x00, 0xFA, mac[2], mac[3], mac[4], mac[5]]
 }
 

@@ -130,10 +130,8 @@ pub enum F32Resampling {
 impl F32Resampling {
     /// Create a new resampler, or passthrough if rates match.
     pub fn new(source_rate: u32, target_rate: u32, channels: u16) -> Self {
-        match F32Resampler::new(source_rate, target_rate, channels) {
-            Some(r) => Self::Active(r),
-            None => Self::Passthrough,
-        }
+        F32Resampler::new(source_rate, target_rate, channels)
+            .map_or(Self::Passthrough, Self::Active)
     }
 
     /// Returns resampled F32 data, or `None` when buffering (not enough input yet).
