@@ -60,6 +60,7 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
   const [config, setConfig] = useState<EqConfig>({ enabled: false, bands: [], preset: "flat" });
   const [abBypass, setAbBypass] = useState(false);
   const [speakerEnabled, setSpeakerEnabled] = useState(false);
+  const [speakerAbBypass, setSpeakerAbBypass] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const showTabs = clientId != null;
@@ -176,6 +177,11 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
                 A/B
               </Button>
             )}
+            {tab === "speaker" && (
+              <Button variant="ghost" size="sm" onClick={() => setSpeakerAbBypass(!speakerAbBypass)} disabled={!speakerEnabled} className={speakerAbBypass ? "text-orange-500 font-semibold" : "text-muted-foreground"} aria-pressed={speakerAbBypass}>
+                A/B
+              </Button>
+            )}
             <Button variant="ghost" size="sm" onClick={handleClose} aria-label={t("close")}>✕</Button>
           </div>
         </div>
@@ -235,7 +241,7 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
         </div>
         {showTabs && (
           <div className={`${tab === "speaker" ? 'opacity-100' : 'opacity-0 pointer-events-none h-0 overflow-hidden'} transition-opacity duration-150`}>
-            <SpeakerTab clientId={clientId!} enabled={speakerEnabled} setEnabled={setSpeakerEnabled} />
+            <SpeakerTab clientId={clientId!} enabled={speakerEnabled} setEnabled={setSpeakerEnabled} abBypass={speakerAbBypass} setAbBypass={setSpeakerAbBypass} />
           </div>
         )}
       </div>
@@ -245,13 +251,12 @@ export function EqOverlay({ zoneId, clientId, label, onClose }: EqOverlayProps) 
 
 // ── Speaker Tab ───────────────────────────────────────────────
 
-function SpeakerTab({ clientId, enabled, setEnabled }: { clientId: number; enabled: boolean; setEnabled: (v: boolean) => void }) {
+function SpeakerTab({ clientId, enabled, setEnabled, abBypass, setAbBypass }: { clientId: number; enabled: boolean; setEnabled: (v: boolean) => void; abBypass: boolean; setAbBypass: (v: boolean) => void }) {
   const t = useTranslations("eq");
   const [search, setSearch] = useState("");
   const [speakers, setSpeakers] = useState<string[]>([]);
   const [currentConfig, setCurrentConfig] = useState<EqConfig | null>(null);
   const [appliedName, setAppliedName] = useState<string | null>(null);
-  const [abBypass, setAbBypass] = useState(false);
   const [loading, setLoading] = useState(true);
   const abBypassRef = useRef(false);
   const appliedNameRef = useRef<string | null>(null);
@@ -321,17 +326,17 @@ function SpeakerTab({ clientId, enabled, setEnabled }: { clientId: number; enabl
     toggleEnabled(enabled);
   }, [enabled]);
 
-  const toggleAB = () => {
-    const next = !abBypass;
-    setAbBypass(next);
-    if (next) {
-      // Temporarily disable
+  // React to A/B bypass changes from parent
+  const prevAbBypass = useRef(abBypass);
+  useEffect(() => {
+    if (prevAbBypass.current === abBypass) return;
+    prevAbBypass.current = abBypass;
+    if (abBypass) {
       api.speakers.apply(clientId, null).catch(logApiError);
     } else if (appliedName) {
-      // Restore
       api.speakers.apply(clientId, appliedName).catch(logApiError);
     }
-  };
+  }, [abBypass, clientId, appliedName]);
 
   const response = useMemo(
     () => (currentConfig?.bands.length ? computeResponse(currentConfig.bands) : []),
@@ -344,13 +349,6 @@ function SpeakerTab({ clientId, enabled, setEnabled }: { clientId: number; enabl
 
   return (
     <div className="space-y-4">
-      {/* A/B */}
-      <div className="flex justify-end">
-        <Button variant="ghost" size="sm" onClick={toggleAB} disabled={!isEnabled} className={abBypass ? "text-orange-500 font-semibold" : "text-muted-foreground"} aria-pressed={abBypass}>
-          A/B
-        </Button>
-      </div>
-
       {/* Content — hidden when off, dimmed when A/B */}
       {isEnabled || abBypass ? (
         <div className={`space-y-4 ${abBypass ? 'opacity-50 pointer-events-none' : ''} transition-opacity duration-150`}>
@@ -392,7 +390,9 @@ function SpeakerTab({ clientId, enabled, setEnabled }: { clientId: number; enabl
         )}
       </div>
       </div>
-      ) : null}
+      ) : (
+        <FrequencyResponseCurve response={[]} curveLabel="Speaker correction curve" />
+      )}
     </div>
   );
 }
