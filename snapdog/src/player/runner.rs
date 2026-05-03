@@ -104,7 +104,7 @@ async fn fade_transition(
                 Ok(Some(audio::PcmMessage::Audio(samples))) => {
                     let mut samples = resampler.process_or_passthrough(samples);
                     zone_eq.process(&mut samples);
-                    fade.process(&mut samples);
+                    fade.process(&mut samples, channels);
                     let _ = backend
                         .send_audio(zone_index, &samples, sample_rate, channels)
                         .await;
@@ -156,18 +156,16 @@ impl ZoneFade {
     }
 
     /// Apply gain ramp to samples. Returns true when fade is complete.
-    fn process(&mut self, samples: &mut [f32]) -> bool {
+    fn process(&mut self, samples: &mut [f32], channels: u16) -> bool {
         if self.total == 0 || self.remaining == 0 {
             return true;
         }
-        // Assume interleaved stereo (2 channels) — process per-sample
-        for sample in samples.iter_mut() {
-            let gain = if self.fading_out {
-                self.remaining as f32 / self.total as f32
-            } else {
-                1.0 - (self.remaining as f32 / self.total as f32)
-            };
-            *sample *= gain;
+        let ch = channels as usize;
+        for frame in samples.chunks_exact_mut(ch) {
+            let gain = snapdog_common::fade_gain(self.remaining, self.total, self.fading_out);
+            for sample in frame.iter_mut() {
+                *sample *= gain;
+            }
             self.remaining = self.remaining.saturating_sub(1);
             if self.remaining == 0 {
                 break;
@@ -540,7 +538,7 @@ async fn run(
                                     stop_decode(&mut current_decode, &mut decode_rx).await;
                                     let offset_secs = (pos_ms / 1000).max(0) as u64;
                                     let url = sub.stream_url_with_offset(&tid, offset_secs);
-                                    let (tx, rx) = audio::pcm_channel(64);
+                                    let (tx, rx) = audio::pcm_channel(PCM_DECODE_CHANNEL_SIZE);
                                     decode_rx = Some(rx);
                                     let ac = audio_config.clone();
                                     current_decode = Some(tokio::spawn(async move {
@@ -562,7 +560,7 @@ async fn run(
                             drop(z_state);
                             if let Some(radio) = config.radios.get(radio_idx) {
                                 reset_playback(&mut current_decode, &mut decode_rx, &mut position_offset_ms).await;
-                                let (tx, rx) = audio::pcm_channel(64);
+                                let (tx, rx) = audio::pcm_channel(PCM_DECODE_CHANNEL_SIZE);
                                 decode_rx = Some(rx);
                                 let url = radio.url.clone();
                                 let ac = audio_config.clone();
@@ -702,7 +700,7 @@ async fn run(
                                 stop_decode(&mut current_decode, &mut decode_rx).await;
                                 let offset_secs = (pos_ms / 1000).max(0) as u64;
                                 let url = sub.stream_url_with_offset(&tid, offset_secs);
-                                let (tx, rx) = audio::pcm_channel(64);
+                                let (tx, rx) = audio::pcm_channel(PCM_DECODE_CHANNEL_SIZE);
                                 decode_rx = Some(rx);
                                 let ac = audio_config.clone();
                                 current_decode = Some(tokio::spawn(async move {
@@ -848,7 +846,7 @@ async fn run(
                         let mut samples = resampler.process_or_passthrough(samples);
                         zone_eq.process(&mut samples);
                         if let Some(ref mut fade) = zone_fade {
-                            if fade.process(&mut samples) {
+                            if fade.process(&mut samples, config.audio.channels) {
                                 if fade.fading_out {
                                     // Fade-out complete — don't send silence, wait for new stream
                                     zone_fade = None;
@@ -943,8 +941,14 @@ fn resolve_presence_source(
     let now_minutes = (now.hour() * 60 + now.minute()) as u16;
 
     for entry in &presence.schedule {
-        let from = crate::config::parse_time(&entry.from).unwrap_or(0);
-        let to = crate::config::parse_time(&entry.to).unwrap_or(0);
+        let from = crate::config::parse_time(&entry.from).unwrap_or_else(|_| {
+            tracing::warn!(value = %entry.from, "Invalid schedule time, defaulting to 00:00");
+            0
+        });
+        let to = crate::config::parse_time(&entry.to).unwrap_or_else(|_| {
+            tracing::warn!(value = %entry.to, "Invalid schedule time, defaulting to 00:00");
+            0
+        });
         if now_minutes >= from && now_minutes < to {
             return Some(entry.source.clone());
         }
@@ -952,4 +956,31 @@ fn resolve_presence_source(
 
     // Fallback to default_source
     presence.default_source.clone()
+}
+
+#[cfg(test)]
+mod fade_tests {
+    use super::ZoneFade;
+
+    #[test]
+    fn fade_out_stereo() {
+        let mut fade = ZoneFade::new(100, 1000); // 100ms at 1kHz = 100 frames
+        let mut buf = vec![1.0f32; 200]; // 100 frames * 2 channels
+        let done = fade.process(&mut buf, 2);
+        assert!(done);
+        // First frame should be near 1.0, last frame should be near 0.0
+        assert!(buf[0] > 0.9);
+        assert!(buf[198] < 0.02);
+    }
+
+    #[test]
+    fn fade_in_stereo() {
+        let mut fade = ZoneFade::new(100, 1000);
+        fade.start_fade_in();
+        let mut buf = vec![1.0f32; 200];
+        let done = fade.process(&mut buf, 2);
+        assert!(done);
+        assert!(buf[0] < 0.02);
+        assert!(buf[198] > 0.9);
+    }
 }

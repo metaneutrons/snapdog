@@ -83,6 +83,17 @@ impl Default for EqConfig {
 
 // ── Volume ────────────────────────────────────────────────────
 
+/// Calculate linear fade gain for a given position.
+/// Returns 1.0→0.0 for fade-out, 0.0→1.0 for fade-in.
+#[inline]
+pub fn fade_gain(remaining: u32, total: u32, fading_out: bool) -> f32 {
+    if total == 0 {
+        return 1.0;
+    }
+    let pos = remaining as f32 / total as f32;
+    if fading_out { pos } else { 1.0 - pos }
+}
+
 /// Perceptual (quadratic) volume curve: maps linear 0–100 to 0.0–1.0.
 /// Input: linear percentage (0–100). Output: gain factor (0.0–1.0).
 pub fn perceptual_volume(linear: u8) -> f32 {

@@ -369,14 +369,19 @@ async fn advance_playlist_track(
     }
 }
 
+use std::sync::LazyLock;
+
+static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
+
 /// Check if a URL points to an image by sending a HEAD request and checking Content-Type.
 async fn is_image_url(url: &str) -> bool {
-    let Ok(resp) = reqwest::Client::new()
+    let Ok(resp) = HTTP_CLIENT
         .head(url)
         .timeout(std::time::Duration::from_secs(3))
         .send()
         .await
     else {
+        tracing::debug!(url, "HEAD request failed for cover URL check");
         return false;
     };
     resp.headers()

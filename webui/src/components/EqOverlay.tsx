@@ -26,6 +26,10 @@ const CURVE_HEIGHT = 160;
 const CURVE_DB_RANGE = 15;
 const CURVE_MIN_HEIGHT = 120;
 
+const MAX_SPEAKER_RESULTS = 50;
+
+const CURVE_COLOR = "oklch(0.65 0.18 40)";
+
 const GRID_FREQS = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000] as const;
 const GRID_DBS = [-12, -6, 0, 6, 12] as const;
 
@@ -286,9 +290,9 @@ function SpeakerTab({ clientId, enabled, setEnabled, abBypass, setAbBypass }: { 
   }, [clientId]);
 
   const filtered = useMemo(() => {
-    if (!search) return speakers.slice(0, 50);
+    if (!search) return speakers.slice(0, MAX_SPEAKER_RESULTS);
     const q = search.toLowerCase();
-    return speakers.filter((s) => s.toLowerCase().includes(q)).slice(0, 50);
+    return speakers.filter((s) => s.toLowerCase().includes(q)).slice(0, MAX_SPEAKER_RESULTS);
   }, [speakers, search]);
 
   const applySpeaker = (name: string) => {
@@ -512,8 +516,8 @@ function FrequencyResponseCurve({ response, curveLabel }: { response: { freq: nu
       ))}
       {path && (
         <>
-          <path d={path + `L${freqToX(FREQ_MAX_HZ)},${dbToY(0)}L${freqToX(FREQ_MIN_HZ)},${dbToY(0)}Z`} fill="oklch(0.65 0.18 40)" fillOpacity={0.15} />
-          <path d={path} fill="none" stroke="oklch(0.65 0.18 40)" strokeWidth={2} />
+          <path d={path + `L${freqToX(FREQ_MAX_HZ)},${dbToY(0)}L${freqToX(FREQ_MIN_HZ)},${dbToY(0)}Z`} fill={CURVE_COLOR} fillOpacity={0.15} />
+          <path d={path} fill="none" stroke={CURVE_COLOR} strokeWidth={2} />
         </>
       )}
       <text x={pad.left - 4} y={dbToY(0) + 3} textAnchor="end" fontSize={9} fill="currentColor" opacity={0.6} fontWeight="bold">0</text>

@@ -15,6 +15,8 @@ use crate::eq::ZoneEq;
 const MIDI_CC_MAX: u8 = 127;
 /// Polling interval while waiting for audio format from the stream.
 const FORMAT_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
+/// Amplitude below which audio is considered silence (for fade-in detection).
+const SILENCE_THRESHOLD: f32 = 1e-6;
 
 /// Shared EQ processor, updated from the event loop, read from the audio thread.
 pub type SharedEq = Arc<Mutex<ZoneEq>>;
@@ -58,7 +60,7 @@ impl FadeState {
     pub fn process(&self, data: &mut [f32], channels: usize) {
         if self.faded_out.load(Ordering::Relaxed) {
             // Fully faded out — check if new audio arrived (non-silent)
-            let has_audio = data.iter().any(|&s| s.abs() > 1e-6);
+            let has_audio = data.iter().any(|&s| s.abs() > SILENCE_THRESHOLD);
             if has_audio {
                 // New stream detected — start fade-in
                 let total = self.fade_samples.load(Ordering::Relaxed);
@@ -93,11 +95,7 @@ impl FadeState {
 
         let num_frames = data.len() / channels;
         for frame in 0..num_frames {
-            let gain = if fading_out {
-                remaining as f32 / total as f32
-            } else {
-                1.0 - (remaining as f32 / total as f32)
-            };
+            let gain = snapdog_common::fade_gain(remaining, total, fading_out);
             for ch in 0..channels {
                 data[frame * channels + ch] *= gain;
             }

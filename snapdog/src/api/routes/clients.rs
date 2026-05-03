@@ -255,7 +255,8 @@ async fn set_zone(
         false
     };
 
-    // Wait for fade-out to complete (only if client supports it)
+    // Wait for client fade-out to complete. No ack mechanism exists;
+    // the sleep duration matches the fade the client is performing.
     if is_snapdog {
         tokio::time::sleep(std::time::Duration::from_millis(fade_ms as u64)).await;
     }

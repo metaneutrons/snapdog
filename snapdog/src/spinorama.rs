@@ -41,10 +41,7 @@ impl SpeakerDb {
                 index_fetched_at: None,
                 profiles: HashMap::new(),
             })),
-            client: reqwest::Client::builder()
-                .user_agent("SnapDog/1.0")
-                .build()
-                .expect("HTTP client"),
+            client: reqwest::Client::new(),
         }
     }
 

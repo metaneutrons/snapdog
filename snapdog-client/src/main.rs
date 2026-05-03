@@ -8,6 +8,8 @@ use snapcast_client::{ClientCommand, ClientConfig, ClientEvent, SnapClient};
 
 use snapdog_common::CLIENT_NAME;
 
+const DEFAULT_SAMPLE_RATE: u32 = 48000;
+
 fn main() -> anyhow::Result<()> {
     let cli = cli::Cli::parse();
 
@@ -68,11 +70,21 @@ fn main() -> anyhow::Result<()> {
         let cmd = client.command_sender();
 
         // EQ processors — shared between event loop and audio thread
-        let eq = std::sync::Arc::new(std::sync::Mutex::new(eq::ZoneEq::new(48000, 2)));
-        let speaker_eq = std::sync::Arc::new(std::sync::Mutex::new(eq::ZoneEq::new(48000, 2)));
+        let eq = std::sync::Arc::new(std::sync::Mutex::new(eq::ZoneEq::new(
+            DEFAULT_SAMPLE_RATE,
+            2,
+        )));
+        let speaker_eq = std::sync::Arc::new(std::sync::Mutex::new(eq::ZoneEq::new(
+            DEFAULT_SAMPLE_RATE,
+            2,
+        )));
 
         // Fade state — shared between event loop (trigger) and audio thread (apply)
         let fade = std::sync::Arc::new(player::FadeState::new());
+
+        // Stream sample rate — updated when format is detected
+        let stream_sample_rate =
+            std::sync::Arc::new(std::sync::atomic::AtomicU32::new(DEFAULT_SAMPLE_RATE));
 
         // Mixer — dispatches volume to software, hardware, midi, or none
         let volume = player::VolumeState::new();
@@ -111,6 +123,7 @@ fn main() -> anyhow::Result<()> {
         let event_speaker_eq = speaker_eq.clone();
         let event_fade = fade.clone();
         let event_mixer = mixer.clone();
+        let event_sample_rate = stream_sample_rate.clone();
         tokio::spawn(async move {
             #[allow(unused_mut)]
             let mut last_eq_config: Option<eq::EqConfig> = None;
@@ -131,6 +144,8 @@ fn main() -> anyhow::Result<()> {
                     }
                     ClientEvent::StreamStarted { codec, format } => {
                         tracing::info!(%codec, %format, "Stream started");
+                        event_sample_rate
+                            .store(format.rate(), std::sync::atomic::Ordering::Relaxed);
                         let mut eq = event_eq.lock().unwrap_or_else(|e| e.into_inner());
                         *eq = eq::ZoneEq::new(format.rate(), format.channels());
                         if let Some(ref config) = last_eq_config {
@@ -190,7 +205,10 @@ fn main() -> anyhow::Result<()> {
                             snapdog_common::DEFAULT_FADE_MS
                         };
                         tracing::info!(duration_ms, "Fade-out triggered");
-                        event_fade.trigger_fade_out(duration_ms, 48000);
+                        event_fade.trigger_fade_out(
+                            duration_ms,
+                            event_sample_rate.load(std::sync::atomic::Ordering::Relaxed),
+                        );
                     }
                     _ => {}
                 }

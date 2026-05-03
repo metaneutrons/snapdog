@@ -282,14 +282,16 @@ impl SnapcastBackend for EmbeddedBackend {
                         .unwrap_or_default();
                     s.clients
                         .values()
-                        .filter(|c| {
-                            zone_index.is_some_and(|zi| c.zone_index == zi)
-                                && c.snapcast_id.is_some()
-                        })
-                        .map(|c| ServerCommand::SetClientVolume {
-                            client_id: c.snapcast_id.clone().unwrap(),
-                            volume: mode.effective(c.base_volume, *percent, c.max_volume) as u16,
-                            muted: c.muted,
+                        .filter(|c| zone_index.is_some_and(|zi| c.zone_index == zi))
+                        .filter_map(|c| {
+                            c.snapcast_id
+                                .as_ref()
+                                .map(|sid| ServerCommand::SetClientVolume {
+                                    client_id: sid.clone(),
+                                    volume: mode.effective(c.base_volume, *percent, c.max_volume)
+                                        as u16,
+                                    muted: c.muted,
+                                })
                         })
                         .collect()
                 }

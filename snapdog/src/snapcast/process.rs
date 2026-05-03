@@ -118,17 +118,11 @@ impl SnapcastBackend for ProcessBackend {
                         let clients: Vec<_> = s
                             .clients
                             .values()
-                            .filter(|c| {
-                                zone_index.is_some_and(|zi| c.zone_index == zi)
-                                    && c.snapcast_id.is_some()
-                            })
-                            .map(|c| {
-                                (
-                                    c.snapcast_id.clone().unwrap(),
-                                    c.base_volume,
-                                    c.muted,
-                                    c.max_volume,
-                                )
+                            .filter(|c| zone_index.is_some_and(|zi| c.zone_index == zi))
+                            .filter_map(|c| {
+                                c.snapcast_id
+                                    .as_ref()
+                                    .map(|sid| (sid.clone(), c.base_volume, c.muted, c.max_volume))
                             })
                             .collect();
                         drop(s);
