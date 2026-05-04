@@ -1,76 +1,218 @@
-# SnapDog Configuration Example
+# ══════════════════════════════════════════════════════════════════════════════
+# SnapDog Configuration
+# ══════════════════════════════════════════════════════════════════════════════
 # Copy to snapdog.toml and adjust to your setup.
+# All sections and fields are optional — sensible defaults are used.
 
+# ── System ─────────────────────────────────────────────────────────────────
 [system]
-log_level = "info"                    # trace, debug, info, warn, error
-# log_file = "/var/log/snapdog/snapdog.log"  # Optional: enable file logging
+# Logging verbosity: trace, debug, info, warn, error
+log_level = "info"
+# Optional: log to file with daily rotation (in addition to stdout)
+# log_file = "/var/log/snapdog/snapdog.log"
+# External base URL for absolute links (MQTT cover art, etc.)
+# Required if behind a reverse proxy or accessed from other hosts.
+base_url = "http://192.168.1.10:5555"
 
+# ── Audio ──────────────────────────────────────────────────────────────────
 [audio]
+# Output sample rate in Hz. All sources are resampled to this rate.
 sample_rate = 48000
+# Output bit depth: 16, 24, or 32
 bit_depth = 16
+# Number of channels (2 = stereo)
 channels = 2
-codec = "flac"                        # Snapcast streaming codec
+# Snapcast streaming codec: "flac", "f32lz4", "f32lz4e" (encrypted)
+codec = "flac"
+# Pre-shared key for f32lz4e encryption (both server and client must match)
+# encryption_psk = "my-secret-key"
+# How zone volume changes affect individual client volumes:
+#   "absolute" = set all clients to the zone volume
+#   "relative" = scale proportionally: client_volume * zone_volume / 100
+group_volume_mode = "relative"
+# How to resolve conflicts when AirPlay/Spotify is active and local
+# playback (radio/subsonic) is requested:
+#   "last_wins" = most recent source takes over (default)
+#   "receiver_wins" = AirPlay/Spotify blocks until it stops
+source_conflict = "last_wins"
+# Fade duration (ms) when a SnapDog client switches zones.
+# The client fades out, switches, then fades in. Set to 0 to disable.
+zone_switch_fade_ms = 300
+# Fade duration (ms) when switching audio sources within a zone
+# (e.g., radio → subsonic). Server-side fade-out then fade-in. 0 to disable.
+source_switch_fade_ms = 300
 
+# ── HTTP Server ────────────────────────────────────────────────────────────
 [http]
+# WebUI + REST API port
 port = 5555
+# Optional: restrict API access with bearer tokens.
+# If empty, all endpoints are open. WebUI and /health are always accessible.
+# api_keys = ["my-secret-token"]
 
+# ── Snapcast ───────────────────────────────────────────────────────────────
 [snapcast]
-address = "127.0.0.1"                 # Loopback — snapserver is a child process
+# Snapcast server address (loopback for embedded server)
+address = "127.0.0.1"
+# JSON-RPC control port
 jsonrpc_port = 1780
+# Audio streaming port (clients connect here)
 streaming_port = 1704
+# Whether SnapDog manages (starts/stops) the snapserver process.
+# Set to false if using an external snapserver.
+managed = true
+# Snapserver verbose logging (for debugging)
+# verbose = false
+# Policy for unknown Snapcast clients (not in [[client]] config):
+#   "accept" = assign to default_zone
+#   "ignore" = allow connection but don't manage
+#   "reject" = disconnect immediately
+unknown_clients = "accept"
+# Zone to assign unknown clients to (only used with "accept" policy)
+default_zone = "Ground Floor"
+# mDNS service type for client discovery
+# mdns_service_type = "_snapcast._tcp.local."
+# mDNS advertised name
+# mdns_name = "SnapDog"
 
+# ── AirPlay ────────────────────────────────────────────────────────────────
 [airplay]
-# password = ""                       # Optional: require password for AirPlay
+# Optional: require password for AirPlay connections
+# password = "1234"
+# Optional: persist AirPlay 2 pairing data (for HomeKit integration)
+# pairing_store = "/var/lib/snapdog/airplay-pairing"
+# Optional: bind to specific network interfaces
+# bind = ["192.168.1.10"]
 
+# ── Spotify Connect ────────────────────────────────────────────────────────
+# Remove this section entirely to disable Spotify Connect.
+[spotify]
+# Spotify streaming bitrate: 96, 160, or 320 kbps
+bitrate = 320
+
+# ── Subsonic / Navidrome ───────────────────────────────────────────────────
+# Remove this section entirely to disable Subsonic integration.
 [subsonic]
 url = "http://navidrome:4533"
 username = "admin"
 password = "admin"
+# Transcoding format: "raw" (original), "flac", "mp3", "opus"
+# format = "raw"
+# Skip TLS certificate verification (for self-signed certs)
+# tls_skip_verify = false
 
+# ── MQTT ───────────────────────────────────────────────────────────────────
+# Remove this section entirely to disable MQTT.
 [mqtt]
-broker = "mqtt:1883"
-username = "snapdog"
-password = "snapdog"
-base_topic = "snapdog/"
+broker = "192.168.1.10:1883"
+# username = "snapdog"
+# password = "snapdog"
+# Base topic prefix. All topics are published/subscribed under this prefix.
+base_topic = "snapdog"
 
+# ── KNX ────────────────────────────────────────────────────────────────────
 [knx]
 enabled = false
-# mode = "client"                         # "client" (default) or "device"
-# url = "udp://192.168.1.50:3671"         # Client mode: tunnel (unicast) or router (multicast)
-# individual_address = "1.1.100"          # Device mode: KNX individual address
-# persist_ets_config = true               # Device mode: persist ETS config across restarts
+# Role: "client" (connect to gateway) or "device" (ETS-programmable)
+# role = "client"
+# KNX/IP gateway URL:
+#   Client mode: "udp://192.168.1.50:3671" (tunnel) or multicast (router)
+#   Device mode: optional, for forwarding GA traffic through a gateway
+# url = "udp://192.168.1.50:3671"
+# Device mode only: KNX individual address assigned by ETS
+# individual_address = "1.1.100"
+# Device mode only: start in programming mode (for initial ETS discovery)
+# start_prog_mode = false
 
-# ── Zones ──────────────────────────────────────────────────────
-# KNX addresses auto-generated: zone N → N/{1-4}/x
-# Sink paths auto-generated: /snapsinks/zoneN
+# ══════════════════════════════════════════════════════════════════════════════
+# Zones
+# ══════════════════════════════════════════════════════════════════════════════
+# Each zone is an independent audio destination with its own AirPlay receiver,
+# Spotify Connect instance, and Snapcast stream.
 
 [[zone]]
 name = "Ground Floor"
 icon = "🏠"
-# sink = "/snapsinks/zone1"          # Auto-generated, override if needed
-# [zone.knx]                         # Override specific KNX addresses:
-# play = "1/1/1"                     # Only specify what deviates from convention
-# [zone.presence]                    # Presence-triggered playback
-# auto_off_delay = 900               # Auto-off after 15 min without presence
-# default_source = "radio:0"         # Fallback source when no schedule matches
-# [[zone.presence.schedule]]         # Time-based source selection
+# Override auto-generated Snapcast sink path:
+# sink = "/snapsinks/zone1"
+# Override auto-generated AirPlay receiver name:
+# airplay_name = "Ground Floor (AirPlay)"
+
+# Optional: presence-triggered playback
+# [zone.presence]
+# auto_off_delay = 900              # Seconds without presence before auto-off (default: 900)
+# default_source = "radio:0"        # Fallback source when no schedule matches
+# [[zone.presence.schedule]]        # Time-based source selection
 # from = "06:00"
 # to = "09:00"
-# source = "radio:0"                 # radio:<index> or playlist:<id> or none
+# source = "radio:0"                # radio:<index>, playlist:<id>, or "none"
+
+# Optional: KNX group addresses (client mode only, device mode uses ETS)
+# [zone.knx]
+# volume = "1/1/1"                  # DPT 5.001 — set volume (0–100%)
+# volume_status = "1/1/2"           # DPT 5.001 — volume feedback
+# volume_dim = "1/1/3"              # DPT 3.007 — relative dimming
+# mute = "1/1/4"                    # DPT 1.001 — set mute
+# mute_status = "1/1/5"            # DPT 1.001 — mute feedback
+# mute_toggle = "1/1/6"            # DPT 1.001 — toggle mute
+# play = "1/1/10"                   # DPT 1.001 — play
+# pause = "1/1/11"                  # DPT 1.001 — pause
+# stop = "1/1/12"                   # DPT 1.001 — stop
+# track_next = "1/1/13"            # DPT 1.001 — next track
+# track_previous = "1/1/14"        # DPT 1.001 — previous track
+# control_status = "1/1/15"        # DPT 1.001 — playing status
+# track_playing = "1/1/16"         # DPT 1.001 — track is playing
+# track_title = "1/1/20"           # DPT 16.001 — current title (14 chars)
+# track_artist = "1/1/21"          # DPT 16.001 — current artist
+# track_album = "1/1/22"           # DPT 16.001 — current album
+# track_progress = "1/1/23"        # DPT 5.001 — track progress (0–100%)
+# shuffle = "1/1/30"               # DPT 1.001 — set shuffle
+# shuffle_status = "1/1/31"        # DPT 1.001 — shuffle feedback
+# shuffle_toggle = "1/1/32"        # DPT 1.001 — toggle shuffle
+# repeat = "1/1/33"                # DPT 1.001 — set repeat
+# repeat_status = "1/1/34"         # DPT 1.001 — repeat feedback
+# repeat_toggle = "1/1/35"         # DPT 1.001 — toggle repeat
+# playlist = "1/1/40"              # DPT 5.010 — set playlist index
+# playlist_status = "1/1/41"       # DPT 5.010 — playlist index feedback
+# playlist_next = "1/1/42"         # DPT 1.001 — next playlist
+# playlist_previous = "1/1/43"     # DPT 1.001 — previous playlist
+# presence = "1/1/50"              # DPT 1.001 — set presence
+# presence_enable = "1/1/51"       # DPT 1.001 — enable/disable auto-off
+# presence_enable_status = "1/1/52" # DPT 1.001 — auto-off enabled feedback
+# presence_timeout = "1/1/53"      # DPT 7.005 — auto-off timeout (seconds)
+# presence_timeout_status = "1/1/54" # DPT 7.005 — timeout feedback
+# presence_timer_status = "1/1/55" # DPT 1.001 — timer running feedback
 
 [[zone]]
 name = "1st Floor"
 icon = "🏠"
 
-# ── Clients ────────────────────────────────────────────────────
-# KNX addresses auto-generated: client N → 3/N/x
+# ══════════════════════════════════════════════════════════════════════════════
+# Clients (Speakers)
+# ══════════════════════════════════════════════════════════════════════════════
+# Each client is a physical speaker identified by its Snapcast MAC address.
+# Clients are assigned to zones and can be moved at runtime via API/WebUI.
 
 [[client]]
 name = "Living Room"
-mac = "02:42:ac:11:00:10"
-zone = "Ground Floor"                 # Reference by name
+mac = "02:42:ac:11:00:10"            # Snapcast client MAC (lowercase)
+zone = "Ground Floor"                 # Initial zone assignment (by name)
 icon = "🛋️"
-# max_volume = 100                    # Volume limit (0-100, default 100)
+# max_volume = 100                   # Volume limit (0–100, default 100)
+
+# Optional: KNX group addresses (client mode only)
+# [client.knx]
+# volume = "3/1/1"                   # DPT 5.001 — set volume
+# volume_status = "3/1/2"           # DPT 5.001 — volume feedback
+# volume_dim = "3/1/3"             # DPT 3.007 — relative dimming
+# mute = "3/1/4"                    # DPT 1.001 — set mute
+# mute_status = "3/1/5"            # DPT 1.001 — mute feedback
+# mute_toggle = "3/1/6"            # DPT 1.001 — toggle mute
+# latency = "3/1/7"                # DPT 7.005 — set latency (ms)
+# latency_status = "3/1/8"         # DPT 7.005 — latency feedback
+# zone = "3/1/9"                    # DPT 5.010 — set zone index
+# zone_status = "3/1/10"           # DPT 5.010 — zone feedback
+# connected_status = "3/1/11"      # DPT 1.001 — connected feedback
 
 [[client]]
 name = "Kitchen"
@@ -84,11 +226,17 @@ mac = "02:42:ac:11:00:12"
 zone = "1st Floor"
 icon = "🛏️"
 
-# ── Radio Stations ─────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# Radio Stations
+# ══════════════════════════════════════════════════════════════════════════════
+# Supports direct streams, M3U/PLS playlists, and HLS (master + media).
+# ICY metadata (artist/title) is parsed automatically.
 
 [[radio]]
 name = "Deutschlandfunk"
 url = "https://st01.sslstream.dlf.de/dlf/01/high/aac/stream.aac"
+# Optional: station logo (used as cover art fallback)
+# cover = "https://www.deutschlandfunk.de/logo.png"
 
 [[radio]]
 name = "DLF Kultur"
