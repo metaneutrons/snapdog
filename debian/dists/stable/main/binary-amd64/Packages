@@ -1,3 +1,5 @@
+Package: snapdog
+Version: 0.7.0-1
 Architecture: amd64
 Homepage: https://github.com/metaneutrons/snapdog
 Section: sound
@@ -11,14 +13,8 @@ Size: 6891952
 MD5sum: 28d5845049afe182b6789537a3c00d57
 SHA256: b32a90c24ca6a465b02424098d9922ace93cd4c3360fcce7b8af040e0cd3781c
 
-Package: snapdog
+Package: snapdog-client
 Version: 0.7.0-1
-Architecture: arm64
-Homepage: https://github.com/metaneutrons/snapdog
-Section: sound
-Priority: optional
-Maintainer: Fabian Schmieder
-Installed-Size: 19243
 Architecture: amd64
 Section: sound
 Priority: optional
@@ -30,13 +26,3 @@ Size: 1145868
 MD5sum: 50b910d8d1a612a8cb3acaa455183f11
 SHA256: bd0e2b8e632a656a4c60fdd2cc1f0b969d8c824724af00b0824baf939284bac4
 
-Package: snapdog-client
-Version: 0.7.0-1
-Architecture: arm64
-Section: sound
-Priority: optional
-Installed-Size: 3343
-Depends: libasound2
-Description: SnapDog multiroom audio client
-Filename: pool/snapdog-client_0.7.0-1_arm64.deb
-Size: 1000520
