@@ -161,17 +161,17 @@ impl Mixer {
                     param.to_string()
                 };
                 // Validate the control exists at startup
-                if !validate_alsa_control(&control) {
+                if validate_alsa_control(&control) {
+                    tracing::info!(control, "Hardware mixer initialized");
+                } else {
                     tracing::warn!(
                         control,
                         "ALSA mixer control not found — volume changes will fail. \
                          Available controls: {}",
                         list_alsa_controls().unwrap_or_else(|| "none".into())
                     );
-                } else {
-                    tracing::info!(control, "Hardware mixer initialized");
                 }
-                Mixer::Hardware { control, volume }
+                Self::Hardware { control, volume }
             }
             #[cfg(not(target_os = "linux"))]
             "hardware" => {
@@ -315,7 +315,7 @@ fn set_alsa_volume_inner(control: &str, percent: u8) -> anyhow::Result<()> {
     let vol = min + ((max - min) as f64 * curved) as i64;
     selem.set_playback_volume_all(vol)?;
     if selem.has_playback_switch() {
-        selem.set_playback_switch_all(if percent == 0 { 0 } else { 1 })?;
+        selem.set_playback_switch_all(i32::from(percent != 0))?;
     }
     Ok(())
 }
