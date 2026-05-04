@@ -1,5 +1,63 @@
 # Changelog
 
+## [0.8.0](https://github.com/metaneutrons/snapdog/compare/v0.7.0...v0.8.0) (2026-05-04)
+
+
+### Features
+
+* audio crossfade on zone switch ([954a026](https://github.com/metaneutrons/snapdog/commit/954a0268f419e473e63152dada00c20a4b16605d))
+* **audio:** server-side fade on source change within a zone ([f453399](https://github.com/metaneutrons/snapdog/commit/f453399fe287eba79ab3b2bb76d114f0c29c5cef))
+* **audio:** source_conflict policy — receiver_wins vs last_wins ([1982690](https://github.com/metaneutrons/snapdog/commit/1982690f449e60ce7c9d03a24303907922f2382c))
+* **ci:** APT repository on GitHub Pages ([93e04bd](https://github.com/metaneutrons/snapdog/commit/93e04bd8cad16bdadd24f7beae95f215857451f4))
+* **config:** add system.base_url, use absolute cover URL in MQTT ([85fee9f](https://github.com/metaneutrons/snapdog/commit/85fee9f79edacf27fe30050134fcd94e7254cb4f))
+* **config:** zone_switch_fade_ms — configurable fade duration ([47dc66e](https://github.com/metaneutrons/snapdog/commit/47dc66e8eb15837f6330d4b026f2a1b8892b0fd5))
+* create snapdog-common crate — shared EQ types, constants, volume curve ([936b64d](https://github.com/metaneutrons/snapdog/commit/936b64d0bc7393332cc50f31386f8ff1ee05c328))
+* **eq:** Apple-grade EQ UX — segmented toggle, preset chips, genre presets ([2e32bab](https://github.com/metaneutrons/snapdog/commit/2e32babdb59d24f07b645ac3d0cd11ad8caddb86))
+* **knx:** publish initial state for all zones and clients on start ([1b06bb9](https://github.com/metaneutrons/snapdog/commit/1b06bb97f861e21e297a60eaff05114233d7561c))
+* **mqtt:** publish initial state for all zones and clients on connect ([21af7f0](https://github.com/metaneutrons/snapdog/commit/21af7f027fd723b99433a03c464055fba1c16474))
+* **player:** CD-player previous behavior (restart before skip) ([08a1c57](https://github.com/metaneutrons/snapdog/commit/08a1c57a8fbde72e075a6138a4023ffc3806f234))
+* **radio:** dynamic cover art from ICY StreamUrl ([b7c3fe3](https://github.com/metaneutrons/snapdog/commit/b7c3fe3653a98db703de63a52b003e5aaf7cb8cf))
+* **radio:** parse ICY StreamTitle into artist + title ([2c507e4](https://github.com/metaneutrons/snapdog/commit/2c507e4ae1fbe8bea385b4b000c3d637c8e902f4))
+* Spinorama speaker correction EQ ([eed0f86](https://github.com/metaneutrons/snapdog/commit/eed0f86d81b167537c0c8e0e9f1aa800fad042f3))
+* **xtask:** add 'cargo xtask ci' — run all CI checks locally ([6ff1543](https://github.com/metaneutrons/snapdog/commit/6ff1543c5df0fc1e29f94e9cea7f5f0b5502e4ce))
+
+
+### Bug Fixes
+
+* **audio:** resolve per-frame fade bug, DRY gain calc, magic numbers, and code quality issues ([f72b730](https://github.com/metaneutrons/snapdog/commit/f72b7306570557c273485b85e3850db8ddca73ed))
+* CI failures — unused import, integration test SubsonicFormat ([7ba24ab](https://github.com/metaneutrons/snapdog/commit/7ba24ab41f1d06723d9fc5eb2c8668aa9150ed7d))
+* **ci:** APT Release file with Date + SHA256/MD5Sum hashes ([9a7cc00](https://github.com/metaneutrons/snapdog/commit/9a7cc009e1c651c31700e955090fecbee46e90fb))
+* **ci:** npm ci --omit=optional to avoid platform-specific failures ([5024219](https://github.com/metaneutrons/snapdog/commit/502421921d14f5cd36558564545d5551acc52011))
+* **ci:** use npm ci --force to skip platform checks ([7887591](https://github.com/metaneutrons/snapdog/commit/7887591a3e2b3d45e84d6ca959078f9dd40b7124))
+* clippy pedantic warnings in snapdog-client (Linux-only code) ([5d5bc8f](https://github.com/metaneutrons/snapdog/commit/5d5bc8fefb8dd6f5386f47d7f3cbb0ffe41472bb))
+* enterprise-grade Rust audit — all remaining findings ([242b60b](https://github.com/metaneutrons/snapdog/commit/242b60bcfcdf4753e7934c4375852712776d5922))
+* final audit findings — SSOT, tests, cleanup ([fede454](https://github.com/metaneutrons/snapdog/commit/fede454b1b8633756b2455dd373c9ca0c2cd69e6))
+* force exit on shutdown (mDNS/AirPlay threads block clean exit) ([44f681e](https://github.com/metaneutrons/snapdog/commit/44f681e7205e0ba23a686ee85b44c43e2a14b12c))
+* **mixer:** quadratic curve instead of cubic (better for amplifiers) ([a4ea894](https://github.com/metaneutrons/snapdog/commit/a4ea894cb2f317ecc7a55d2ca40c8a4a7ad3361f))
+* only send fade-out to SnapDog clients (non-SnapDog clients ignore custom messages) ([1e27ec8](https://github.com/metaneutrons/snapdog/commit/1e27ec893d238de8c60673cd87857d982951ae41))
+* remove .await on sync SnapserverHandle::start() in integration tests ([060cc6c](https://github.com/metaneutrons/snapdog/commit/060cc6c77f44b591434e4457e02e6c6370528c29))
+* **snapdog-client:** perceptual volume curve for hardware mixer ([06bbb6a](https://github.com/metaneutrons/snapdog/commit/06bbb6a2c1a0c3edf8f10206c1c05e81760fd056))
+* Spotify Connect uses zone name without '(Spotify)' suffix ([6c680c4](https://github.com/metaneutrons/snapdog/commit/6c680c4e149c0c21b2c072d7d205098d19c25349))
+* **webui:** Apple-grade tab crossfade — no flash on switch ([5474cfc](https://github.com/metaneutrons/snapdog/commit/5474cfc05ac83bded5252ffccd76e527a5c0c32d))
+* **webui:** consistent A/B position + empty curve when Speaker off ([3a93e5e](https://github.com/metaneutrons/snapdog/commit/3a93e5e7261bdd35a068e9d7ca1ccee7b7464c52))
+* **webui:** disable A/B bypass button when EQ is off ([bd3b764](https://github.com/metaneutrons/snapdog/commit/bd3b764f8bf0d2d73aa8febf722b10f99f251220))
+* **webui:** enterprise-grade audit — all remaining findings ([2380fd3](https://github.com/metaneutrons/snapdog/commit/2380fd30a7ad9e5c1248368bfecb1e6314b255ec))
+* **webui:** EQ button visible on initial render ([2a31541](https://github.com/metaneutrons/snapdog/commit/2a315418184b32bb3b3354b50a86909ee402649b))
+* **webui:** EQ chip indicator — overlay returns enabled state on close ([9be414c](https://github.com/metaneutrons/snapdog/commit/9be414ca39ea3371e23f8aa85683caa214746467))
+* **webui:** EQ indicator — orange bold text instead of dot ([67fe71f](https://github.com/metaneutrons/snapdog/commit/67fe71f2bbacf935651449de97fb4092da12d6aa))
+* **webui:** EQ On/Off now works, Off shows only coordinate grid ([d5ff5fa](https://github.com/metaneutrons/snapdog/commit/d5ff5fa9b4f60af275fc4e82d67977d8c31c4792))
+* **webui:** EQ overlay — On/Off in header, fix A/B bypass logic ([9fd6c3e](https://github.com/metaneutrons/snapdog/commit/9fd6c3e7988a0ad68c8f9ae9498892305ab2cc6a))
+* **webui:** EQ preset dropdown label → 'Presets' (all languages) ([4cc73e8](https://github.com/metaneutrons/snapdog/commit/4cc73e8679b29c6a331b778ef0eb6f2b20507fda))
+* **webui:** EQ toggle-on no longer overwrites server bands with empty ([6f0ad53](https://github.com/metaneutrons/snapdog/commit/6f0ad53dc47910339a70f425cc9a206d0166d1c9))
+* **webui:** remove transition-opacity from EQ tab content — instant state ([bf60aa3](https://github.com/metaneutrons/snapdog/commit/bf60aa3e492420fb515622393c37bc1aa7dffc3e))
+* **webui:** Speaker On/Off in header next to title (like EQ tab) ([a9196dd](https://github.com/metaneutrons/snapdog/commit/a9196dd360fda82ac3d2dd2b1bce50e66670a63e))
+* **webui:** Speaker tab — fix 'flat' lookup, hide content when off ([eb40457](https://github.com/metaneutrons/snapdog/commit/eb40457cfec10bf157d36df6da9cfc0ba58d5dd2))
+* **webui:** Speaker tab gets independent On/Off + A/B controls ([5c5ef27](https://github.com/metaneutrons/snapdog/commit/5c5ef27b66d592013f8999ed88d91fbe46149f3d))
+* **webui:** Speaker tab On button works without pre-selected speaker ([992b35a](https://github.com/metaneutrons/snapdog/commit/992b35a5413486b47451673dcaf0c9140789ea3f))
+* **webui:** volume slider no longer flickers on release ([e32f240](https://github.com/metaneutrons/snapdog/commit/e32f24088b838e5f2d4d2df7bbfebfd869dc24cc))
+* **xtask:** backward-compatible subcommand dispatch ([89e07b3](https://github.com/metaneutrons/snapdog/commit/89e07b30c81f2eb7c9bc6364d17985d9bdd95c45))
+* zone volume/mute changes now reach all clients (stale group_id bug) ([4762ec4](https://github.com/metaneutrons/snapdog/commit/4762ec4fd9fcaceb175d24c8656367a95f16a0c0))
+
 ## [0.7.0](https://github.com/metaneutrons/snapdog/compare/v0.6.2...v0.7.0) (2026-05-02)
 
 
