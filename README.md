@@ -225,6 +225,7 @@ A specialized Snapcast client that understands SnapDog's custom protocol extensi
 - **Speaker correction** — second EQ stage for Spinorama-based speaker profiles
 - **Audio fade** — smooth fade-out/fade-in on zone switch (triggered by server)
 - **Hardware volume** — native ALSA mixer control with perceptual (quadratic) curve
+- **MIDI CC volume** — send volume as MIDI Control Change (e.g., for professional mixing consoles)
 - **Encryption** — PSK-based chunk encryption matching the embedded server
 
 Available as binary and Docker image (`ghcr.io/metaneutrons/snapdog-client`).
