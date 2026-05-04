@@ -57,7 +57,7 @@ jobs:
           cache-dependency-path: webui/package-lock.json
       - name: Build WebUI
         working-directory: webui
-        run: npm ci && npm run build
+        run: npm ci --force && npm run build
       - name: Install cross-compilation tools
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
@@ -129,7 +129,7 @@ jobs:
       - name: Build WebUI
         if: matrix.pkg == 'snapdog'
         working-directory: webui
-        run: npm ci && npm run build
+        run: npm ci --force && npm run build
       - run: cargo build --release -p ${{ matrix.pkg }}
       - run: cargo deb -p ${{ matrix.pkg }} --no-build
       - uses: actions/upload-artifact@v7
