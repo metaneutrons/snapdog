@@ -80,7 +80,7 @@ async fn test_config() -> (Arc<AppConfig>, u16, u16, u16) {
 
 /// Generate a snapserver.conf for the given config and start snapserver.
 async fn start_snapserver(config: &AppConfig) -> SnapserverHandle {
-    let handle = SnapserverHandle::start(config).await.unwrap();
+    let handle = SnapserverHandle::start(config).unwrap();
     tokio::time::sleep(Duration::from_secs(1)).await;
     handle
 }
@@ -240,7 +240,7 @@ mod broken_tests {
             managed_config.zones[0].tcp_source_port,
             managed_config.zones[1].tcp_source_port
         );
-        let snapserver = SnapserverHandle::start(&managed_config).await.unwrap();
+        let snapserver = SnapserverHandle::start(&managed_config).unwrap();
         eprintln!("Snapserver started, waiting...");
         tokio::time::sleep(Duration::from_secs(2)).await;
         eprintln!(
