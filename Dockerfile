@@ -3,7 +3,7 @@ FROM node:25-slim AS webui-builder
 
 WORKDIR /build/webui
 COPY webui/package.json webui/package-lock.json ./
-RUN npm ci
+RUN npm ci --force
 COPY webui/ .
 RUN npm run build
 
