@@ -25,4 +25,4 @@ knx/*.knxprod
 knx/*.xml
 knx/*.debug.xml
 include/eq.json
-/eq.json
+/eq.json/snapdog.toml
