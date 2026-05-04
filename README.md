@@ -226,6 +226,13 @@ A specialized Snapcast client that understands SnapDog's custom protocol extensi
 - **Audio fade** — smooth fade-out/fade-in on zone switch (triggered by server)
 - **Hardware volume** — native ALSA mixer control with perceptual (quadratic) curve
 - **MIDI CC volume** — send volume as MIDI Control Change (e.g., for professional mixing consoles)
+
+  ```bash
+  # Send volume on MIDI channel 1, CC7 (default) to a USB MIDI interface
+  snapdog-client --mixer midi:hw:1:0
+  # Send volume on MIDI channel 3, CC11 (expression) to a named port
+  snapdog-client --mixer midi:"Scarlett 18i8":2:11
+  ```
 - **Encryption** — PSK-based chunk encryption matching the embedded server
 
 Available as binary and Docker image (`ghcr.io/metaneutrons/snapdog-client`).
