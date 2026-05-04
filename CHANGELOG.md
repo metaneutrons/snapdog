@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.1](https://github.com/metaneutrons/snapdog/compare/v0.8.0...v0.8.1) (2026-05-04)
+
+
+### Bug Fixes
+
+* **docker:** add snapdog-common to build context ([fc07098](https://github.com/metaneutrons/snapdog/commit/fc070988afdc596c72fa05b0b41f2b09a120bcc5))
+* **docker:** npm ci --force in Dockerfile (platform-specific optional deps) ([53c0af0](https://github.com/metaneutrons/snapdog/commit/53c0af0488ee3758d571803f5fa74517438485d9))
+
 ## [0.8.0](https://github.com/metaneutrons/snapdog/compare/v0.7.0...v0.8.0) (2026-05-04)
 
 
