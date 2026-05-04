@@ -235,18 +235,25 @@ jobs:
             gzip -kf "dists/stable/main/binary-${arch}/Packages"
           done
 
-          # Generate Release file
-          cat > dists/stable/Release <<EOF
-          Origin: SnapDog
-          Label: SnapDog
-          Suite: stable
-          Codename: stable
-          Architectures: amd64 arm64
-          Components: main
-          Description: SnapDog multi-room audio system
-          EOF
-          # Fix indentation
-          sed -i 's/^          //' dists/stable/Release
+          # Generate Release file with Date and hashes
+          {
+            echo "Origin: SnapDog"
+            echo "Label: SnapDog"
+            echo "Suite: stable"
+            echo "Codename: stable"
+            echo "Date: $(date -Ru)"
+            echo "Architectures: amd64 arm64"
+            echo "Components: main"
+            echo "Description: SnapDog multi-room audio system"
+            echo "MD5Sum:"
+            for f in main/binary-amd64/Packages main/binary-amd64/Packages.gz main/binary-arm64/Packages main/binary-arm64/Packages.gz; do
+              echo " $(md5sum "dists/stable/$f" | cut -d' ' -f1) $(stat -c%s "dists/stable/$f") $f"
+            done
+            echo "SHA256:"
+            for f in main/binary-amd64/Packages main/binary-amd64/Packages.gz main/binary-arm64/Packages main/binary-arm64/Packages.gz; do
+              echo " $(sha256sum "dists/stable/$f" | cut -d' ' -f1) $(stat -c%s "dists/stable/$f") $f"
+            done
+          } > dists/stable/Release
       - name: Push to gh-pages
         working-directory: gh-pages
         run: |
