@@ -16,6 +16,7 @@ WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
 COPY snapdog/ snapdog/
 COPY snapdog-client/ snapdog-client/
+COPY snapdog-common/ snapdog-common/
 COPY xtask/ xtask/
 COPY --from=webui-builder /build/webui/out webui/out
 RUN cargo build --release -p snapdog
