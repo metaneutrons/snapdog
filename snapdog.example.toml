@@ -87,6 +87,8 @@ default_zone = "Ground Floor"
 # ── Spotify Connect ────────────────────────────────────────────────────────
 # Remove this section entirely to disable Spotify Connect.
 [spotify]
+# Spotify Connect device name (visible in Spotify app)
+name = "SnapDog"
 # Spotify streaming bitrate: 96, 160, or 320 kbps
 bitrate = 320
 
