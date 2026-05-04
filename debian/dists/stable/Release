@@ -2,6 +2,17 @@ Origin: SnapDog
 Label: SnapDog
 Suite: stable
 Codename: stable
+Date: Mon, 04 May 2026 06:48:47 UTC
 Architectures: amd64 arm64
 Components: main
 Description: SnapDog multi-room audio system
+MD5Sum:
+ c15701dec0b8586f47267ad16267d645 827 main/binary-amd64/Packages
+ 8824f0ef9a7820fae32ee6dd69f829e2 490 main/binary-amd64/Packages.gz
+ ae957136398f4fa07c9e7c025c4e96ae 827 main/binary-arm64/Packages
+ f558dc34f1eaadbe2c673d760d519da6 491 main/binary-arm64/Packages.gz
+SHA256:
+ 440e004105a7add35cc9ee428c886acf7f7da3178d23cd28f6d54eac4bdf1abb 827 main/binary-amd64/Packages
+ 0db2f19d193df93f14d7ef33733d119c4071ab600888be6ca6776a5dc3c6e003 490 main/binary-amd64/Packages.gz
+ a7dc2da95eacb0c916a5650271dbbaa1091ea87512aae73840de80f7b845a7d6 827 main/binary-arm64/Packages
+ c8874d3a47daface7b9e05d4a015581fba892acae76ec657f65f3599f659ccae 491 main/binary-arm64/Packages.gz
