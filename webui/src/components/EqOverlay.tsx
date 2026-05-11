@@ -352,10 +352,10 @@ function SpeakerTab({ clientId, enabled, setEnabled, abBypass }: { clientId: num
   const isEnabled = enabled;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* Content — hidden when off, dimmed when A/B */}
       {isEnabled || abBypass ? (
-        <div className={`space-y-4 ${abBypass ? 'opacity-50 pointer-events-none' : ''} transition-opacity duration-150`}>
+        <div className={`space-y-5 ${abBypass ? 'opacity-50 pointer-events-none' : ''} transition-opacity duration-150`}>
         {/* Correction curve */}
         <FrequencyResponseCurve response={response} curveLabel="Speaker correction curve" />
 
