@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useClientDrop } from "@/hooks/useClientDrop";
+import { Marquee } from "@/components/Marquee";
 import type { ZoneState } from "@/stores/useAppStore";
 
 interface ZoneRailItemProps {
@@ -51,9 +52,9 @@ export function ZoneRailItem({ zone, selected, onSelect }: ZoneRailItemProps) {
       </div>
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium truncate">{zone.name}</div>
-        <div className="text-xs text-muted-foreground truncate">
+        <div className="text-xs text-muted-foreground">
           {zone.track && zone.source !== "idle"
-            ? `${zone.track.artist} — ${zone.track.title}`
+            ? <Marquee>{`${zone.track.artist} — ${zone.track.title}`}</Marquee>
             : t("zone.idle")}
         </div>
       </div>
