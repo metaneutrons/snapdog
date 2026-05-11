@@ -74,9 +74,16 @@ impl SpeakerDb {
             .client
             .get(INDEX_URL)
             .header("Accept", "application/vnd.github.v3+json")
+            .header("User-Agent", concat!("snapdog/", env!("CARGO_PKG_VERSION")))
             .send()
             .await
             .context("Failed to fetch speaker index from GitHub")?;
+        if !resp.status().is_success() {
+            anyhow::bail!(
+                "GitHub API returned {} (rate limit?)",
+                resp.status()
+            );
+        }
         let entries: Vec<GitHubEntry> = resp
             .json()
             .await
