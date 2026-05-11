@@ -205,14 +205,17 @@ async fn publish_zone_state(
     store: &state::SharedState,
     transport: &impl KnxPublisher,
 ) {
-    let s = store.read().await;
-    let Some(zone) = s.zones.get(&zone_index) else {
-        return;
-    };
     let Some(zone_cfg) = config.zones.get(zone_index - 1) else {
         return;
     };
     let knx = &zone_cfg.knx;
+    let zone = {
+        let s = store.read().await;
+        match s.zones.get(&zone_index) {
+            Some(z) => z.clone(),
+            None => return,
+        }
+    };
     let playing = zone.playback.to_string() == "playing";
 
     if let Some(ref ga) = knx.volume_status {
@@ -274,16 +277,16 @@ async fn publish_zone_track(
     store: &state::SharedState,
     transport: &impl KnxPublisher,
 ) {
-    let s = store.read().await;
-    let Some(zone) = s.zones.get(&zone_index) else {
-        return;
-    };
     let Some(zone_cfg) = config.zones.get(zone_index - 1) else {
         return;
     };
     let knx = &zone_cfg.knx;
+    let track = {
+        let s = store.read().await;
+        s.zones.get(&zone_index).and_then(|z| z.track.clone())
+    };
 
-    if let Some(ref track) = zone.track {
+    if let Some(ref track) = track {
         if let Some(ref ga) = knx.track_title_status {
             write(
                 transport,
@@ -333,15 +336,17 @@ async fn publish_zone_progress(
     store: &state::SharedState,
     transport: &impl KnxPublisher,
 ) {
-    let s = store.read().await;
-    let Some(zone) = s.zones.get(&zone_index) else {
-        return;
-    };
     let Some(zone_cfg) = config.zones.get(zone_index - 1) else {
         return;
     };
     if let Some(ref ga) = zone_cfg.knx.track_progress_status {
-        let pct = zone.track.as_ref().map_or(0.0, track_progress_pct);
+        let pct = {
+            let s = store.read().await;
+            s.zones
+                .get(&zone_index)
+                .and_then(|z| z.track.as_ref())
+                .map_or(0.0, track_progress_pct)
+        };
         write(transport, ga, DPT_SCALING, &DptValue::Float(pct)).await;
     }
 }
@@ -352,14 +357,17 @@ async fn publish_client_state(
     store: &state::SharedState,
     transport: &impl KnxPublisher,
 ) {
-    let s = store.read().await;
-    let Some(client) = s.clients.get(&client_index) else {
-        return;
-    };
     let Some(client_cfg) = config.clients.get(client_index - 1) else {
         return;
     };
     let knx = &client_cfg.knx;
+    let client = {
+        let s = store.read().await;
+        match s.clients.get(&client_index) {
+            Some(c) => c.clone(),
+            None => return,
+        }
+    };
 
     if let Some(ref ga) = knx.volume_status {
         write(
