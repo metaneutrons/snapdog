@@ -140,6 +140,29 @@ async fn handle_event(
                     }
                 }
 
+                // Push snapdog's persisted volume/mute to snapcast (SSOT)
+                let (push_vol, push_mute) = {
+                    let s = store.read().await;
+                    s.clients
+                        .get(&client_index)
+                        .map(|c| (c.base_volume, c.muted))
+                        .unwrap_or((crate::state::DEFAULT_VOLUME, false))
+                };
+                let _ = backend
+                    .execute(SnapcastCmd::Client {
+                        client_id: id.clone(),
+                        action: ClientAction::Volume(push_vol),
+                    })
+                    .await;
+                if push_mute {
+                    let _ = backend
+                        .execute(SnapcastCmd::Client {
+                            client_id: id.clone(),
+                            action: ClientAction::Mute(true),
+                        })
+                        .await;
+                }
+
                 // Push persisted client EQ config (only to SnapDog clients)
                 if is_snapdog {
                     let eq_config = eq_store
