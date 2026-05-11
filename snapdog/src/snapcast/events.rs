@@ -361,6 +361,20 @@ async fn setup_zone_group(
         }
     }
 
+    // Ensure group is unmuted — stale mute in state file would block audio
+    let group_muted = group.get("muted").and_then(|m| m.as_bool()).unwrap_or(false);
+    if group_muted {
+        if let Err(e) = backend
+            .execute(SnapcastCmd::Group {
+                group_id: gid.clone(),
+                action: GroupAction::Mute(false),
+            })
+            .await
+        {
+            tracing::warn!(error = %e, "Failed to unmute group");
+        }
+    }
+
     // Store group ID
     let mut s = store.write().await;
     if let Some(zone) = s.zones.get_mut(&zone_index) {
