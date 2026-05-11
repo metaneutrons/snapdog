@@ -20,6 +20,11 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
+    if cli.test_tone {
+        player::play_test_tone(&cli.soundcard)?;
+        return Ok(());
+    }
+
     #[cfg(feature = "encryption")]
     let encryption_psk = cli.encryption_psk.clone();
     let null_player = cli.player == "null";

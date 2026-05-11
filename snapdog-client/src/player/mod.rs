@@ -522,3 +522,70 @@ fn run_cpal(
     std::thread::park();
     Ok(())
 }
+
+/// Play a 440 Hz sine wave for 2 seconds to verify audio output, then exit.
+pub fn play_test_tone(device_name: &str) -> anyhow::Result<()> {
+    use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+
+    const FREQ: f32 = 440.0;
+    const DURATION_SECS: f32 = 2.0;
+    const AMPLITUDE: f32 = 0.3;
+
+    let host = cpal::default_host();
+    let device = if device_name == "default" {
+        host.default_output_device()
+    } else {
+        host.output_devices()?
+            .find(|d| d.description().map_or(false, |n| format!("{n}").contains(device_name)))
+    }
+    .ok_or_else(|| anyhow::anyhow!("no output device '{device_name}'"))?;
+
+    let config = device.default_output_config()?;
+    let sample_rate = config.sample_rate() as f32;
+    let channels = config.channels() as usize;
+    let total_samples = (DURATION_SECS * sample_rate) as usize;
+    let mut sample_idx = 0usize;
+
+    println!(
+        "Playing 440 Hz test tone for 2s on: {}",
+        device.description().map(|d| format!("{d}")).unwrap_or_default()
+    );
+
+    let stream_config = cpal::StreamConfig {
+        channels: config.channels() as u16,
+        sample_rate: config.sample_rate(),
+        buffer_size: cpal::BufferSize::Default,
+    };
+
+    let done = Arc::new(AtomicBool::new(false));
+    let done_cb = done.clone();
+
+    let stream = device.build_output_stream(
+        &stream_config,
+        move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+            for frame in data.chunks_mut(channels) {
+                if sample_idx >= total_samples {
+                    frame.fill(0.0);
+                    done_cb.store(true, Ordering::Relaxed);
+                    continue;
+                }
+                let t = sample_idx as f32 / sample_rate;
+                let sample = AMPLITUDE * (2.0 * std::f32::consts::PI * FREQ * t).sin();
+                frame.fill(sample);
+                sample_idx += 1;
+            }
+        },
+        |err| eprintln!("Audio error: {err}"),
+        None,
+    )?;
+
+    stream.play()?;
+
+    while !done.load(Ordering::Relaxed) {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    // Let the buffer drain
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    Ok(())
+}

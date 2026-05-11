@@ -50,6 +50,10 @@ pub struct Cli {
     #[arg(short, long)]
     pub list: bool,
 
+    /// Play a test tone and exit (verifies audio output works)
+    #[arg(long)]
+    pub test_tone: bool,
+
     /// PCM device index or name
     #[arg(short, long, default_value = "default")]
     pub soundcard: String,
