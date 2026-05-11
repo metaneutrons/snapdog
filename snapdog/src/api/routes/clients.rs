@@ -231,26 +231,28 @@ async fn set_zone(
     // Send fade-out to client before switching zones (only SnapDog clients support it)
     let fade_ms = state.config.audio.zone_switch_fade_ms;
     let is_snapdog = if fade_ms > 0 {
-        let s = state.store.read().await;
-        if let Some(client) = s.clients.get(&idx) {
-            if client.is_snapdog {
-                if let Some(ref snap_id) = client.snapcast_id {
-                    let _ = state
-                        .snap_tx
-                        .send(SnapcastCmd::Client {
-                            client_id: snap_id.clone(),
-                            action: ClientAction::SendCustom {
-                                type_id: snapdog_common::MSG_TYPE_FADE_OUT,
-                                payload: fade_ms.to_le_bytes().to_vec(),
-                            },
-                        })
-                        .await;
-                }
+        let (is_sd, snap_id) = {
+            let s = state.store.read().await;
+            s.clients
+                .get(&idx)
+                .map(|c| (c.is_snapdog, c.snapcast_id.clone()))
+                .unwrap_or((false, None))
+        };
+        if is_sd {
+            if let Some(snap_id) = snap_id {
+                let _ = state
+                    .snap_tx
+                    .send(SnapcastCmd::Client {
+                        client_id: snap_id,
+                        action: ClientAction::SendCustom {
+                            type_id: snapdog_common::MSG_TYPE_FADE_OUT,
+                            payload: fade_ms.to_le_bytes().to_vec(),
+                        },
+                    })
+                    .await;
             }
-            client.is_snapdog
-        } else {
-            false
         }
+        is_sd
     } else {
         false
     };

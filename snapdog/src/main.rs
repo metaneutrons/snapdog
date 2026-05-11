@@ -353,21 +353,25 @@ async fn main() -> Result<()> {
                     tracing::warn!(error = %e, "MQTT subscribe failed");
                 }
                 // Publish initial state for all zones and clients
-                let snap = store.read().await;
-                for (&idx, zone) in &snap.zones {
+                let (zones, clients) = {
+                    let s = store.read().await;
+                    let z: Vec<_> = s.zones.iter().map(|(&i, z)| (i, z.clone())).collect();
+                    let c: Vec<_> = s.clients.iter().map(|(&i, c)| (i, c.clone())).collect();
+                    (z, c)
+                };
+                for (idx, zone) in &zones {
                     if let Err(e) = bridge
-                        .publish_zone_state(idx, zone)
+                        .publish_zone_state(*idx, zone)
                         .await
                     {
                         tracing::warn!(zone = idx, error = %e, "MQTT initial zone publish failed");
                     }
                 }
-                for (&idx, client) in &snap.clients {
-                    if let Err(e) = bridge.publish_client_state(idx, client).await {
+                for (idx, client) in &clients {
+                    if let Err(e) = bridge.publish_client_state(*idx, client).await {
                         tracing::warn!(client = idx, error = %e, "MQTT initial client publish failed");
                     }
                 }
-                drop(snap);
                 Some(bridge)
             }
             Err(e) => {
