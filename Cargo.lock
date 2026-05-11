@@ -3893,9 +3893,9 @@ checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 
 [[package]]
 name = "snapcast-client"
-version = "0.7.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2bd4c1338b3fa67da32491d20c07f39e35773880828a428a76a68d1ae6bc00e"
+checksum = "06e9156348baa0852b458f7bc1d2d864c974f4e13e8523e1371d6b10c8cab80f"
 dependencies = [
  "anyhow",
  "chacha20poly1305",
@@ -3912,7 +3912,7 @@ dependencies = [
  "rustls-native-certs",
  "serde",
  "sha2",
- "snapcast-proto 0.7.0",
+ "snapcast-proto",
  "symphonia",
  "tokio",
  "tokio-rustls",
@@ -3922,21 +3922,9 @@ dependencies = [
 
 [[package]]
 name = "snapcast-proto"
-version = "0.7.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28f08a6a5ca90ac3817c8a8a0e1b91964c3328757c632af390b36a985df3d151"
-dependencies = [
- "byteorder",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "snapcast-proto"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d907a9a2865964245d70036296a157ed4143b58fe612b66ad6cf4036eaa2fcff"
+checksum = "f5ad04dfae291f01f3a3ea287614ed1879fcd08c62656c1a9a1b885bdd012669"
 dependencies = [
  "byteorder",
  "serde",
@@ -3946,9 +3934,9 @@ dependencies = [
 
 [[package]]
 name = "snapcast-server"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "262f3aea9f9904d971e67b1d7ddc38b11b529ad1c5ac9b891898cc0e721fb501"
+checksum = "141a05b6b378f8f6d77b9d84a77cfea698352de5a7bc5a114923397021305a5b"
 dependencies = [
  "anyhow",
  "base64",
@@ -3963,7 +3951,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "snapcast-proto 0.9.0",
+ "snapcast-proto",
  "socket2 0.5.10",
  "subtle",
  "tokio",
@@ -4003,7 +3991,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shairplay",
- "snapcast-proto 0.9.0",
+ "snapcast-proto",
  "snapcast-server",
  "snapdog-common",
  "symphonia",
@@ -4036,7 +4024,7 @@ dependencies = [
  "serde",
  "serde_json",
  "snapcast-client",
- "snapcast-proto 0.7.0",
+ "snapcast-proto",
  "snapdog-common",
  "tokio",
  "tracing",
