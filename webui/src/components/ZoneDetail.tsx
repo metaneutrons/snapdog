@@ -102,8 +102,8 @@ export function ZoneDetail({ zone }: { zone: ZoneState }) {
             />
           </div>
         </div>
-        <ClientList zone={zone} />
         <PlaylistBrowser zone={zone} />
+        <ClientList zone={zone} />
       </div>
       {showEq && <EqOverlay zoneId={zone.index} label={zone.name} onClose={(enabled) => { setShowEq(false); setEqEnabled(enabled); }} />}
     </div>

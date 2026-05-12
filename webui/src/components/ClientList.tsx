@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
 import { useTranslations } from "next-intl";
 import { api } from "@/lib/api";
 import { logApiError } from "@/lib/log-api-error";
@@ -120,12 +118,10 @@ function ClientCard({ client }: { client: ClientInfo }) {
   );
 }
 
-const BREAKPOINT_MD = 768;
 const SHOW_OFFLINE_KEY = "snapdog-show-offline";
 
 export function ClientList({ zone }: { zone: ZoneState }) {
   const t = useTranslations("client");
-  const [expanded, setExpanded] = useState(() => typeof window !== "undefined" && window.innerWidth >= BREAKPOINT_MD);
   const [showOffline, setShowOffline] = useState(() => typeof window !== "undefined" && localStorage.getItem(SHOW_OFFLINE_KEY) === "true");
   const clients = useAppStore((s) => s.clients);
 
@@ -145,15 +141,9 @@ export function ClientList({ zone }: { zone: ZoneState }) {
   return (
     <div className="w-full">
       <div className="flex items-center px-3 py-2">
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          aria-expanded={expanded}
-          aria-label={expanded ? t("collapse") : t("expand")}
-        >
-          <HugeiconsIcon icon={ArrowDown01Icon} size={12} className={`transition-transform ${expanded ? "rotate-180" : ""}`} />
-          <span>{t("clients", { count: visibleClients.length })}</span>
-        </button>
+        <span className="text-xs text-muted-foreground">
+          {t("clients", { count: visibleClients.length })}
+        </span>
         {offlineCount > 0 && (
           <button
             onClick={toggleOffline}
@@ -165,7 +155,7 @@ export function ClientList({ zone }: { zone: ZoneState }) {
           </button>
         )}
       </div>
-      {expanded && visibleClients.length > 0 && (
+      {visibleClients.length > 0 && (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-1 border-t border-border pt-1">
           {visibleClients.map((c) => (
             <div key={c.index}>
