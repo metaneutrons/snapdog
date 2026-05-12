@@ -67,6 +67,7 @@ anyhow = "1"
 
 # Snapcast
 snapcast-server = { version = "0.9", features = ["flac", "encryption", "mdns", "custom-protocol"] }
+snapcast-client = "0.9"
 snapcast-proto = "0.9"
 
 # Shared

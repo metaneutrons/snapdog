@@ -13,8 +13,8 @@ path = "src/main.rs"
 [target.'cfg(target_os = "linux")'.dependencies]
 alsa = "0.11"
 [dependencies]
-snapcast-client = "0.7"
-snapcast-proto = "0.7"
+snapcast-client = { workspace = true }
+snapcast-proto = { workspace = true }
 snapdog-common = { workspace = true }
 tokio = { version = "1", features = ["full"] }
 clap = { version = "4", features = ["derive"] }

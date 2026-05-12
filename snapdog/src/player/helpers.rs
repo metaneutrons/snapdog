@@ -98,16 +98,14 @@ pub async fn start_subsonic_track_decode(
     let ac = ctx.config.audio.clone();
 
     if let Some(cache) = ctx.track_cache {
-        let content_type = "audio/mpeg"; // will be overridden by HTTP response in decode_http_stream_cached
-        let total_bytes = None; // unknown until HTTP response
-        if let Ok(writer) = cache.start_download(&track.id, content_type, total_bytes) {
-            *ds.current_decode = Some(tokio::spawn(async move {
-                if let Err(e) = audio::decode_http_stream_cached(url, tx, ac, writer).await {
-                    tracing::error!(error = %e, "Subsonic cached decode failed");
-                }
-            }));
-            return;
-        }
+        let cache = cache.clone();
+        let tid = track.id.clone();
+        *ds.current_decode = Some(tokio::spawn(async move {
+            if let Err(e) = audio::decode_http_stream_cached(url, tx, ac, &cache, &tid).await {
+                tracing::error!(error = %e, "Subsonic cached decode failed");
+            }
+        }));
+        return;
     }
 
     // Fallback — no cache, stream directly

@@ -435,6 +435,8 @@ fn run_cpal(
     let channels = format.channels() as usize;
     let was_silent = Arc::new(AtomicBool::new(true));
     let signal_flag = was_silent.clone();
+    let first_data_log = Arc::new(AtomicBool::new(true));
+    let first_data_flag = first_data_log.clone();
 
     let cpal_stream = device.build_output_stream(
         &config,
@@ -502,6 +504,14 @@ fn run_cpal(
                 tracing::debug!("Audio signal detected");
             } else if !has_signal && !signal_flag.load(Ordering::Relaxed) {
                 signal_flag.store(true, Ordering::Relaxed);
+            }
+            // One-shot: log peak amplitude of first non-zero buffer
+            if first_data_flag.load(Ordering::Relaxed) {
+                let peak = data.iter().map(|s| s.abs()).fold(0.0f32, f32::max);
+                if peak > 0.0 {
+                    tracing::debug!(peak, num_frames, current_sample_size, "First non-zero audio buffer");
+                    first_data_flag.store(false, Ordering::Relaxed);
+                }
             }
 
             // Apply speaker correction after music EQ

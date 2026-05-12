@@ -44,7 +44,7 @@ pub enum CacheEntry {
 
 /// Handle for writing bytes to a cache entry during download.
 pub struct CacheWriter {
-    file: fs::File,
+    file: Option<fs::File>,
     partial_path: PathBuf,
     final_path: PathBuf,
     track_id: String,
@@ -52,14 +52,16 @@ pub struct CacheWriter {
     bytes_written: u64,
     total_bytes: Option<u64>,
     cache: TrackCache,
+    completed: bool,
 }
 
 impl CacheWriter {
     /// Append bytes to the partial file.
     pub fn write(&mut self, data: &[u8]) -> Result<()> {
-        self.file
-            .write_all(data)
-            .context("Failed to write to cache file")?;
+        if let Some(ref mut file) = self.file {
+            file.write_all(data)
+                .context("Failed to write to cache file")?;
+        }
         self.bytes_written += data.len() as u64;
         Ok(())
     }
@@ -75,8 +77,9 @@ impl CacheWriter {
     }
 
     /// Finalize the download — rename `.partial` to final path and update index.
-    pub fn complete(self) -> Result<PathBuf> {
-        drop(self.file);
+    pub fn complete(mut self) -> Result<PathBuf> {
+        self.completed = true;
+        self.file.take(); // close file before rename
         fs::rename(&self.partial_path, &self.final_path)
             .context("Failed to rename partial cache file")?;
         self.cache.mark_complete(
@@ -84,18 +87,27 @@ impl CacheWriter {
             &self.content_type,
             self.bytes_written,
         );
-        Ok(self.final_path)
+        Ok(self.final_path.clone())
     }
 
     /// Abort the download — remove the partial file.
-    pub fn abort(self) {
-        drop(self.file);
+    pub fn abort(mut self) {
+        self.completed = true; // prevent Drop from double-removing
+        self.file.take(); // close file before remove
         let _ = fs::remove_file(&self.partial_path);
     }
 
     /// Path to the partial file (for reading while downloading).
     pub fn partial_path(&self) -> &Path {
         &self.partial_path
+    }
+}
+
+impl Drop for CacheWriter {
+    fn drop(&mut self) {
+        if !self.completed && self.partial_path.exists() {
+            let _ = std::fs::remove_file(&self.partial_path);
+        }
     }
 }
 
@@ -138,7 +150,6 @@ impl TrackCache {
             if path.exists() {
                 idx.entries[pos].last_accessed = now_epoch_secs();
                 let content_type = idx.entries[pos].content_type.clone();
-                self.persist_index(&idx);
                 return CacheEntry::Complete { path, content_type };
             }
             // File missing — remove stale index entry
@@ -179,7 +190,7 @@ impl TrackCache {
             .with_context(|| format!("Failed to create cache file: {}", partial_path.display()))?;
 
         Ok(CacheWriter {
-            file,
+            file: Some(file),
             partial_path,
             final_path,
             track_id: track_id.to_string(),
@@ -187,6 +198,7 @@ impl TrackCache {
             bytes_written: 0,
             total_bytes,
             cache: self.clone(),
+            completed: false,
         })
     }
 

@@ -233,12 +233,13 @@ pub async fn decode_http_stream(
 ///
 /// On completion, finalizes the cache entry. On abort (consumer dropped), the partial
 /// file remains for potential future resume.
-#[tracing::instrument(skip(tx, audio_config, cache_writer))]
+#[tracing::instrument(skip(tx, audio_config, cache))]
 pub async fn decode_http_stream_cached(
     url: String,
     tx: PcmSender,
     audio_config: AudioConfig,
-    mut cache_writer: cache::CacheWriter,
+    cache: &cache::TrackCache,
+    track_id: &str,
 ) -> Result<()> {
     let client = icy::icy_client();
     let response = client
@@ -253,10 +254,16 @@ pub async fn decode_http_stream_cached(
         .headers()
         .get("content-type")
         .and_then(|v| v.to_str().ok())
-        .unwrap_or("")
+        .unwrap_or("application/octet-stream")
         .to_string();
+    let content_length = response.content_length();
 
     tracing::info!(content_type = %content_type, "Cached stream connected");
+
+    // Create writer with correct content_type from HTTP response
+    let mut cache_writer = cache
+        .start_download(track_id, &content_type, content_length)
+        .context("Failed to start cache download")?;
 
     // MP4/M4A: buffer entirely, write to cache, then decode
     let needs_seek = content_type.contains("mp4") || content_type.contains("m4a");
@@ -283,25 +290,29 @@ pub async fn decode_http_stream_cached(
     // Streaming path: pipe to decoder + tee to cache
     let (mut pipe_tx, pipe_rx) = tokio::io::duplex(PIPE_BUFFER_SIZE);
     let progress_tx = tx.clone();
-    let total_bytes = cache_writer.total_bytes();
+    let total_bytes = content_length;
 
     let url_clone = url.clone();
     let http_task = tokio::spawn(async move {
         use futures_util::StreamExt;
         use tokio::io::AsyncWriteExt;
         let mut stream = response.bytes_stream();
+        let mut write_failed = false;
         while let Some(chunk) = stream.next().await {
             match chunk {
                 Ok(bytes) => {
-                    // Tee to cache
-                    if let Err(e) = cache_writer.write(&bytes) {
-                        tracing::warn!(error = %e, "Cache write failed, continuing without cache");
+                    // Tee to cache (abort on first failure)
+                    if !write_failed {
+                        if let Err(e) = cache_writer.write(&bytes) {
+                            tracing::warn!(error = %e, "Cache write failed, aborting cache");
+                            write_failed = true;
+                        } else {
+                            let _ = progress_tx.send(PcmMessage::BufferProgress {
+                                buffered_bytes: cache_writer.bytes_written(),
+                                total_bytes,
+                            }).await;
+                        }
                     }
-                    // Send buffer progress
-                    let _ = progress_tx.send(PcmMessage::BufferProgress {
-                        buffered_bytes: cache_writer.bytes_written(),
-                        total_bytes,
-                    }).await;
                     // Write to decode pipe
                     if pipe_tx.write_all(&bytes).await.is_err() {
                         break;
@@ -314,10 +325,12 @@ pub async fn decode_http_stream_cached(
             }
         }
         let _ = pipe_tx.shutdown().await;
-        // Finalize cache entry
-        if let Err(e) = cache_writer.complete() {
-            tracing::warn!(error = %e, "Failed to finalize cache entry");
+        if !write_failed {
+            if let Err(e) = cache_writer.complete() {
+                tracing::warn!(error = %e, "Failed to finalize cache entry");
+            }
         }
+        // If write_failed, Drop will clean up the partial file
     });
 
     let decode_task = tokio::task::spawn_blocking(move || {
@@ -488,16 +501,7 @@ fn decode_to_pcm(
     content_type: &str,
     tx: &PcmSender,
 ) -> Result<()> {
-    let mut hint = Hint::new();
-    match content_type {
-        t if t.contains("mp4") || t.contains("m4a") => hint.with_extension("m4a"),
-        t if t.contains("aac") => hint.with_extension("aac"),
-        t if t.contains("mpeg") || t.contains("mp3") => hint.with_extension("mp3"),
-        t if t.contains("flac") => hint.with_extension("flac"),
-        t if t.contains("ogg") => hint.with_extension("ogg"),
-        _ => &mut hint,
-    };
-
+    let hint = hint_for_content_type(content_type);
     let mss = MediaSourceStream::new(Box::new(reader), MediaSourceStreamOptions::default());
     let probed = symphonia::default::get_probe()
         .format(
@@ -523,76 +527,7 @@ fn decode_to_pcm(
         .make(&track.codec_params, &DecoderOptions::default())
         .context("Failed to create decoder")?;
 
-    let time_base = track.codec_params.time_base;
-    let mut format_sent = false;
-    let mut last_position_sec: i64 = -1;
-
-    loop {
-        let packet = match format.next_packet() {
-            Ok(p) => p,
-            Err(symphonia::core::errors::Error::IoError(e))
-                if e.kind() == std::io::ErrorKind::UnexpectedEof =>
-            {
-                tracing::debug!("Stream ended (EOF)");
-                break;
-            }
-            Err(e) => {
-                tracing::warn!(error = %e, "Packet read error, skipping");
-                continue;
-            }
-        };
-
-        if packet.track_id() != track_id {
-            continue;
-        }
-
-        let decoded = match decoder.decode(&packet) {
-            Ok(d) => d,
-            Err(e) => {
-                tracing::debug!(error = %e, "Decode error, skipping packet");
-                continue;
-            }
-        };
-
-        // Convert to interleaved f32
-        let spec = *decoded.spec();
-        let num_frames = decoded.frames();
-
-        // Send actual format from decoded audio (not container metadata)
-        if !format_sent {
-            let _ = tx.blocking_send(PcmMessage::Format {
-                sample_rate: spec.rate,
-                channels: spec.channels.count() as u16,
-            });
-            format_sent = true;
-        }
-
-        let mut sample_buf = SampleBuffer::<f32>::new(num_frames as u64, spec);
-        sample_buf.copy_interleaved_ref(decoded);
-
-        if tx
-            .blocking_send(PcmMessage::Audio(sample_buf.samples().to_vec()))
-            .is_err()
-        {
-            tracing::debug!("PCM consumer dropped, stopping decode");
-            break;
-        }
-
-        // Send position ~once per second using symphonia's packet timestamp
-        if let Some(tb) = time_base {
-            let time = tb.calc_time(packet.ts());
-            let sec = time.seconds as i64;
-            if sec != last_position_sec {
-                last_position_sec = sec;
-                let ms = (time.seconds as i64) * 1000 + (time.frac * 1000.0) as i64;
-                let _ = tx.blocking_send(PcmMessage::Position(ms));
-            }
-        }
-    }
-
-    // Note: resampling is handled by the ZonePlayer, not the decoder
-
-    Ok(())
+    run_decode_loop(&mut format, &mut decoder, track_id, tx)
 }
 
 /// Decode a cached file on disk with optional seek to a position.
@@ -608,16 +543,7 @@ pub fn decode_cached_file(
     let file = std::fs::File::open(path)
         .with_context(|| format!("Failed to open cached file: {}", path.display()))?;
 
-    let mut hint = Hint::new();
-    match content_type {
-        t if t.contains("mp4") || t.contains("m4a") => hint.with_extension("m4a"),
-        t if t.contains("aac") => hint.with_extension("aac"),
-        t if t.contains("mpeg") || t.contains("mp3") => hint.with_extension("mp3"),
-        t if t.contains("flac") => hint.with_extension("flac"),
-        t if t.contains("ogg") => hint.with_extension("ogg"),
-        _ => &mut hint,
-    };
-
+    let hint = hint_for_content_type(content_type);
     let mss = MediaSourceStream::new(Box::new(file), MediaSourceStreamOptions::default());
     let probed = symphonia::default::get_probe()
         .format(
@@ -631,7 +557,6 @@ pub fn decode_cached_file(
     let mut format = probed.format;
     let track = format.default_track().context("No audio track found")?;
     let track_id = track.id;
-    let time_base = track.codec_params.time_base;
 
     tracing::info!(
         codec = ?track.codec_params.codec,
@@ -660,7 +585,33 @@ pub fn decode_cached_file(
         }
     }
 
-    // Decode loop (same as decode_to_pcm)
+    run_decode_loop(&mut format, &mut decoder, track_id, tx)
+}
+
+/// Build a symphonia hint from an HTTP content-type string.
+fn hint_for_content_type(content_type: &str) -> Hint {
+    let mut hint = Hint::new();
+    match content_type {
+        t if t.contains("mp4") || t.contains("m4a") => hint.with_extension("m4a"),
+        t if t.contains("aac") => hint.with_extension("aac"),
+        t if t.contains("mpeg") || t.contains("mp3") => hint.with_extension("mp3"),
+        t if t.contains("flac") => hint.with_extension("flac"),
+        t if t.contains("ogg") => hint.with_extension("ogg"),
+        _ => &mut hint,
+    };
+    hint
+}
+
+/// Shared decode loop: reads packets, decodes, sends PCM + position to channel.
+fn run_decode_loop(
+    format: &mut Box<dyn symphonia::core::formats::FormatReader>,
+    decoder: &mut Box<dyn symphonia::core::codecs::Decoder>,
+    track_id: u32,
+    tx: &PcmSender,
+) -> Result<()> {
+    let time_base = format
+        .default_track()
+        .and_then(|t| t.codec_params.time_base);
     let mut format_sent = false;
     let mut last_position_sec: i64 = -1;
 
@@ -670,7 +621,7 @@ pub fn decode_cached_file(
             Err(symphonia::core::errors::Error::IoError(e))
                 if e.kind() == std::io::ErrorKind::UnexpectedEof =>
             {
-                tracing::debug!("Cached file decode complete (EOF)");
+                tracing::debug!("Stream ended (EOF)");
                 break;
             }
             Err(e) => {

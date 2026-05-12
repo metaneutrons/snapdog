@@ -1,0 +1,17 @@
+{
+  "zones": {},
+  "clients": {
+    "1": {
+      "enabled": false,
+      "bands": [
+        {
+          "freq": 145.0,
+          "gain": 8.0,
+          "q": 1.0,
+          "type": "low_shelf"
+        }
+      ]
+    }
+  },
+  "speaker_corrections": {}
+}

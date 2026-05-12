@@ -432,6 +432,7 @@ async fn run(
                             z.source = SourceType::Idle;
                             z.track = None;
                             z.cover_url = None;
+                            z.buffered_ms = None;
                         })
                         .await;
                     }
@@ -628,7 +629,7 @@ async fn run(
                     ZoneCommand::Stop => {
                         reset_playback(&mut current_decode, &mut decode_rx, &mut position_offset_ms).await;
                         source = ActiveSource::Idle;
-                        update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Stopped; z.source = SourceType::Idle; z.track = None; z.cover_url = None; }).await;
+                        update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Stopped; z.source = SourceType::Idle; z.track = None; z.cover_url = None; z.buffered_ms = None; }).await;
                     }
                     ZoneCommand::Next => {
                         if matches!(source, ActiveSource::AirPlay | ActiveSource::Spotify) {
@@ -979,6 +980,7 @@ async fn run(
                         z.source = SourceType::Idle;
                         z.track = None;
                         z.cover_url = None;
+                        z.buffered_ms = None;
                         z.presence_source = false;
                         z.auto_off_active = false;
                     }).await;
