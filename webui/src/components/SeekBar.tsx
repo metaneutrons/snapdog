@@ -23,6 +23,7 @@ export function SeekBar({ zone }: { zone: ZoneState }) {
 
   const [localPosition, setLocalPosition] = useState(serverPosition);
   const [dragging, setDragging] = useState(false);
+  const [pendingSeek, setPendingSeek] = useState<number | null>(null);
   const lastServerRef = useRef(serverPosition);
 
   const trackKey = `${track?.title}-${track?.artist}`;
@@ -32,13 +33,22 @@ export function SeekBar({ zone }: { zone: ZoneState }) {
   useEffect(() => {
     if (trackKey !== lastTrackRef.current) {
       setLocalPosition(0);
+      setPendingSeek(null);
       lastTrackRef.current = trackKey;
       lastServerRef.current = 0;
     } else if (!dragging) {
+      // If we have a pending seek, ignore server updates until it confirms
+      if (pendingSeek != null) {
+        if (Math.abs(serverPosition - pendingSeek) < 2000) {
+          setPendingSeek(null); // Server caught up
+        } else {
+          return; // Keep showing the seeked position
+        }
+      }
       setLocalPosition(serverPosition);
       lastServerRef.current = serverPosition;
     }
-  }, [serverPosition, dragging, trackKey, isPlaying]);
+  }, [serverPosition, dragging, trackKey, isPlaying, pendingSeek]);
 
   const isEndless = duration === 0 && !isIdle && isPlaying;
 
@@ -64,7 +74,8 @@ export function SeekBar({ zone }: { zone: ZoneState }) {
     (value: number[]) => {
       if (!canSeek) return;
       setDragging(false);
-      lastServerRef.current = value[0];
+      setLocalPosition(value[0]);
+      setPendingSeek(value[0]);
       api.zones.seekPosition(zone.index, value[0]).catch(logApiError);
     },
     [zone.index, canSeek],
