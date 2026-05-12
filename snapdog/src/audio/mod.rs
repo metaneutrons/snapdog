@@ -488,6 +488,138 @@ fn decode_to_pcm(
     Ok(())
 }
 
+/// Decode a cached file on disk with optional seek to a position.
+///
+/// Unlike `decode_http_stream`, this operates on a complete (or partial) file
+/// and supports symphonia's native seek for instant position changes.
+pub fn decode_cached_file(
+    path: &std::path::Path,
+    content_type: &str,
+    seek_ms: Option<i64>,
+    tx: &PcmSender,
+) -> Result<()> {
+    let file = std::fs::File::open(path)
+        .with_context(|| format!("Failed to open cached file: {}", path.display()))?;
+
+    let mut hint = Hint::new();
+    match content_type {
+        t if t.contains("mp4") || t.contains("m4a") => hint.with_extension("m4a"),
+        t if t.contains("aac") => hint.with_extension("aac"),
+        t if t.contains("mpeg") || t.contains("mp3") => hint.with_extension("mp3"),
+        t if t.contains("flac") => hint.with_extension("flac"),
+        t if t.contains("ogg") => hint.with_extension("ogg"),
+        _ => &mut hint,
+    };
+
+    let mss = MediaSourceStream::new(Box::new(file), MediaSourceStreamOptions::default());
+    let probed = symphonia::default::get_probe()
+        .format(
+            &hint,
+            mss,
+            &FormatOptions::default(),
+            &MetadataOptions::default(),
+        )
+        .context("Failed to probe cached audio format")?;
+
+    let mut format = probed.format;
+    let track = format.default_track().context("No audio track found")?;
+    let track_id = track.id;
+    let time_base = track.codec_params.time_base;
+
+    tracing::info!(
+        codec = ?track.codec_params.codec,
+        sample_rate = track.codec_params.sample_rate,
+        channels = ?track.codec_params.channels,
+        seek_ms,
+        "Decoding cached file"
+    );
+
+    let mut decoder = symphonia::default::get_codecs()
+        .make(&track.codec_params, &DecoderOptions::default())
+        .context("Failed to create decoder")?;
+
+    // Seek if requested
+    if let Some(ms) = seek_ms {
+        if ms > 0 {
+            use symphonia::core::formats::{SeekMode, SeekTo};
+            let seek_time = symphonia::core::units::Time {
+                seconds: (ms / 1000) as u64,
+                frac: (ms % 1000) as f64 / 1000.0,
+            };
+            match format.seek(SeekMode::Accurate, SeekTo::Time { time: seek_time, track_id: Some(track_id) }) {
+                Ok(_) => tracing::debug!(ms, "Seeked in cached file"),
+                Err(e) => tracing::warn!(error = %e, ms, "Seek failed, decoding from start"),
+            }
+        }
+    }
+
+    // Decode loop (same as decode_to_pcm)
+    let mut format_sent = false;
+    let mut last_position_sec: i64 = -1;
+
+    loop {
+        let packet = match format.next_packet() {
+            Ok(p) => p,
+            Err(symphonia::core::errors::Error::IoError(e))
+                if e.kind() == std::io::ErrorKind::UnexpectedEof =>
+            {
+                tracing::debug!("Cached file decode complete (EOF)");
+                break;
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "Packet read error, skipping");
+                continue;
+            }
+        };
+
+        if packet.track_id() != track_id {
+            continue;
+        }
+
+        let decoded = match decoder.decode(&packet) {
+            Ok(d) => d,
+            Err(e) => {
+                tracing::debug!(error = %e, "Decode error, skipping packet");
+                continue;
+            }
+        };
+
+        let spec = *decoded.spec();
+        let num_frames = decoded.frames();
+
+        if !format_sent {
+            let _ = tx.blocking_send(PcmMessage::Format {
+                sample_rate: spec.rate,
+                channels: spec.channels.count() as u16,
+            });
+            format_sent = true;
+        }
+
+        let mut sample_buf = SampleBuffer::<f32>::new(num_frames as u64, spec);
+        sample_buf.copy_interleaved_ref(decoded);
+
+        if tx
+            .blocking_send(PcmMessage::Audio(sample_buf.samples().to_vec()))
+            .is_err()
+        {
+            tracing::debug!("PCM consumer dropped, stopping decode");
+            break;
+        }
+
+        if let Some(tb) = time_base {
+            let time = tb.calc_time(packet.ts());
+            let sec = time.seconds as i64;
+            if sec != last_position_sec {
+                last_position_sec = sec;
+                let ms = (time.seconds as i64) * 1000 + (time.frac * 1000.0) as i64;
+                let _ = tx.blocking_send(PcmMessage::Position(ms));
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Bridge from async tokio DuplexStream to sync Read for symphonia.
 struct SyncReader(tokio::runtime::Handle, tokio::io::DuplexStream);
 
