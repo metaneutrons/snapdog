@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useReducer } from "react";
 import { useTranslations } from "next-intl";
 import { Slider } from "@/components/ui/slider";
 import { api } from "@/lib/api";
@@ -10,6 +10,64 @@ import type { ZoneState } from "@/stores/useAppStore";
 
 const INTERPOLATION_INTERVAL_MS = 250;
 const SEEK_STEP_MS = 1000;
+/** Safety timeout: if server doesn't confirm seek within this time, resume sync */
+const SEEK_TIMEOUT_MS = 5000;
+
+// ── State machine ─────────────────────────────────────────────
+
+type SeekState =
+  | { type: "synced"; position: number }
+  | { type: "dragging"; position: number }
+  | { type: "seeking"; target: number; sentAt: number };
+
+type SeekAction =
+  | { type: "server_update"; position: number }
+  | { type: "drag"; position: number }
+  | { type: "commit"; target: number }
+  | { type: "tick"; delta: number; duration: number }
+  | { type: "track_change" }
+  | { type: "timeout" };
+
+function seekReducer(state: SeekState, action: SeekAction): SeekState {
+  switch (action.type) {
+    case "server_update":
+      switch (state.type) {
+        case "synced":
+          return { type: "synced", position: action.position };
+        case "dragging":
+          return state; // ignore server while dragging
+        case "seeking":
+          // Server confirmed: position is at or past the target
+          if (action.position >= state.target - 2000) {
+            return { type: "synced", position: action.position };
+          }
+          return state; // still waiting
+      }
+      break; // unreachable but satisfies TS
+    case "drag":
+      return { type: "dragging", position: action.position };
+    case "commit":
+      return { type: "seeking", target: action.target, sentAt: Date.now() };
+    case "tick":
+      if (state.type === "synced") {
+        const next = action.duration > 0
+          ? Math.min(state.position + action.delta, action.duration)
+          : state.position + action.delta;
+        return { type: "synced", position: next };
+      }
+      return state;
+    case "track_change":
+      return { type: "synced", position: 0 };
+    case "timeout":
+      if (state.type === "seeking") {
+        return { type: "synced", position: state.target };
+      }
+      return state;
+  }
+  return state;
+}
+
+// ── Component ─────────────────────────────────────────────────
 
 export function SeekBar({ zone }: { zone: ZoneState }) {
   const t = useTranslations("seek");
@@ -21,51 +79,49 @@ export function SeekBar({ zone }: { zone: ZoneState }) {
   const canSeek = track?.seekable ?? false;
   const bufferedMs = zone.buffered_ms ?? null;
 
-  const [localPosition, setLocalPosition] = useState(serverPosition);
-  const [dragging, setDragging] = useState(false);
-  const [pendingSeek, setPendingSeek] = useState<number | null>(null);
-  const lastServerRef = useRef(serverPosition);
+  const [state, dispatch] = useReducer(seekReducer, { type: "synced", position: serverPosition });
 
   const trackKey = `${track?.title}-${track?.artist}`;
   const lastTrackRef = useRef(trackKey);
 
-  // Sync from server when position changes externally, or reset on track/playback change
+  // Track change detection
   useEffect(() => {
     if (trackKey !== lastTrackRef.current) {
-      setLocalPosition(0);
-      setPendingSeek(null);
       lastTrackRef.current = trackKey;
-      lastServerRef.current = 0;
-    } else if (!dragging) {
-      // If we have a pending seek, ignore server updates until it confirms
-      if (pendingSeek != null) {
-        if (Math.abs(serverPosition - pendingSeek) < 2000) {
-          setPendingSeek(null); // Server caught up
-        } else {
-          return; // Keep showing the seeked position
-        }
-      }
-      setLocalPosition(serverPosition);
-      lastServerRef.current = serverPosition;
+      dispatch({ type: "track_change" });
     }
-  }, [serverPosition, dragging, trackKey, isPlaying, pendingSeek]);
+  }, [trackKey]);
 
-  const isEndless = duration === 0 && !isIdle && isPlaying;
-
-  // Client-side interpolation: tick forward every 250ms while playing
+  // Server position sync
   useEffect(() => {
-    if (!isPlaying || dragging || isIdle) return;
+    dispatch({ type: "server_update", position: serverPosition });
+  }, [serverPosition]);
+
+  // Client-side interpolation
+  useEffect(() => {
+    if (!isPlaying || state.type !== "synced" || isIdle) return;
     const interval = setInterval(() => {
-      setLocalPosition((prev) => duration > 0 ? Math.min(prev + INTERPOLATION_INTERVAL_MS, duration) : prev + INTERPOLATION_INTERVAL_MS);
+      dispatch({ type: "tick", delta: INTERPOLATION_INTERVAL_MS, duration });
     }, INTERPOLATION_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [isPlaying, dragging, isIdle, duration]);
+  }, [isPlaying, state.type, isIdle, duration]);
+
+  // Seek timeout safety net
+  useEffect(() => {
+    if (state.type !== "seeking") return;
+    const remaining = SEEK_TIMEOUT_MS - (Date.now() - state.sentAt);
+    if (remaining <= 0) {
+      dispatch({ type: "timeout" });
+      return;
+    }
+    const timer = setTimeout(() => dispatch({ type: "timeout" }), remaining);
+    return () => clearTimeout(timer);
+  }, [state]);
 
   const handleSeek = useCallback(
     (value: number[]) => {
       if (!canSeek) return;
-      setLocalPosition(value[0]);
-      setDragging(true);
+      dispatch({ type: "drag", position: value[0] });
     },
     [canSeek],
   );
@@ -73,13 +129,14 @@ export function SeekBar({ zone }: { zone: ZoneState }) {
   const handleSeekCommit = useCallback(
     (value: number[]) => {
       if (!canSeek) return;
-      setDragging(false);
-      setLocalPosition(value[0]);
-      setPendingSeek(value[0]);
+      dispatch({ type: "commit", target: value[0] });
       api.zones.seekPosition(zone.index, value[0]).catch(logApiError);
     },
     [zone.index, canSeek],
   );
+
+  const displayPosition = state.type === "seeking" ? state.target : state.position;
+  const isEndless = duration === 0 && !isIdle && isPlaying;
 
   if (isIdle) return (
     <div className="w-full sm:max-w-xs space-y-1">
@@ -94,7 +151,6 @@ export function SeekBar({ zone }: { zone: ZoneState }) {
   return (
     <div className="w-full sm:max-w-xs space-y-1">
       <div className="relative">
-        {/* Buffer progress bar — behind the slider */}
         {bufferedMs != null && duration > 0 && bufferedMs < duration && (
           <div
             className="absolute top-1/2 -translate-y-1/2 left-0 h-3 rounded-4xl bg-primary/20 pointer-events-none"
@@ -102,7 +158,7 @@ export function SeekBar({ zone }: { zone: ZoneState }) {
           />
         )}
         <Slider
-          value={isEndless ? [0] : [localPosition]}
+          value={isEndless ? [0] : [displayPosition]}
           max={isEndless ? 1 : (duration || 1)}
           step={SEEK_STEP_MS}
           onValueChange={handleSeek}
@@ -113,7 +169,7 @@ export function SeekBar({ zone }: { zone: ZoneState }) {
         />
       </div>
       <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
-        <span>{formatTime(localPosition)}</span>
+        <span>{formatTime(displayPosition)}</span>
         <span>{duration > 0 ? formatTime(duration) : "∞"}</span>
       </div>
     </div>
