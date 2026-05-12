@@ -874,6 +874,9 @@ async fn run(
                             if let Some(ref mut t) = z.track { t.position_ms = ms + position_offset_ms; }
                         }).await;
                     }
+                    Some(audio::PcmMessage::BufferProgress { .. }) => {
+                        // TODO: forward to WebSocket as buffered_ms
+                    }
                     None => {
                         current_decode = None;
                         decode_rx = None;

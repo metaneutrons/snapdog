@@ -38,6 +38,13 @@ pub enum PcmMessage {
     Audio(Vec<f32>),
     /// Playback position from decoder (milliseconds).
     Position(i64),
+    /// Buffer download progress (for stream-and-cache).
+    BufferProgress {
+        /// Bytes downloaded so far.
+        buffered_bytes: u64,
+        /// Total expected bytes (from Content-Length), if known.
+        total_bytes: Option<u64>,
+    },
 }
 
 /// Sending half of a PCM channel.
