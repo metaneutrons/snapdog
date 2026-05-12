@@ -17,5 +17,6 @@ snapdog.toml
 snapdog.dev.toml
 state.json
 snapcast-state.json
+eq.json
 *.log
 .env.test
