@@ -491,3 +491,76 @@ mod tests {
         );
     }
 }
+
+/// Pre-fetch upcoming playlist tracks into the disk cache in the background.
+///
+/// Spawns low-priority download tasks for the next `lookahead` tracks that aren't
+/// already cached. Does nothing if cache is disabled or lookahead is 0.
+pub fn prefetch_next_tracks(
+    sub: &SubsonicClient,
+    playlist_tracks: &[crate::subsonic::Track],
+    current_index: usize,
+    cache: &crate::audio::cache::TrackCache,
+    lookahead: usize,
+) {
+    if lookahead == 0 {
+        return;
+    }
+
+    let upcoming: Vec<_> = playlist_tracks
+        .iter()
+        .skip(current_index + 1)
+        .take(lookahead)
+        .filter(|t| !cache.is_complete(&t.id))
+        .map(|t| (t.id.clone(), sub.stream_url(&t.id)))
+        .collect();
+
+    if upcoming.is_empty() {
+        return;
+    }
+
+    let cache = cache.clone();
+    tokio::spawn(async move {
+        for (track_id, url) in upcoming {
+            tracing::debug!(track_id = %track_id, "Prefetching track");
+            if let Err(e) = prefetch_one(&cache, &track_id, &url).await {
+                tracing::debug!(track_id = %track_id, error = %e, "Prefetch failed");
+            }
+            // Yield between downloads to avoid starving playback
+            tokio::task::yield_now().await;
+        }
+    });
+}
+
+async fn prefetch_one(
+    cache: &crate::audio::cache::TrackCache,
+    track_id: &str,
+    url: &str,
+) -> anyhow::Result<()> {
+    let client = reqwest::Client::new();
+    let response = client
+        .get(url)
+        .send()
+        .await?
+        .error_for_status()?;
+
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("audio/mpeg")
+        .to_string();
+    let content_length = response.content_length();
+
+    let mut writer = cache.start_download(track_id, &content_type, content_length)?;
+
+    use futures_util::StreamExt;
+    let mut stream = response.bytes_stream();
+    while let Some(chunk) = stream.next().await {
+        let bytes = chunk?;
+        writer.write(&bytes)?;
+    }
+    writer.complete()?;
+    tracing::debug!(track_id = %track_id, "Prefetch complete");
+    Ok(())
+}
