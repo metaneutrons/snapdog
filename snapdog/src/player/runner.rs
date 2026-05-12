@@ -18,8 +18,8 @@ use super::context::{
 
 use super::helpers::{DecodeState, PlaybackCtx};
 use super::helpers::{
-    handle_next, handle_previous, handle_track_complete, radio_track_info, start_radio_decode,
-    start_subsonic_track_decode, subsonic_track_info,
+    handle_next, handle_previous, handle_track_complete, prefetch_next_tracks, radio_track_info,
+    start_radio_decode, start_subsonic_track_decode, subsonic_track_info,
 };
 use crate::audio;
 use crate::receiver::ReceiverProvider;
@@ -466,6 +466,11 @@ async fn run(
                                         z.playlist_track_count = Some(track_count);
                                         z.track = Some(subsonic_track_info(track));
                                     }).await;
+                                    // Prefetch next tracks
+                                    if let Some(ref cache) = track_cache {
+                                        let lookahead = config.subsonic.as_ref().map_or(0, |s| s.cache.lookahead);
+                                        prefetch_next_tracks(sub, &playlist.entry, track_idx, cache, lookahead);
+                                    }
                                 }
                             }
                         }
@@ -570,11 +575,16 @@ async fn run(
 
                                     let used_cache = if let Some((path, content_type)) = cached_path {
                                         let seek = Some(pos_ms);
+                                        let inv_cache = track_cache.clone();
+                                        let inv_tid = tid.clone();
                                         current_decode = Some(tokio::spawn(async move {
                                             if let Err(e) = tokio::task::spawn_blocking(move || {
                                                 audio::decode_cached_file(&path, &content_type, seek, &tx)
                                             }).await.unwrap_or_else(|e| Err(e.into())) {
                                                 tracing::error!(error = %e, "Cached resume failed");
+                                                if let Some(cache) = inv_cache {
+                                                    cache.invalidate(&inv_tid);
+                                                }
                                             }
                                         }));
                                         true
@@ -753,11 +763,16 @@ async fn run(
 
                                 let used_cache = if let Some((path, content_type)) = cached_path {
                                     let seek = Some(pos_ms);
+                                    let inv_cache = track_cache.clone();
+                                    let inv_tid = tid.clone();
                                     current_decode = Some(tokio::spawn(async move {
                                         if let Err(e) = tokio::task::spawn_blocking(move || {
                                             audio::decode_cached_file(&path, &content_type, seek, &tx)
                                         }).await.unwrap_or_else(|e| Err(e.into())) {
                                             tracing::error!(error = %e, "Cached seek decode failed");
+                                            if let Some(cache) = inv_cache {
+                                                cache.invalidate(&inv_tid);
+                                            }
                                         }
                                     }));
                                     true

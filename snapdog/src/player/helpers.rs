@@ -82,11 +82,14 @@ pub async fn start_subsonic_track_decode(
         if let audio::cache::CacheEntry::Complete { path, content_type } = cache.get(&track.id) {
             // Cache hit — decode directly from file (instant, seekable)
             tracing::info!(track = %track.title, "Playing from cache");
+            let inv_cache = cache.clone();
+            let inv_tid = track.id.clone();
             *ds.current_decode = Some(tokio::spawn(async move {
                 if let Err(e) = tokio::task::spawn_blocking(move || {
                     audio::decode_cached_file(&path, &content_type, None, &tx)
                 }).await.unwrap_or_else(|e| Err(e.into())) {
                     tracing::error!(error = %e, "Cached decode failed");
+                    inv_cache.invalidate(&inv_tid);
                 }
             }));
             return;
@@ -386,6 +389,11 @@ async fn advance_playlist_track(
                     z.track = Some(subsonic_track_info(track));
                 })
                 .await;
+                // Prefetch next tracks
+                if let Some(cache) = ctx.track_cache {
+                    let lookahead = ctx.config.subsonic.as_ref().map_or(0, |s| s.cache.lookahead);
+                    prefetch_next_tracks(sub, &playlist.entry, track_index, cache, lookahead);
+                }
                 tracing::info!(
                     zone = ctx.zone_index,
                     track = track_index,

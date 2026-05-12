@@ -207,6 +207,18 @@ impl TrackCache {
         matches!(self.get(track_id), CacheEntry::Complete { .. })
     }
 
+    /// Remove a track from the cache (e.g., on decode failure due to corruption).
+    pub fn invalidate(&self, track_id: &str) {
+        let mut idx = self.index.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(pos) = idx.entries.iter().position(|e| e.track_id == track_id) {
+            let path = Path::new(&self.config.path).join(&idx.entries[pos].filename);
+            let _ = fs::remove_file(&path);
+            idx.entries.remove(pos);
+            self.persist_index(&idx);
+            tracing::debug!(track_id, "Invalidated cached track");
+        }
+    }
+
     /// Evict oldest entries until total size ≤ max_size_mb.
     pub fn evict_lru(&self) {
         let max_bytes = self.config.max_size_mb * 1024 * 1024;
