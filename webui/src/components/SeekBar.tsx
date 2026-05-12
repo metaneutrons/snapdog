@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useReducer } from "react";
+import { useEffect, useRef, useCallback, useReducer } from "react";
 import { useTranslations } from "next-intl";
 import { Slider } from "@/components/ui/slider";
 import { api } from "@/lib/api";
@@ -12,6 +12,9 @@ const INTERPOLATION_INTERVAL_MS = 250;
 const SEEK_STEP_MS = 1000;
 /** Safety timeout: if server doesn't confirm seek within this time, resume sync */
 const SEEK_TIMEOUT_MS = 5000;
+/** Server position must be within this range of target to count as confirmed.
+ *  Accounts for decoder granularity (AAC frames ~23ms, FLAC ~20ms) and network jitter. */
+const SEEK_CONFIRM_TOLERANCE_MS = 2000;
 
 // ── State machine ─────────────────────────────────────────────
 
@@ -38,7 +41,7 @@ function seekReducer(state: SeekState, action: SeekAction): SeekState {
           return state; // ignore server while dragging
         case "seeking":
           // Server confirmed: position is at or past the target
-          if (action.position >= state.target - 2000) {
+          if (action.position >= state.target - SEEK_CONFIRM_TOLERANCE_MS) {
             return { type: "synced", position: action.position };
           }
           return state; // still waiting
