@@ -101,6 +101,7 @@ fn subsonic_config() -> Option<config::SubsonicConfig> {
         password,
         format: snapdog::config::SubsonicFormat::Flac,
         tls_skip_verify: false,
+        cache: Default::default(),
     })
 }
 
@@ -148,6 +149,7 @@ fn mqtt_config() -> Option<config::MqttConfig> {
     }
     Some(config::MqttConfig {
         broker,
+        client_id: "snapdog-test".to_string(),
         username,
         password,
         base_topic: "snapdog/test".to_string(),
@@ -432,6 +434,7 @@ mod broken_tests {
             password,
             format: snapdog::config::SubsonicFormat::Flac,
             tls_skip_verify: false,
+            cache: Default::default(),
         })
     }
 
