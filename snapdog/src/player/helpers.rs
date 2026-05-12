@@ -28,6 +28,7 @@ pub struct PlaybackCtx<'a> {
     pub zone_index: usize,
     pub notify: &'a NotifySender,
     pub covers: &'a SharedCoverCache,
+    pub track_cache: &'a Option<crate::audio::cache::TrackCache>,
 }
 
 /// Fetch cover art in the background and update zone state.
@@ -69,14 +70,47 @@ pub async fn start_subsonic_track_decode(
     ds: &mut DecodeState<'_>,
     ctx: &PlaybackCtx<'_>,
 ) {
-    let url = sub.stream_url(&track.id);
     let (tx, rx) = audio::pcm_channel(super::runner::PCM_DECODE_CHANNEL_SIZE);
     *ds.decode_rx = Some(rx);
     if let Some(ref cover_id) = track.cover_art {
         let cover_url = sub.cover_art_fetch_url(cover_id);
         spawn_cover_fetch(ctx.covers, ctx.store, ctx.zone_index, ctx.notify, cover_url, &ctx.config.system.base_url);
     }
+
+    // Check cache for this track
+    if let Some(cache) = ctx.track_cache {
+        if let audio::cache::CacheEntry::Complete { path, content_type } = cache.get(&track.id) {
+            // Cache hit — decode directly from file (instant, seekable)
+            tracing::info!(track = %track.title, "Playing from cache");
+            *ds.current_decode = Some(tokio::spawn(async move {
+                if let Err(e) = tokio::task::spawn_blocking(move || {
+                    audio::decode_cached_file(&path, &content_type, None, &tx)
+                }).await.unwrap_or_else(|e| Err(e.into())) {
+                    tracing::error!(error = %e, "Cached decode failed");
+                }
+            }));
+            return;
+        }
+    }
+
+    // Cache miss — stream and cache simultaneously
+    let url = sub.stream_url(&track.id);
     let ac = ctx.config.audio.clone();
+
+    if let Some(cache) = ctx.track_cache {
+        let content_type = "audio/mpeg"; // will be overridden by HTTP response in decode_http_stream_cached
+        let total_bytes = None; // unknown until HTTP response
+        if let Ok(writer) = cache.start_download(&track.id, content_type, total_bytes) {
+            *ds.current_decode = Some(tokio::spawn(async move {
+                if let Err(e) = audio::decode_http_stream_cached(url, tx, ac, writer).await {
+                    tracing::error!(error = %e, "Subsonic cached decode failed");
+                }
+            }));
+            return;
+        }
+    }
+
+    // Fallback — no cache, stream directly
     *ds.current_decode = Some(tokio::spawn(async move {
         if let Err(e) = audio::decode_http_stream(url, tx, ac, None).await {
             tracing::error!(error = %e, "Subsonic decode failed");

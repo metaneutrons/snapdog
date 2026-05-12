@@ -218,6 +218,17 @@ async fn run(
     // Subsonic client (if configured)
     let subsonic = config.subsonic.as_ref().map(SubsonicClient::new);
 
+    // Track cache (if subsonic + cache enabled)
+    let track_cache = config
+        .subsonic
+        .as_ref()
+        .filter(|s| s.cache.enabled)
+        .and_then(|s| {
+            crate::audio::cache::TrackCache::new(&s.cache)
+                .map_err(|e| tracing::warn!(error = %e, "Failed to initialize track cache"))
+                .ok()
+        });
+
     // AirPlay: F32 audio channel + event channel + receiver instance
     let (airplay_audio_tx, mut airplay_audio_rx) =
         crate::receiver::audio_channel(RECEIVER_AUDIO_CHANNEL_SIZE);
@@ -443,7 +454,7 @@ async fn run(
                             if let Ok(playlist) = sub.get_playlist(&playlist_id).await {
                                 let track_count = playlist.entry.len();
                                 if let Some(track) = playlist.entry.get(track_idx) {
-                                    start_subsonic_track_decode(sub, track, &mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers }).await;
+                                    start_subsonic_track_decode(sub, track, &mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers, track_cache: &track_cache }).await;
                                     source = ActiveSource::SubsonicPlaylist { playlist_id, track_index: track_idx, track_count };
                                     update_and_notify(store, zone_index, notify, |z| {
                                         z.playback = PlaybackState::Playing;
@@ -499,7 +510,7 @@ async fn run(
                             if track_idx < config.radios.len() {
                                 if let Some(radio) = config.radios.get(track_idx) {
                                     reset_playback(&mut current_decode, &mut decode_rx, &mut position_offset_ms).await;
-                                    start_radio_decode(radio, &mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers }).await;
+                                    start_radio_decode(radio, &mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers, track_cache: &track_cache }).await;
                                     source = ActiveSource::Radio { index: track_idx };
                                     update_and_notify(store, zone_index, notify, |z| {
                                         z.playlist_index = Some(0);
@@ -516,7 +527,7 @@ async fn run(
                                 if let Some(sub) = &subsonic {
                                     if let Ok(playlist) = sub.get_playlist(&pid).await {
                                         if let Some(track) = playlist.entry.get(track_idx) {
-                                            start_subsonic_track_decode(sub, track, &mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers }).await;
+                                            start_subsonic_track_decode(sub, track, &mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers, track_cache: &track_cache }).await;
                                             source = ActiveSource::SubsonicPlaylist { playlist_id: pid, track_index: track_idx, track_count };
                                             update_and_notify(store, zone_index, notify, |z| { z.playlist_track_index = Some(track_idx); z.track = Some(subsonic_track_info(track)); }).await;
                                         }
@@ -546,15 +557,37 @@ async fn run(
                                         .and_then(|z| z.track.as_ref().map(|t| t.position_ms))
                                         .unwrap_or(0);
                                     stop_decode(&mut current_decode, &mut decode_rx).await;
-                                    let offset_secs = (pos_ms / 1000).max(0) as u64;
-                                    let url = sub.stream_url_with_offset(&tid, offset_secs);
                                     let (tx, rx) = audio::pcm_channel(PCM_DECODE_CHANNEL_SIZE);
                                     decode_rx = Some(rx);
-                                    let ac = audio_config.clone();
-                                    current_decode = Some(tokio::spawn(async move {
-                                        if let Err(e) = audio::decode_http_stream(url, tx, ac, None).await { tracing::error!(error = %e, "Resume decode failed"); }
-                                    }));
-                                    position_offset_ms = pos_ms;
+
+                                    // Try resuming from cached file
+                                    let cached_path = track_cache.as_ref().and_then(|cache| {
+                                        if let audio::cache::CacheEntry::Complete { path, content_type } = cache.get(&tid) {
+                                            Some((path, content_type))
+                                        } else { None }
+                                    });
+
+                                    let used_cache = if let Some((path, content_type)) = cached_path {
+                                        let seek = Some(pos_ms);
+                                        current_decode = Some(tokio::spawn(async move {
+                                            if let Err(e) = tokio::task::spawn_blocking(move || {
+                                                audio::decode_cached_file(&path, &content_type, seek, &tx)
+                                            }).await.unwrap_or_else(|e| Err(e.into())) {
+                                                tracing::error!(error = %e, "Cached resume failed");
+                                            }
+                                        }));
+                                        true
+                                    } else {
+                                        let offset_secs = (pos_ms / 1000).max(0) as u64;
+                                        let url = sub.stream_url_with_offset(&tid, offset_secs);
+                                        let ac = audio_config.clone();
+                                        current_decode = Some(tokio::spawn(async move {
+                                            if let Err(e) = audio::decode_http_stream(url, tx, ac, None).await { tracing::error!(error = %e, "Resume decode failed"); }
+                                        }));
+                                        false
+                                    };
+
+                                    position_offset_ms = if used_cache { 0 } else { pos_ms };
                                     update_and_notify(store, zone_index, notify, |z| { z.playback = PlaybackState::Playing; }).await;
                                 }
                             }
@@ -601,14 +634,14 @@ async fn run(
                         if matches!(source, ActiveSource::AirPlay | ActiveSource::Spotify) {
                             if let Some(ref rc) = remote_control { let _ = rc.send_command(crate::receiver::RemoteCommand::NextTrack); }
                         } else {
-                            handle_next(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers }).await;
+                            handle_next(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers, track_cache: &track_cache }).await;
                         }
                     }
                     ZoneCommand::Previous => {
                         if matches!(source, ActiveSource::AirPlay | ActiveSource::Spotify) {
                             if let Some(ref rc) = remote_control { let _ = rc.send_command(crate::receiver::RemoteCommand::PreviousTrack); }
                         } else {
-                            handle_previous(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers }).await;
+                            handle_previous(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers, track_cache: &track_cache }).await;
                         }
                     }
                     ZoneCommand::NextPlaylist | ZoneCommand::PreviousPlaylist | ZoneCommand::SetPlaylist(..) => {
@@ -650,7 +683,7 @@ async fn run(
                             let radio_idx = start_track.min(config.radios.len().saturating_sub(1));
                             reset_playback(&mut current_decode, &mut decode_rx, &mut position_offset_ms).await;
                             if let Some(radio) = config.radios.get(radio_idx) {
-                                start_radio_decode(radio, &mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers }).await;
+                                start_radio_decode(radio, &mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers, track_cache: &track_cache }).await;
                                 source = ActiveSource::Radio { index: radio_idx };
                                 update_and_notify(store, zone_index, notify, |z| {
                                     z.playback = PlaybackState::Playing;
@@ -672,7 +705,7 @@ async fn run(
                                     if let Ok(playlist) = sub.get_playlist(&pl.id).await {
                                         let track_idx = start_track.min(playlist.entry.len().saturating_sub(1));
                                         if let Some(track) = playlist.entry.get(track_idx) {
-                                            start_subsonic_track_decode(sub, track, &mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers }).await;
+                                            start_subsonic_track_decode(sub, track, &mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers, track_cache: &track_cache }).await;
                                             source = ActiveSource::SubsonicPlaylist {
                                                 playlist_id: pl.id.clone(),
                                                 track_index: track_idx,
@@ -707,21 +740,45 @@ async fn run(
                             };
                             if let Some(tid) = track_id {
                                 stop_decode(&mut current_decode, &mut decode_rx).await;
-                                let offset_secs = (pos_ms / 1000).max(0) as u64;
-                                let url = sub.stream_url_with_offset(&tid, offset_secs);
                                 let (tx, rx) = audio::pcm_channel(PCM_DECODE_CHANNEL_SIZE);
                                 decode_rx = Some(rx);
-                                let ac = audio_config.clone();
-                                current_decode = Some(tokio::spawn(async move {
-                                    if let Err(e) = audio::decode_http_stream(url, tx, ac, None).await {
-                                        tracing::error!(error = %e, "Seek decode failed");
-                                    }
-                                }));
+
+                                // Try seeking in cached file first
+                                let cached_path = track_cache.as_ref().and_then(|cache| {
+                                    if let audio::cache::CacheEntry::Complete { path, content_type } = cache.get(&tid) {
+                                        Some((path, content_type))
+                                    } else { None }
+                                });
+
+                                let used_cache = if let Some((path, content_type)) = cached_path {
+                                    let seek = Some(pos_ms);
+                                    current_decode = Some(tokio::spawn(async move {
+                                        if let Err(e) = tokio::task::spawn_blocking(move || {
+                                            audio::decode_cached_file(&path, &content_type, seek, &tx)
+                                        }).await.unwrap_or_else(|e| Err(e.into())) {
+                                            tracing::error!(error = %e, "Cached seek decode failed");
+                                        }
+                                    }));
+                                    true
+                                } else {
+                                    // Fallback: re-fetch with timeOffset
+                                    let offset_secs = (pos_ms / 1000).max(0) as u64;
+                                    let url = sub.stream_url_with_offset(&tid, offset_secs);
+                                    let ac = audio_config.clone();
+                                    current_decode = Some(tokio::spawn(async move {
+                                        if let Err(e) = audio::decode_http_stream(url, tx, ac, None).await {
+                                            tracing::error!(error = %e, "Seek decode failed");
+                                        }
+                                    }));
+                                    false
+                                };
+
                                 update_and_notify(store, zone_index, notify, |z| {
                                     z.playback = PlaybackState::Playing;
                                     if let Some(ref mut t) = z.track { t.position_ms = pos_ms; }
                                 }).await;
-                                position_offset_ms = pos_ms;
+                                // When decoding from cache, symphonia reports absolute position
+                                position_offset_ms = if used_cache { 0 } else { pos_ms };
                                 tracing::debug!(zone = %zone_config.name, position_ms = pos_ms, "Seeked");
                             }
                         }
@@ -881,7 +938,7 @@ async fn run(
                         current_decode = None;
                         decode_rx = None;
                         position_offset_ms = 0;
-                        handle_track_complete(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers }).await;
+                        handle_track_complete(&mut DecodeState { current_decode: &mut current_decode, decode_rx: &mut decode_rx, source: &mut source }, &PlaybackCtx { config, subsonic: &subsonic, store, zone_index, notify, covers, track_cache: &track_cache }).await;
                     }
                 }
             }
