@@ -145,7 +145,9 @@ async fn handle_event(
                     let s = store.read().await;
                     s.clients
                         .get(&client_index)
-                        .map_or((crate::state::DEFAULT_VOLUME, false), |c| (c.base_volume, c.muted))
+                        .map_or((crate::state::DEFAULT_VOLUME, false), |c| {
+                            (c.base_volume, c.muted)
+                        })
                 };
                 let _ = backend
                     .execute(SnapcastCmd::Client {
@@ -496,9 +498,16 @@ async fn sync_group_ids(
                         tracing::debug!(zone = zone_cfg.index, new = %gid, "Zone group ID updated");
                         zone.snapcast_group_id = Some(gid.to_string());
                     }
-                    let group_muted = group.get("muted").and_then(|m| m.as_bool()).unwrap_or(false);
+                    let group_muted = group
+                        .get("muted")
+                        .and_then(|m| m.as_bool())
+                        .unwrap_or(false);
                     if zone.muted != group_muted {
-                        tracing::debug!(zone = zone_cfg.index, muted = group_muted, "Zone mute synced from Snapcast group");
+                        tracing::debug!(
+                            zone = zone_cfg.index,
+                            muted = group_muted,
+                            "Zone mute synced from Snapcast group"
+                        );
                         zone.muted = group_muted;
                     }
                 }

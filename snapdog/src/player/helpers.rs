@@ -54,8 +54,7 @@ pub fn spawn_cover_fetch(
             let hash = cache.get(zone_index).map(|e| e.hash.clone());
             drop(cache);
             if let Some(h) = hash {
-                let cover_url =
-                    format!("{base_url}/api/v1/zones/{zone_index}/cover?h={h}");
+                let cover_url = format!("{base_url}/api/v1/zones/{zone_index}/cover?h={h}");
                 update_and_notify(&store, zone_index, &notify, |z| {
                     z.cover_url = Some(cover_url.clone());
                 })
@@ -74,7 +73,14 @@ pub async fn start_subsonic_track_decode(
     *ds.decode_rx = Some(rx);
     if let Some(ref cover_id) = track.cover_art {
         let cover_url = sub.cover_art_fetch_url(cover_id);
-        spawn_cover_fetch(ctx.covers, ctx.store, ctx.zone_index, ctx.notify, cover_url, &ctx.config.system.base_url);
+        spawn_cover_fetch(
+            ctx.covers,
+            ctx.store,
+            ctx.zone_index,
+            ctx.notify,
+            cover_url,
+            &ctx.config.system.base_url,
+        );
     }
 
     // Check cache for this track
@@ -87,7 +93,10 @@ pub async fn start_subsonic_track_decode(
             *ds.current_decode = Some(tokio::spawn(async move {
                 if let Err(e) = tokio::task::spawn_blocking(move || {
                     audio::decode_cached_file(&path, &content_type, None, &tx)
-                }).await.unwrap_or_else(|e| Err(e.into())) {
+                })
+                .await
+                .unwrap_or_else(|e| Err(e.into()))
+                {
                     tracing::error!(error = %e, "Cached decode failed");
                     inv_cache.invalidate(&inv_tid);
                 }
@@ -192,7 +201,14 @@ pub async fn start_radio_decode(
                 _ => fallback_cover.clone(),
             };
             if let Some(url) = cover_url {
-                spawn_cover_fetch(&icy_covers, &icy_store, zone_index, &icy_notify, url, &icy_base_url);
+                spawn_cover_fetch(
+                    &icy_covers,
+                    &icy_store,
+                    zone_index,
+                    &icy_notify,
+                    url,
+                    &icy_base_url,
+                );
             }
         }
     });
@@ -391,7 +407,11 @@ async fn advance_playlist_track(
                 .await;
                 // Prefetch next tracks
                 if let Some(cache) = ctx.track_cache {
-                    let lookahead = ctx.config.subsonic.as_ref().map_or(0, |s| s.cache.lookahead);
+                    let lookahead = ctx
+                        .config
+                        .subsonic
+                        .as_ref()
+                        .map_or(0, |s| s.cache.lookahead);
                     prefetch_next_tracks(sub, &playlist.entry, track_index, cache, lookahead);
                 }
                 tracing::info!(
@@ -453,51 +473,6 @@ fn parse_icy_title(raw: &str) -> (String, String) {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parse_icy_title_basic() {
-        assert_eq!(
-            parse_icy_title("Coldplay - Yellow"),
-            ("Coldplay".into(), "Yellow".into())
-        );
-    }
-
-    #[test]
-    fn parse_icy_title_with_station_pipe() {
-        assert_eq!(
-            parse_icy_title("ANTENNE BAYERN | Ed Sheeran - Shape Of You"),
-            ("Ed Sheeran".into(), "Shape Of You".into())
-        );
-    }
-
-    #[test]
-    fn parse_icy_title_with_station_colon() {
-        assert_eq!(
-            parse_icy_title("SWR3: Coldplay - Yellow"),
-            ("Coldplay".into(), "Yellow".into())
-        );
-    }
-
-    #[test]
-    fn parse_icy_title_no_separator() {
-        assert_eq!(
-            parse_icy_title("Nachrichten"),
-            ("".into(), "Nachrichten".into())
-        );
-    }
-
-    #[test]
-    fn parse_icy_title_en_dash() {
-        assert_eq!(
-            parse_icy_title("Adele \u{2013} Hello"),
-            ("Adele".into(), "Hello".into())
-        );
-    }
-}
-
 /// Pre-fetch upcoming playlist tracks into the disk cache in the background.
 ///
 /// Spawns low-priority download tasks for the next `lookahead` tracks that aren't
@@ -544,11 +519,7 @@ async fn prefetch_one(
     url: &str,
 ) -> anyhow::Result<()> {
     let client = reqwest::Client::new();
-    let response = client
-        .get(url)
-        .send()
-        .await?
-        .error_for_status()?;
+    let response = client.get(url).send().await?.error_for_status()?;
 
     let content_type = response
         .headers()
@@ -569,4 +540,49 @@ async fn prefetch_one(
     writer.complete()?;
     tracing::debug!(track_id = %track_id, "Prefetch complete");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_icy_title_basic() {
+        assert_eq!(
+            parse_icy_title("Coldplay - Yellow"),
+            ("Coldplay".into(), "Yellow".into())
+        );
+    }
+
+    #[test]
+    fn parse_icy_title_with_station_pipe() {
+        assert_eq!(
+            parse_icy_title("ANTENNE BAYERN | Ed Sheeran - Shape Of You"),
+            ("Ed Sheeran".into(), "Shape Of You".into())
+        );
+    }
+
+    #[test]
+    fn parse_icy_title_with_station_colon() {
+        assert_eq!(
+            parse_icy_title("SWR3: Coldplay - Yellow"),
+            ("Coldplay".into(), "Yellow".into())
+        );
+    }
+
+    #[test]
+    fn parse_icy_title_no_separator() {
+        assert_eq!(
+            parse_icy_title("Nachrichten"),
+            ("".into(), "Nachrichten".into())
+        );
+    }
+
+    #[test]
+    fn parse_icy_title_en_dash() {
+        assert_eq!(
+            parse_icy_title("Adele \u{2013} Hello"),
+            ("Adele".into(), "Hello".into())
+        );
+    }
 }

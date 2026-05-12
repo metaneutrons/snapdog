@@ -509,7 +509,12 @@ fn run_cpal(
             if first_data_flag.load(Ordering::Relaxed) {
                 let peak = data.iter().map(|s| s.abs()).fold(0.0f32, f32::max);
                 if peak > 0.0 {
-                    tracing::debug!(peak, num_frames, current_sample_size, "First non-zero audio buffer");
+                    tracing::debug!(
+                        peak,
+                        num_frames,
+                        current_sample_size,
+                        "First non-zero audio buffer"
+                    );
                     first_data_flag.store(false, Ordering::Relaxed);
                 }
             }
@@ -555,8 +560,10 @@ pub fn play_test_tone(device_name: &str) -> anyhow::Result<()> {
     let device = if device_name == "default" {
         host.default_output_device()
     } else {
-        host.output_devices()?
-            .find(|d| d.description().is_ok_and(|n| format!("{n}").contains(device_name)))
+        host.output_devices()?.find(|d| {
+            d.description()
+                .is_ok_and(|n| format!("{n}").contains(device_name))
+        })
     }
     .ok_or_else(|| anyhow::anyhow!("no output device '{device_name}'"))?;
 
@@ -568,7 +575,10 @@ pub fn play_test_tone(device_name: &str) -> anyhow::Result<()> {
 
     println!(
         "Playing 440 Hz test tone for 2s on: {}",
-        device.description().map(|d| format!("{d}")).unwrap_or_default()
+        device
+            .description()
+            .map(|d| format!("{d}"))
+            .unwrap_or_default()
     );
 
     let stream_config = cpal::StreamConfig {

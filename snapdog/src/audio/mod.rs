@@ -272,17 +272,17 @@ pub async fn decode_http_stream_cached(
             .await
             .context("Failed to read stream body")?;
         cache_writer.write(&bytes)?;
-        let _ = tx.send(PcmMessage::BufferProgress {
-            buffered_bytes: bytes.len() as u64,
-            total_bytes: Some(bytes.len() as u64),
-        }).await;
+        let _ = tx
+            .send(PcmMessage::BufferProgress {
+                buffered_bytes: bytes.len() as u64,
+                total_bytes: Some(bytes.len() as u64),
+            })
+            .await;
         let path = cache_writer.complete()?;
         let ct = content_type.clone();
-        tokio::task::spawn_blocking(move || {
-            decode_cached_file(&path, &ct, None, &tx)
-        })
-        .await
-        .context("Decoder task panicked")??;
+        tokio::task::spawn_blocking(move || decode_cached_file(&path, &ct, None, &tx))
+            .await
+            .context("Decoder task panicked")??;
         return Ok(());
     }
 
@@ -306,10 +306,12 @@ pub async fn decode_http_stream_cached(
                             tracing::warn!(error = %e, "Cache write failed, aborting cache");
                             write_failed = true;
                         } else {
-                            let _ = progress_tx.send(PcmMessage::BufferProgress {
-                                buffered_bytes: cache_writer.bytes_written(),
-                                total_bytes,
-                            }).await;
+                            let _ = progress_tx
+                                .send(PcmMessage::BufferProgress {
+                                    buffered_bytes: cache_writer.bytes_written(),
+                                    total_bytes,
+                                })
+                                .await;
                         }
                     }
                     // Write to decode pipe
@@ -578,7 +580,13 @@ pub fn decode_cached_file(
                 seconds: (ms / 1000) as u64,
                 frac: (ms % 1000) as f64 / 1000.0,
             };
-            match format.seek(SeekMode::Accurate, SeekTo::Time { time: seek_time, track_id: Some(track_id) }) {
+            match format.seek(
+                SeekMode::Accurate,
+                SeekTo::Time {
+                    time: seek_time,
+                    track_id: Some(track_id),
+                },
+            ) {
                 Ok(_) => tracing::debug!(ms, "Seeked in cached file"),
                 Err(e) => tracing::warn!(error = %e, ms, "Seek failed, decoding from start"),
             }
@@ -962,7 +970,10 @@ mod tests {
         let mut got_audio = false;
         while let Ok(msg) = rx.try_recv() {
             match msg {
-                PcmMessage::Format { sample_rate: sr, channels: ch } => {
+                PcmMessage::Format {
+                    sample_rate: sr,
+                    channels: ch,
+                } => {
                     assert_eq!(sr, 44100);
                     assert_eq!(ch, 1);
                     got_format = true;
@@ -1008,7 +1019,10 @@ mod tests {
         let (tx, _rx) = mpsc::channel(64);
         // Seek to 999 seconds in a 1-second file — should not panic, just decode from start
         let result = decode_cached_file(&path, "audio/wav", Some(999_000), &tx);
-        assert!(result.is_ok(), "Seek beyond EOF should not fail: {result:?}");
+        assert!(
+            result.is_ok(),
+            "Seek beyond EOF should not fail: {result:?}"
+        );
     }
 
     #[test]
@@ -1018,7 +1032,10 @@ mod tests {
             total_bytes: Some(1_000_000),
         };
         match msg {
-            PcmMessage::BufferProgress { buffered_bytes, total_bytes } => {
+            PcmMessage::BufferProgress {
+                buffered_bytes,
+                total_bytes,
+            } => {
                 assert_eq!(buffered_bytes, 500_000);
                 assert_eq!(total_bytes, Some(1_000_000));
             }

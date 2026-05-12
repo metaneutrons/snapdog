@@ -219,7 +219,9 @@ async fn get_playlist_tracks(
                         .enumerate()
                         .map(|(i, t)| {
                             let cover = t.cover_art.as_ref().map(|_| {
-                                format!("{base_url}/api/v1/media/playlists/{index}/tracks/{i}/cover")
+                                format!(
+                                    "{base_url}/api/v1/media/playlists/{index}/tracks/{i}/cover"
+                                )
                             });
                             serde_json::json!({
                                 "id": t.id,

@@ -79,10 +79,7 @@ impl SpeakerDb {
             .await
             .context("Failed to fetch speaker index from GitHub")?;
         if !resp.status().is_success() {
-            anyhow::bail!(
-                "GitHub API returned {} (rate limit?)",
-                resp.status()
-            );
+            anyhow::bail!("GitHub API returned {} (rate limit?)", resp.status());
         }
         let entries: Vec<GitHubEntry> = resp
             .json()

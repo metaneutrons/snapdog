@@ -88,11 +88,8 @@ impl CacheWriter {
         self.file.take(); // close file before rename
         fs::rename(&self.partial_path, &self.final_path)
             .context("Failed to rename partial cache file")?;
-        self.cache.mark_complete(
-            &self.track_id,
-            &self.content_type,
-            self.bytes_written,
-        );
+        self.cache
+            .mark_complete(&self.track_id, &self.content_type, self.bytes_written);
         Ok(self.final_path.clone())
     }
 
@@ -349,7 +346,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let cache = TrackCache::new(&test_config(&dir)).unwrap();
 
-        let mut writer = cache.start_download("track1", "audio/mpeg", Some(1024)).unwrap();
+        let mut writer = cache
+            .start_download("track1", "audio/mpeg", Some(1024))
+            .unwrap();
         writer.write(&[0u8; 512]).unwrap();
         writer.write(&[1u8; 512]).unwrap();
         assert_eq!(writer.bytes_written(), 1024);
@@ -359,7 +358,10 @@ mod tests {
         assert_eq!(path.extension().unwrap(), "mp3");
 
         match cache.get("track1") {
-            CacheEntry::Complete { path: p, content_type } => {
+            CacheEntry::Complete {
+                path: p,
+                content_type,
+            } => {
                 assert_eq!(p, path);
                 assert_eq!(content_type, "audio/mpeg");
             }
@@ -471,14 +473,19 @@ mod tests {
 
         let partial_path;
         {
-            let mut writer = cache.start_download("abandoned", "audio/ogg", None).unwrap();
+            let mut writer = cache
+                .start_download("abandoned", "audio/ogg", None)
+                .unwrap();
             writer.write(&[0u8; 50]).unwrap();
             partial_path = writer.partial_path().to_path_buf();
             assert!(partial_path.exists());
             // writer dropped here without complete()
         }
 
-        assert!(!partial_path.exists(), "Partial file should be cleaned up by Drop");
+        assert!(
+            !partial_path.exists(),
+            "Partial file should be cleaned up by Drop"
+        );
     }
 
     #[test]
@@ -590,7 +597,10 @@ mod tests {
         // All should be retrievable
         for i in 0..10 {
             let id = format!("track_{i}");
-            assert!(matches!(cache.get(&id), CacheEntry::Complete { .. }), "track_{i} missing");
+            assert!(
+                matches!(cache.get(&id), CacheEntry::Complete { .. }),
+                "track_{i} missing"
+            );
         }
     }
 }

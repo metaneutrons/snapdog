@@ -330,7 +330,11 @@ mod process_impl {
                         zone.snapcast_group_id = Some(group.id.clone());
                     }
                     if zone.muted != group.muted {
-                        tracing::debug!(zone = zone_cfg.index, muted = group.muted, "Zone mute synced from Snapcast group");
+                        tracing::debug!(
+                            zone = zone_cfg.index,
+                            muted = group.muted,
+                            "Zone mute synced from Snapcast group"
+                        );
                         zone.muted = group.muted;
                     }
                 }

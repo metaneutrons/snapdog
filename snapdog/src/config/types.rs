@@ -540,8 +540,10 @@ const fn default_cache_enabled() -> bool {
 fn default_cache_path() -> String {
     std::env::var("XDG_CACHE_HOME").map_or_else(
         |_| {
-            std::env::var("HOME")
-                .map_or_else(|_| "/tmp/snapdog/tracks".into(), |h| format!("{h}/.cache/snapdog/tracks"))
+            std::env::var("HOME").map_or_else(
+                |_| "/tmp/snapdog/tracks".into(),
+                |h| format!("{h}/.cache/snapdog/tracks"),
+            )
         },
         |p| format!("{p}/snapdog/tracks"),
     )

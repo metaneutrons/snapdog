@@ -360,10 +360,7 @@ async fn main() -> Result<()> {
                     (z, c)
                 };
                 for (idx, zone) in &zones {
-                    if let Err(e) = bridge
-                        .publish_zone_state(*idx, zone)
-                        .await
-                    {
+                    if let Err(e) = bridge.publish_zone_state(*idx, zone).await {
                         tracing::warn!(zone = idx, error = %e, "MQTT initial zone publish failed");
                     }
                 }

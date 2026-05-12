@@ -108,11 +108,7 @@ impl MqttBridge {
     }
 
     /// Publish zone status updates.
-    pub async fn publish_zone_state(
-        &self,
-        index: usize,
-        zone: &state::ZoneState,
-    ) -> Result<()> {
+    pub async fn publish_zone_state(&self, index: usize, zone: &state::ZoneState) -> Result<()> {
         let base = format!("zones/{index}");
         self.publish(&format!("{base}/volume"), &zone.volume.to_string())
             .await?;
