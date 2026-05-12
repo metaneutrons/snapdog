@@ -10,6 +10,7 @@ import { ApiKeyPrompt } from "@/components/ApiKeyPrompt";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConnectionStatus } from "@/components/ConnectionStatus";
 import { LocalePicker } from "@/components/LocalePicker";
+import { AboutButton } from "@/components/AboutButton";
 import { ProgrammingMode } from "@/components/ProgrammingMode";
 import { ZoneRailItem } from "@/components/ZoneRailItem";
 import { ZoneDetail } from "@/components/ZoneDetail";
@@ -189,7 +190,7 @@ export default function Home() {
       <aside className="hidden lg:flex xl:hidden flex-col border-r border-border bg-card lg:w-56 shrink-0" aria-label={t("zone.navigation")}>
         <div className="px-4 py-4 border-b border-border flex items-center justify-between">
           <h1 className="text-base font-semibold">SnapDog</h1>
-          <ProgrammingMode /><LocalePicker />
+          <ProgrammingMode /><LocalePicker /><AboutButton />
         </div>
         <nav className="flex-1 overflow-y-auto p-2 space-y-0.5" aria-label={t("zone.zones")}>
           {zoneList.map((z) => (
@@ -208,13 +209,13 @@ export default function Home() {
         {/* Header (mobile + compact + wide — hidden when sidebar visible at lg–xl) */}
         <header className="flex lg:hidden items-center justify-between px-4 py-3 border-b border-border">
           <h1 className="text-base font-semibold">SnapDog</h1>
-          <ProgrammingMode /><LocalePicker />
+          <ProgrammingMode /><LocalePicker /><AboutButton />
         </header>
 
         {/* Wide header (xl+) */}
         <header className="hidden xl:flex items-center justify-between px-6 py-3 border-b border-border">
           <h1 className="text-base font-semibold">SnapDog</h1>
-          <ProgrammingMode /><LocalePicker />
+          <ProgrammingMode /><LocalePicker /><AboutButton />
         </header>
 
         {/* Zone tabs (mobile + compact + normal without sidebar visible) */}
