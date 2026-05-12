@@ -5,6 +5,10 @@ import { I18nProvider } from "@/i18n/provider";
 export const metadata: Metadata = {
   title: "SnapDog",
   description: "Multi-zone audio controller",
+  icons: {
+    icon: "/favicon.png",
+    apple: "/favicon.png",
+  },
 };
 
 export const viewport: Viewport = {
