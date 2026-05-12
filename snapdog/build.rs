@@ -2,13 +2,15 @@
 // Copyright (C) 2026 Fabian Schmieder
 
 //! Build script: compiles the WebUI (Next.js static export) so rust-embed can
-//! bundle the assets.
+//! bundle the assets. Skips if `webui/out/` already exists (CI builds it
+//! separately) or if `SKIP_WEBUI_BUILD=1` is set.
 
 use std::path::Path;
 use std::process::Command;
 
 fn main() {
     let webui_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../webui");
+    let out_dir = webui_dir.join("out");
 
     // Re-run if webui sources change
     println!("cargo::rerun-if-changed=../webui/src");
@@ -17,6 +19,17 @@ fn main() {
     println!("cargo::rerun-if-changed=../webui/next.config.ts");
     println!("cargo::rerun-if-changed=../webui/tsconfig.json");
     println!("cargo::rerun-if-changed=../webui/messages");
+
+    // Skip if already built (CI) or explicitly disabled
+    if out_dir.join("index.html").exists() {
+        return;
+    }
+    if std::env::var("SKIP_WEBUI_BUILD").is_ok() {
+        // Create a minimal placeholder so rust-embed doesn't fail
+        std::fs::create_dir_all(&out_dir).ok();
+        std::fs::write(out_dir.join("index.html"), "<!-- placeholder -->").ok();
+        return;
+    }
 
     // Install dependencies (deterministic from lockfile)
     let status = Command::new("npm")
