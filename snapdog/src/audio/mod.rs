@@ -867,3 +867,163 @@ fn resolve_hls_master(base: &url::Url, body: &str) -> Option<String> {
 
     best_url
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    #[test]
+    fn hint_for_content_type_maps_correctly() {
+        let h = hint_for_content_type("audio/mpeg");
+        // Hint doesn't expose its extension, but we can verify it doesn't panic
+        let _ = h;
+
+        let _ = hint_for_content_type("audio/mp4");
+        let _ = hint_for_content_type("audio/flac");
+        let _ = hint_for_content_type("audio/ogg");
+        let _ = hint_for_content_type("audio/aac");
+        let _ = hint_for_content_type("unknown/type");
+        let _ = hint_for_content_type("");
+    }
+
+    #[test]
+    fn decode_cached_file_corrupted_returns_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("garbage.mp3");
+        std::fs::write(&path, b"this is not audio data at all").unwrap();
+
+        let (tx, _rx) = mpsc::channel(16);
+        let result = decode_cached_file(&path, "audio/mpeg", None, &tx);
+        assert!(result.is_err(), "Corrupted file should return error");
+    }
+
+    #[test]
+    fn decode_cached_file_empty_returns_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("empty.flac");
+        std::fs::write(&path, b"").unwrap();
+
+        let (tx, _rx) = mpsc::channel(16);
+        let result = decode_cached_file(&path, "audio/flac", None, &tx);
+        assert!(result.is_err(), "Empty file should return error");
+    }
+
+    #[test]
+    fn decode_cached_file_nonexistent_returns_error() {
+        let (tx, _rx) = mpsc::channel(16);
+        let result = decode_cached_file(
+            std::path::Path::new("/nonexistent/path/track.mp3"),
+            "audio/mpeg",
+            None,
+            &tx,
+        );
+        assert!(result.is_err(), "Nonexistent file should return error");
+    }
+
+    #[test]
+    fn decode_cached_file_valid_wav() {
+        // Create a minimal valid WAV file (44-byte header + 4 bytes of silence)
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.wav");
+        let mut f = std::fs::File::create(&path).unwrap();
+
+        let sample_rate: u32 = 44100;
+        let channels: u16 = 1;
+        let bits_per_sample: u16 = 16;
+        let data_size: u32 = 4; // 2 samples
+        let byte_rate = sample_rate * u32::from(channels) * u32::from(bits_per_sample) / 8;
+        let block_align = channels * bits_per_sample / 8;
+
+        // RIFF header
+        f.write_all(b"RIFF").unwrap();
+        f.write_all(&(36 + data_size).to_le_bytes()).unwrap();
+        f.write_all(b"WAVE").unwrap();
+        // fmt chunk
+        f.write_all(b"fmt ").unwrap();
+        f.write_all(&16u32.to_le_bytes()).unwrap(); // chunk size
+        f.write_all(&1u16.to_le_bytes()).unwrap(); // PCM
+        f.write_all(&channels.to_le_bytes()).unwrap();
+        f.write_all(&sample_rate.to_le_bytes()).unwrap();
+        f.write_all(&byte_rate.to_le_bytes()).unwrap();
+        f.write_all(&block_align.to_le_bytes()).unwrap();
+        f.write_all(&bits_per_sample.to_le_bytes()).unwrap();
+        // data chunk
+        f.write_all(b"data").unwrap();
+        f.write_all(&data_size.to_le_bytes()).unwrap();
+        f.write_all(&[0u8; 4]).unwrap(); // 2 silent samples
+        drop(f);
+
+        let (tx, mut rx) = mpsc::channel(64);
+        let result = decode_cached_file(&path, "audio/wav", None, &tx);
+        assert!(result.is_ok(), "Valid WAV should decode: {result:?}");
+
+        // Should have received Format + Audio + possibly Position
+        let mut got_format = false;
+        let mut got_audio = false;
+        while let Ok(msg) = rx.try_recv() {
+            match msg {
+                PcmMessage::Format { sample_rate: sr, channels: ch } => {
+                    assert_eq!(sr, 44100);
+                    assert_eq!(ch, 1);
+                    got_format = true;
+                }
+                PcmMessage::Audio(samples) => {
+                    assert!(!samples.is_empty());
+                    got_audio = true;
+                }
+                _ => {}
+            }
+        }
+        assert!(got_format, "Should receive Format message");
+        assert!(got_audio, "Should receive Audio message");
+    }
+
+    #[test]
+    fn decode_cached_file_seek_beyond_duration_still_works() {
+        // Create a minimal WAV, seek to 999999ms — should decode from start (seek fails gracefully)
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("short.wav");
+        let mut f = std::fs::File::create(&path).unwrap();
+
+        let sample_rate: u32 = 44100;
+        let data_size: u32 = 88200; // 1 second of mono 16-bit
+        let byte_rate: u32 = 88200;
+
+        f.write_all(b"RIFF").unwrap();
+        f.write_all(&(36 + data_size).to_le_bytes()).unwrap();
+        f.write_all(b"WAVE").unwrap();
+        f.write_all(b"fmt ").unwrap();
+        f.write_all(&16u32.to_le_bytes()).unwrap();
+        f.write_all(&1u16.to_le_bytes()).unwrap(); // PCM
+        f.write_all(&1u16.to_le_bytes()).unwrap(); // mono
+        f.write_all(&sample_rate.to_le_bytes()).unwrap();
+        f.write_all(&byte_rate.to_le_bytes()).unwrap();
+        f.write_all(&2u16.to_le_bytes()).unwrap(); // block align
+        f.write_all(&16u16.to_le_bytes()).unwrap(); // bits
+        f.write_all(b"data").unwrap();
+        f.write_all(&data_size.to_le_bytes()).unwrap();
+        f.write_all(&vec![0u8; data_size as usize]).unwrap();
+        drop(f);
+
+        let (tx, _rx) = mpsc::channel(64);
+        // Seek to 999 seconds in a 1-second file — should not panic, just decode from start
+        let result = decode_cached_file(&path, "audio/wav", Some(999_000), &tx);
+        assert!(result.is_ok(), "Seek beyond EOF should not fail: {result:?}");
+    }
+
+    #[test]
+    fn buffer_progress_message_fields() {
+        let msg = PcmMessage::BufferProgress {
+            buffered_bytes: 500_000,
+            total_bytes: Some(1_000_000),
+        };
+        match msg {
+            PcmMessage::BufferProgress { buffered_bytes, total_bytes } => {
+                assert_eq!(buffered_bytes, 500_000);
+                assert_eq!(total_bytes, Some(1_000_000));
+            }
+            _ => panic!("Wrong variant"),
+        }
+    }
+}

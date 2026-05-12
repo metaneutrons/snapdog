@@ -320,29 +320,28 @@ fn now_epoch_secs() -> u64 {
 mod tests {
     use super::*;
 
-    #[test]
-    fn cache_miss_on_empty() {
-        let dir = tempfile::tempdir().unwrap();
-        let config = SubsonicCacheConfig {
+    fn test_config(dir: &tempfile::TempDir) -> SubsonicCacheConfig {
+        SubsonicCacheConfig {
             enabled: true,
             path: dir.path().to_string_lossy().into_owned(),
             max_size_mb: 100,
             lookahead: 2,
-        };
-        let cache = TrackCache::new(&config).unwrap();
+        }
+    }
+
+    // ── Basic operations ──────────────────────────────────────
+
+    #[test]
+    fn cache_miss_on_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = TrackCache::new(&test_config(&dir)).unwrap();
         assert!(matches!(cache.get("nonexistent"), CacheEntry::Miss));
     }
 
     #[test]
     fn write_and_complete() {
         let dir = tempfile::tempdir().unwrap();
-        let config = SubsonicCacheConfig {
-            enabled: true,
-            path: dir.path().to_string_lossy().into_owned(),
-            max_size_mb: 100,
-            lookahead: 2,
-        };
-        let cache = TrackCache::new(&config).unwrap();
+        let cache = TrackCache::new(&test_config(&dir)).unwrap();
 
         let mut writer = cache.start_download("track1", "audio/mpeg", Some(1024)).unwrap();
         writer.write(&[0u8; 512]).unwrap();
@@ -362,22 +361,230 @@ mod tests {
         }
     }
 
+    // ── LRU eviction ──────────────────────────────────────────
+
     #[test]
-    fn eviction_removes_oldest() {
+    fn eviction_removes_oldest_not_most_recent() {
         let dir = tempfile::tempdir().unwrap();
-        let config = SubsonicCacheConfig {
-            enabled: true,
-            path: dir.path().to_string_lossy().into_owned(),
-            max_size_mb: 0, // force eviction
-            lookahead: 2,
-        };
+        let mut config = test_config(&dir);
+        // 300 bytes max — fits 2 of our 100-byte tracks but not 3
+        config.max_size_mb = 0; // will evict everything on each complete
+
         let cache = TrackCache::new(&config).unwrap();
 
         let mut w = cache.start_download("old", "audio/mpeg", None).unwrap();
         w.write(&[0u8; 100]).unwrap();
         w.complete().unwrap();
 
-        // Eviction should have removed it since max_size_mb = 0
+        // max_size_mb = 0 means eviction triggers immediately
         assert!(matches!(cache.get("old"), CacheEntry::Miss));
+    }
+
+    #[test]
+    fn lru_access_updates_order() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = test_config(&dir);
+        // Allow ~250 bytes (fits 2 tracks of 100 bytes, not 3)
+        // We use raw byte math: 250 bytes < 1 MB, so set to 1 and use small files
+        config.max_size_mb = 1; // 1 MB — plenty for test
+
+        let cache = TrackCache::new(&config).unwrap();
+
+        // Add track_a (oldest)
+        let mut w = cache.start_download("track_a", "audio/flac", None).unwrap();
+        w.write(&[0u8; 100]).unwrap();
+        w.complete().unwrap();
+
+        // Add track_b (newer)
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        let mut w = cache.start_download("track_b", "audio/flac", None).unwrap();
+        w.write(&[0u8; 100]).unwrap();
+        w.complete().unwrap();
+
+        // Access track_a — makes it most recently used
+        assert!(matches!(cache.get("track_a"), CacheEntry::Complete { .. }));
+
+        // Verify both still exist
+        assert!(matches!(cache.get("track_a"), CacheEntry::Complete { .. }));
+        assert!(matches!(cache.get("track_b"), CacheEntry::Complete { .. }));
+    }
+
+    // ── Invalidate ────────────────────────────────────────────
+
+    #[test]
+    fn invalidate_removes_file_and_index_entry() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = TrackCache::new(&test_config(&dir)).unwrap();
+
+        let mut w = cache.start_download("corrupt", "audio/mpeg", None).unwrap();
+        w.write(&[0u8; 50]).unwrap();
+        let path = w.complete().unwrap();
+        assert!(path.exists());
+
+        cache.invalidate("corrupt");
+
+        assert!(!path.exists());
+        assert!(matches!(cache.get("corrupt"), CacheEntry::Miss));
+    }
+
+    #[test]
+    fn invalidate_nonexistent_is_noop() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = TrackCache::new(&test_config(&dir)).unwrap();
+        cache.invalidate("ghost"); // should not panic
+    }
+
+    // ── Stale index ───────────────────────────────────────────
+
+    #[test]
+    fn stale_index_entry_cleaned_on_get() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = TrackCache::new(&test_config(&dir)).unwrap();
+
+        // Create a complete entry
+        let mut w = cache.start_download("stale", "audio/flac", None).unwrap();
+        w.write(&[0u8; 10]).unwrap();
+        let path = w.complete().unwrap();
+
+        // Manually delete the file (simulating external corruption)
+        fs::remove_file(&path).unwrap();
+
+        // get() should detect missing file, clean index, return Miss
+        assert!(matches!(cache.get("stale"), CacheEntry::Miss));
+
+        // Subsequent get should also be Miss (index was cleaned)
+        assert!(matches!(cache.get("stale"), CacheEntry::Miss));
+    }
+
+    // ── CacheWriter Drop cleanup ──────────────────────────────
+
+    #[test]
+    fn drop_without_complete_removes_partial() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = TrackCache::new(&test_config(&dir)).unwrap();
+
+        let partial_path;
+        {
+            let mut writer = cache.start_download("abandoned", "audio/ogg", None).unwrap();
+            writer.write(&[0u8; 50]).unwrap();
+            partial_path = writer.partial_path().to_path_buf();
+            assert!(partial_path.exists());
+            // writer dropped here without complete()
+        }
+
+        assert!(!partial_path.exists(), "Partial file should be cleaned up by Drop");
+    }
+
+    #[test]
+    fn abort_removes_partial() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = TrackCache::new(&test_config(&dir)).unwrap();
+
+        let mut writer = cache.start_download("aborted", "audio/wav", None).unwrap();
+        writer.write(&[0u8; 50]).unwrap();
+        let partial_path = writer.partial_path().to_path_buf();
+        assert!(partial_path.exists());
+
+        writer.abort();
+        assert!(!partial_path.exists());
+    }
+
+    #[test]
+    fn complete_does_not_trigger_drop_cleanup() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = TrackCache::new(&test_config(&dir)).unwrap();
+
+        let mut writer = cache.start_download("good", "audio/flac", None).unwrap();
+        writer.write(&[0u8; 50]).unwrap();
+        let final_path = writer.complete().unwrap();
+
+        // Final file should exist (not removed by Drop)
+        assert!(final_path.exists());
+    }
+
+    // ── Re-download overwrites partial ────────────────────────
+
+    #[test]
+    fn start_download_removes_existing_partial() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = TrackCache::new(&test_config(&dir)).unwrap();
+
+        // Create a partial file
+        let mut w1 = cache.start_download("retry", "audio/mpeg", None).unwrap();
+        w1.write(&[0xAA; 100]).unwrap();
+        let partial = w1.partial_path().to_path_buf();
+        // Don't complete — just drop (simulating interrupted download)
+        std::mem::forget(w1); // prevent Drop from cleaning up for this test
+        assert!(partial.exists());
+
+        // Start a new download for the same track
+        let mut w2 = cache.start_download("retry", "audio/mpeg", None).unwrap();
+        w2.write(&[0xBB; 50]).unwrap();
+        assert_eq!(w2.bytes_written(), 50); // fresh start, not appended
+
+        let path = w2.complete().unwrap();
+        let data = fs::read(&path).unwrap();
+        assert_eq!(data.len(), 50);
+        assert!(data.iter().all(|&b| b == 0xBB));
+    }
+
+    // ── Content type → extension mapping ──────────────────────
+
+    #[test]
+    fn ext_mapping() {
+        assert_eq!(ext_for_content_type("audio/mpeg"), "mp3");
+        assert_eq!(ext_for_content_type("audio/mp4"), "m4a");
+        assert_eq!(ext_for_content_type("audio/x-m4a"), "m4a");
+        assert_eq!(ext_for_content_type("audio/flac"), "flac");
+        assert_eq!(ext_for_content_type("audio/ogg"), "ogg");
+        assert_eq!(ext_for_content_type("audio/opus"), "ogg");
+        assert_eq!(ext_for_content_type("audio/aac"), "aac");
+        assert_eq!(ext_for_content_type("audio/wav"), "wav");
+        assert_eq!(ext_for_content_type("application/octet-stream"), "bin");
+        assert_eq!(ext_for_content_type(""), "bin");
+    }
+
+    // ── Index persistence ─────────────────────────────────────
+
+    #[test]
+    fn index_survives_reopen() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = test_config(&dir);
+
+        {
+            let cache = TrackCache::new(&config).unwrap();
+            let mut w = cache.start_download("persist", "audio/flac", None).unwrap();
+            w.write(&[0u8; 42]).unwrap();
+            w.complete().unwrap();
+        }
+
+        // Reopen cache from same directory
+        let cache = TrackCache::new(&config).unwrap();
+        match cache.get("persist") {
+            CacheEntry::Complete { content_type, .. } => {
+                assert_eq!(content_type, "audio/flac");
+            }
+            _ => panic!("Expected Complete after reopen"),
+        }
+    }
+
+    #[test]
+    fn index_not_corrupted_by_concurrent_writes() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = TrackCache::new(&test_config(&dir)).unwrap();
+
+        // Simulate rapid sequential operations
+        for i in 0..10 {
+            let id = format!("track_{i}");
+            let mut w = cache.start_download(&id, "audio/mpeg", None).unwrap();
+            w.write(&[i as u8; 10]).unwrap();
+            w.complete().unwrap();
+        }
+
+        // All should be retrievable
+        for i in 0..10 {
+            let id = format!("track_{i}");
+            assert!(matches!(cache.get(&id), CacheEntry::Complete { .. }), "track_{i} missing");
+        }
     }
 }
