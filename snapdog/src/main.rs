@@ -417,6 +417,8 @@ pub async fn run_app() -> Result<()> {
     let mqtt_zone_cmds = zone_commands.clone();
     let mqtt_store = store.clone();
     let mqtt_snap_tx = snap_cmd_tx.clone();
+    let mqtt_notify_store = store.clone();
+    let mut mqtt_notifications = notify_tx.subscribe();
     let cmd_backend = backend.clone();
 
     // Volume coalescing: buffer rapid volume changes per client
@@ -473,10 +475,30 @@ pub async fn run_app() -> Result<()> {
                 #[cfg(not(all(feature = "snapcast-process", not(feature = "snapcast-embedded"))))]
                 std::future::pending::<()>().await;
             } => {}
-            // MQTT events
+            // MQTT: poll commands + republish state on notifications
             _ = async {
                 if let Some(ref mut bridge) = mqtt_bridge {
-                    bridge.poll_once(&mqtt_zone_cmds, &mqtt_store, &mqtt_snap_tx).await;
+                    tokio::select! {
+                        _ = bridge.poll_once(&mqtt_zone_cmds, &mqtt_store, &mqtt_snap_tx) => {}
+                        Ok(notif) = mqtt_notifications.recv() => {
+                            let s = mqtt_notify_store.read().await;
+                            match notif {
+                                api::ws::Notification::ZoneStateChanged { zone, .. }
+                                | api::ws::Notification::ZoneTrackChanged { zone, .. }
+                                | api::ws::Notification::ZoneProgress { zone, .. } => {
+                                    if let Some(z) = s.zones.get(&zone) {
+                                        let _ = bridge.publish_zone_state(zone, z).await;
+                                    }
+                                }
+                                api::ws::Notification::ClientStateChanged { client, .. } => {
+                                    if let Some(c) = s.clients.get(&client) {
+                                        let _ = bridge.publish_client_state(client, c).await;
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
                 } else {
                     std::future::pending::<()>().await;
                 }
