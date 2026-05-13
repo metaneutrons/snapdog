@@ -44,6 +44,7 @@ interface AppState {
   clients: Map<number, ClientInfo>;
   selectedZone: number;
   isConnected: boolean;
+  serverGoingAway: boolean;
   isLoading: boolean;
   needsAuth: boolean;
 
@@ -72,7 +73,7 @@ interface AppState {
 
   // UI
   selectZone: (id: number) => void;
-  setConnected: (v: boolean) => void;
+  setConnected: (v: boolean, serverGoingAway?: boolean) => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -80,6 +81,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   clients: new Map(),
   selectedZone: 1,
   isConnected: false,
+  serverGoingAway: false,
   isLoading: true,
   needsAuth: false,
 
@@ -189,9 +191,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     sessionStorage.setItem("selectedZone", String(id));
     set({ selectedZone: id });
   },
-  setConnected: (v) => {
+  setConnected: (v, goingAway) => {
     const was = get().isConnected;
-    set({ isConnected: v });
+    set({ isConnected: v, serverGoingAway: goingAway ?? false });
     // On reconnect, re-fetch all state
     if (v && !was) {
       get().loadAll();

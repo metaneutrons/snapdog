@@ -85,6 +85,7 @@
   },
   "connection": {
     "lost": "Verbindung verloren",
+    "serverRestarting": "Server wird neu gestartet",
     "reconnecting": "Verbindung wird wiederhergestellt…"
   },
   "knx": {

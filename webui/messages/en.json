@@ -85,6 +85,7 @@
   },
   "connection": {
     "lost": "Connection Lost",
+    "serverRestarting": "Server Restarting",
     "reconnecting": "Reconnecting…"
   },
   "knx": {

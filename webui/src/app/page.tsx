@@ -137,9 +137,9 @@ export default function Home() {
     [updateZone, updateZoneTrack, updateZoneProgress, updateZonePresence, updateClient],
   );
 
-  const { isConnected: wsConnected } = useWebSocket(handleNotification);
+  const { isConnected: wsConnected, serverGoingAway } = useWebSocket(handleNotification);
 
-  useEffect(() => { setConnected(wsConnected); }, [wsConnected, setConnected]);
+  useEffect(() => { setConnected(wsConnected, serverGoingAway); }, [wsConnected, serverGoingAway, setConnected]);
   useEffect(() => { loadAll(); }, [loadAll]);
 
   const zoneList = Array.from(zoneMap.values());

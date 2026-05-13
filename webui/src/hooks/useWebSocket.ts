@@ -8,6 +8,7 @@ const BACKOFF_STEPS = [1_000, 2_500, 5_000, 10_000, 15_000];
 
 export function useWebSocket(onNotification: (n: WsNotification) => void, onReconnect?: () => void) {
   const [isConnected, setIsConnected] = useState(false);
+  const [serverGoingAway, setServerGoingAway] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const attemptRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -29,6 +30,7 @@ export function useWebSocket(onNotification: (n: WsNotification) => void, onReco
     ws.onopen = () => {
       const wasDisconnected = wasConnectedRef.current;
       setIsConnected(true);
+      setServerGoingAway(false);
       wasConnectedRef.current = true;
       attemptRef.current = 0;
       if (wasDisconnected) onReconnectRef.current?.();
@@ -43,8 +45,11 @@ export function useWebSocket(onNotification: (n: WsNotification) => void, onReco
       }
     };
 
-    ws.onclose = () => {
+    ws.onclose = (e) => {
       setIsConnected(false);
+      if (e.code === 1001) {
+        setServerGoingAway(true);
+      }
       wsRef.current = null;
       const delay = BACKOFF_STEPS[Math.min(attemptRef.current, BACKOFF_STEPS.length - 1)];
       attemptRef.current++;
@@ -69,5 +74,5 @@ export function useWebSocket(onNotification: (n: WsNotification) => void, onReco
     }
   }, []);
 
-  return { isConnected, sendCommand };
+  return { isConnected, serverGoingAway, sendCommand };
 }
