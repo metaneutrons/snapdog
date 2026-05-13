@@ -85,5 +85,8 @@ systemd-units = { unit-name = "snapdog", enable = false, start = false }
 [target.'cfg(target_os = "windows")'.build-dependencies]
 winresource = "0.1"
 
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-service = "0.8"
+
 [lints]
 workspace = true

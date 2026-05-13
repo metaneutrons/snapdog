@@ -72,6 +72,11 @@ struct Cli {
     /// Log level: trace, debug, info, warn, error
     #[arg(short, long)]
     log_level: Option<String>,
+
+    /// Run as a Windows service (Windows only)
+    #[cfg(target_os = "windows")]
+    #[arg(long)]
+    service: bool,
 }
 
 /// Volume coalescing window — rapid volume changes within this window are merged.
@@ -125,8 +130,28 @@ impl VolumeCoalescer {
     }
 }
 
+#[cfg(target_os = "windows")]
+mod service_windows;
+
 #[tokio::main]
 async fn main() -> Result<()> {
+    // ── Windows service mode ──────────────────────────────────
+    #[cfg(target_os = "windows")]
+    {
+        // Pre-parse just to check --service flag (before full init)
+        let cli = Cli::parse();
+        if cli.service {
+            service_windows::run_as_service()
+                .map_err(|e| anyhow::anyhow!("Windows service error: {e}"))?;
+            return Ok(());
+        }
+    }
+
+    run_app().await
+}
+
+/// Core application logic — used by both console mode and Windows service.
+pub async fn run_app() -> Result<()> {
     // ── Parse config ──────────────────────────────────────────
     let cli = Cli::parse();
 
