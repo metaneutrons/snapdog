@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="rg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e1882e"/>
+      <stop offset="100%" stop-color="#bc631a"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="24" fill="#1a1410"/>
+  <!-- Antenna -->
+  <line x1="64" y1="28" x2="64" y2="52" stroke="url(#rg)" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="64" cy="26" r="3" fill="#e1882e"/>
+  <!-- Radio body -->
+  <rect x="32" y="52" width="64" height="48" rx="8" fill="url(#rg)" opacity="0.9"/>
+  <!-- Speaker grille -->
+  <circle cx="54" cy="76" r="14" fill="#1a1410" opacity="0.5"/>
+  <circle cx="54" cy="76" r="10" fill="#1a1410" opacity="0.3"/>
+  <!-- Dial -->
+  <circle cx="82" cy="68" r="6" fill="#1a1410" opacity="0.4"/>
+  <circle cx="82" cy="68" r="3" fill="#e1882e" opacity="0.8"/>
+  <!-- Waves -->
+  <path d="M88 36c6 0 11 5 11 11" fill="none" stroke="#e1882e" stroke-width="2.5" stroke-linecap="round" opacity="0.7"/>
+  <path d="M88 30c10 0 17 8 17 17" fill="none" stroke="#e1882e" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+  <path d="M40 36c-6 0-11 5-11 11" fill="none" stroke="#e1882e" stroke-width="2.5" stroke-linecap="round" opacity="0.7"/>
+  <path d="M40 30c-10 0-17 8-17 17" fill="none" stroke="#e1882e" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+</svg>
