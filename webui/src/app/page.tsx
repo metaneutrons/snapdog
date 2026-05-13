@@ -153,7 +153,7 @@ export default function Home() {
     return (
       <div className="flex flex-1 h-full">
         {/* Skeleton sidebar */}
-        <aside className="hidden lg:flex xl:hidden flex-col border-r border-border bg-card lg:w-56 shrink-0">
+        <aside className="hidden md:flex xl:hidden flex-col border-r border-border bg-card md:w-56 shrink-0">
           <div className="px-4 py-4 border-b border-border">
             <Skeleton className="h-5 w-24" />
           </div>
@@ -187,7 +187,7 @@ export default function Home() {
       </a>
       <ConnectionStatus />
       {/* ── Sidebar / Rail (tablet only) ──────────────────── */}
-      <aside className="hidden lg:flex xl:hidden flex-col border-r border-border bg-card lg:w-56 shrink-0" aria-label={t("zone.navigation")}>
+      <aside className="hidden md:flex xl:hidden flex-col border-r border-border bg-card md:w-56 shrink-0" aria-label={t("zone.navigation")}>
         <div className="px-4 py-4 border-b border-border flex items-center justify-between">
           <h1 className="text-base font-semibold">SnapDog</h1>
           <ProgrammingMode /><LocalePicker /><AboutButton />
@@ -207,7 +207,7 @@ export default function Home() {
       {/* ── Main content ───────────────────────────────────── */}
       <main className="flex flex-1 flex-col min-w-0" id="main-content">
         {/* Header (mobile + compact + wide — hidden when sidebar visible at lg–xl) */}
-        <header className="flex lg:hidden items-center justify-between px-4 py-3 border-b border-border">
+        <header className="flex md:hidden items-center justify-between px-4 py-3 border-b border-border">
           <h1 className="text-base font-semibold">SnapDog</h1>
           <ProgrammingMode /><LocalePicker /><AboutButton />
         </header>
