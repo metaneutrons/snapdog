@@ -34,7 +34,7 @@ SnapDog turns a Linux box (or Mac) into a synchronized multi-room audio system w
 | 🎛️ **Multiband Parametric EQ** | Per-zone and per-client, genre presets, real-time via custom protocol |
 | 🔊 **Speaker Correction** | Per-client Spinorama profiles (1000+ speakers from (https://spinorama.org)) |
 | 🔀 **Audio Fade** | Smooth transitions: zone switch (client-side) and source switch (server-side) |
-| 🏠 **MQTT** | Bidirectional smart home integration (initial state on connect) |
+| 🏠 **MQTT** | Bidirectional smart home integration, Home Assistant auto-discovery |
 | 🏢 **KNX** | Building automation — client mode (tunnel/router) or device mode (ETS-programmable, 35 group objects per zone, 11 group objects per client, presence detection mode) |
 | 🌐 **REST API** | ~90 endpoints, full zone/client/media control |
 | 📡 **WebSocket** | Real-time state push notifications |
@@ -104,6 +104,13 @@ Download from [Releases](https://github.com/metaneutrons/snapdog/releases/latest
 
 ```bash
 snapdog --config snapdog.toml
+```
+
+On Windows, SnapDog can run as a native service:
+
+```cmd
+sc create SnapDog binPath= "\"C:\Program Files\SnapDog\snapdog.exe\" --service --config \"C:\ProgramData\snapdog\snapdog.toml\""
+sc start SnapDog
 ```
 
 ### Debian/Ubuntu (APT)
@@ -195,6 +202,15 @@ url = "https://st01.sslstream.dlf.de/dlf/01/high/aac/stream.aac"
 ```
 
 Snapcast sink paths, stream names, and AirPlay names are auto-generated from zone/client definitions. KNX addresses are explicit in client mode (fits into existing installations). In device mode, ETS assigns group addresses via the `.knxprod` product database.
+
+<details>
+<summary><strong>Home Assistant Integration</strong></summary>
+
+SnapDog publishes [MQTT Discovery](https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery) messages automatically. Zones appear as `media_player` entities in Home Assistant with zero configuration — just point both at the same MQTT broker.
+
+Supported features: play, pause, stop, next/previous, volume, mute, shuffle, repeat (off/one/all), seek, cover art, track metadata, and availability.
+
+</details>
 
 <details>
 <summary><strong>API Authentication</strong></summary>
