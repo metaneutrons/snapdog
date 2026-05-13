@@ -20,6 +20,8 @@ pub enum ApiError {
     NotFound(&'static str),
     /// Invalid request parameters (400).
     BadRequest(String),
+    /// Request conflicts with current server state (409).
+    Conflict(&'static str),
     /// Request understood but cannot be processed (422).
     Unprocessable(String),
     /// Required service not configured (503).
@@ -39,6 +41,7 @@ impl IntoResponse for ApiError {
                 format!("{what} not found"),
             ),
             Self::BadRequest(msg) => (StatusCode::BAD_REQUEST, "bad_request", msg),
+            Self::Conflict(msg) => (StatusCode::CONFLICT, "conflict", msg.into()),
             Self::Unprocessable(msg) => (StatusCode::UNPROCESSABLE_ENTITY, "unprocessable", msg),
             Self::ServiceUnavailable(what) => (
                 StatusCode::SERVICE_UNAVAILABLE,

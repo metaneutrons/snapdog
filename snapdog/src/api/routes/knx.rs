@@ -23,7 +23,7 @@ pub fn router(state: SharedState) -> Router {
 
 async fn get_programming_mode(State(state): State<SharedState>) -> impl IntoResponse {
     let Some(ref ctl) = state.knx_device_control else {
-        return Err(ApiError::NotFound("KNX device mode not active"));
+        return Err(ApiError::Conflict("KNX device mode not active"));
     };
     Ok(Json(ctl.get_prog_mode().await))
 }
@@ -33,7 +33,7 @@ async fn set_programming_mode(
     Json(enabled): Json<bool>,
 ) -> impl IntoResponse {
     let Some(ref ctl) = state.knx_device_control else {
-        return Err(ApiError::NotFound("KNX device mode not active"));
+        return Err(ApiError::Conflict("KNX device mode not active"));
     };
     ctl.set_prog_mode(enabled).await;
     Ok(Json(enabled))
