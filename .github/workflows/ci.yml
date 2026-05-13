@@ -130,3 +130,20 @@ jobs:
           name: snapdog-knxprod
           path: knx/snapdog.knxprod
           if-no-files-found: error
+
+  windows-check:
+    name: Windows Check
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 25
+          cache: npm
+          cache-dependency-path: webui/package-lock.json
+      - name: Build WebUI
+        working-directory: webui
+        run: npm ci --force && npm run build
+      - run: cargo check --all-targets

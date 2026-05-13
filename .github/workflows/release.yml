@@ -41,6 +41,8 @@ jobs:
             os: macos-latest
           - target: aarch64-apple-darwin
             os: macos-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
@@ -89,8 +91,13 @@ jobs:
           cp "target/${{ matrix.target }}/release/snapdog-client" "$archive/" 2>/dev/null || \
           cp "target/${{ matrix.target }}/release/snapdog-client.exe" "$archive/" 2>/dev/null || true
           cp LICENSE README.md "$archive/" 2>/dev/null || true
-          tar czf "${archive}.tar.gz" "$archive"
-          shasum -a 256 "${archive}.tar.gz" > "${archive}.tar.gz.sha256"
+          if [[ "${{ matrix.target }}" == *"windows"* ]]; then
+            7z a "${archive}.zip" "$archive"
+            shasum -a 256 "${archive}.zip" > "${archive}.zip.sha256"
+          else
+            tar czf "${archive}.tar.gz" "$archive"
+            shasum -a 256 "${archive}.tar.gz" > "${archive}.tar.gz.sha256"
+          fi
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
@@ -98,6 +105,8 @@ jobs:
           path: |
             snapdog-*.tar.gz
             snapdog-*.tar.gz.sha256
+            snapdog-*.zip
+            snapdog-*.zip.sha256
 
   build-deb:
     name: Debian ${{ matrix.pkg }} (${{ matrix.arch }})
@@ -168,7 +177,7 @@ jobs:
       - name: Collect assets
         run: |
           mkdir release-assets
-          find artifacts -type f \( -name "*.tar.gz" -o -name "*.tar.gz.sha256" -o -name "*.deb" -o -name "*.knxprod" \) -exec cp {} release-assets/ \;
+          find artifacts -type f \( -name "*.tar.gz" -o -name "*.tar.gz.sha256" -o -name "*.zip" -o -name "*.zip.sha256" -o -name "*.deb" -o -name "*.knxprod" \) -exec cp {} release-assets/ \;
           cd release-assets && sha256sum * > SHA256SUMS
       - name: Upload to GitHub Release
         env:

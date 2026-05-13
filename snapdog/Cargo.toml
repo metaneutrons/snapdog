@@ -82,5 +82,8 @@ assets = [
 ]
 systemd-units = { unit-name = "snapdog", enable = false, start = false }
 
+[target.'cfg(target_os = "windows")'.build-dependencies]
+winresource = "0.1"
+
 [lints]
 workspace = true
