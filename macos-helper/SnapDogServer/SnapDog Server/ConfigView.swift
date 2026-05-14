@@ -198,7 +198,7 @@ struct ConfigView: View {
     @ViewBuilder
     private var httpForm: some View {
         SwiftUI.Section("Server") {
-            TextField("Port", value: $config.http.port, format: .number)
+            TextField("Port", value: $config.http.port, format: .number.grouping(.never))
             TextField("Base URL", text: $config.http.baseUrl)
                 .help("External URL for absolute links in API responses")
         }
@@ -236,7 +236,7 @@ struct ConfigView: View {
     @ViewBuilder
     private var snapcastForm: some View {
         SwiftUI.Section("Network") {
-            TextField("Streaming Port", value: $config.snapcast.streamingPort, format: .number)
+            TextField("Streaming Port", value: $config.snapcast.streamingPort, format: .number.grouping(.never))
         }
         SwiftUI.Section("Codec") {
             Picker("Codec", selection: $config.snapcast.codec) {
