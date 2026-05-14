@@ -60,14 +60,17 @@ struct ConfigView: View {
             Tab("Music", systemImage: "music.note.house") {
                 Form { musicForm }.formStyle(.grouped)
             }
-            Tab("Zones & Clients", systemImage: "hifispeaker.2") {
-                Form { zonesClientsForm }.formStyle(.grouped)
+            Tab("Zones", systemImage: "rectangle.split.3x1") {
+                Form { zonesForm }.formStyle(.grouped)
+            }
+            Tab("Clients", systemImage: "speaker.wave.2") {
+                Form { clientsForm }.formStyle(.grouped)
             }
             Tab("Advanced", systemImage: "gearshape") {
                 Form { advancedForm }.formStyle(.grouped)
             }
         }
-        .tabViewStyle(.sidebarAdaptable)
+        .tabViewStyle(.automatic)
         .frame(minWidth: 520, minHeight: 400)
         .onAppear { load() }
         .onChange(of: config.subsonic) { _, _ in debounceSave() }
@@ -122,7 +125,7 @@ struct ConfigView: View {
     // MARK: - Zones & Clients Tab
 
     @ViewBuilder
-    private var zonesClientsForm: some View {
+    private var zonesForm: some View {
         SwiftUI.Section {
             List {
                 ForEach($config.zones) { $zone in
@@ -136,9 +139,7 @@ struct ConfigView: View {
                 .onDelete { config.zones.remove(atOffsets: $0) }
                 .onMove { config.zones.move(fromOffsets: $0, toOffset: $1) }
             }
-            .frame(minHeight: 80)
-        } header: {
-            Text("Zones")
+            .frame(minHeight: 120)
         } footer: {
             HStack {
                 Button("", systemImage: "plus") {
@@ -152,7 +153,9 @@ struct ConfigView: View {
             }
             .buttonStyle(.borderless)
         }
+    }
 
+    private var clientsForm: some View {
         SwiftUI.Section {
             List {
                 ForEach($config.clients) { $client in
@@ -175,9 +178,7 @@ struct ConfigView: View {
                 .onDelete { config.clients.remove(atOffsets: $0) }
                 .onMove { config.clients.move(fromOffsets: $0, toOffset: $1) }
             }
-            .frame(minHeight: 100)
-        } header: {
-            Text("Clients")
+            .frame(minHeight: 120)
         } footer: {
             HStack {
                 Button("", systemImage: "plus") {
