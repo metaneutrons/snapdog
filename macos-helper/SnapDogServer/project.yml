@@ -21,7 +21,7 @@ targets:
       - package: TOMLKit
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: eu.schmieder.snapdog.server
+        PRODUCT_BUNDLE_IDENTIFIER: com.metaneutrons.snapdog.helper
         PRODUCT_NAME: SnapDog Server
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"
