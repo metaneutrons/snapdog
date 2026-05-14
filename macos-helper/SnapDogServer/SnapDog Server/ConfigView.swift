@@ -9,8 +9,11 @@ final class ConfigModel {
     var clients: [ClientEntry] = []
     var radios: [RadioEntry] = []
     var mqtt = MqttSection()
+    var knx = KnxSection()
     var airplayPassword = ""
     var codec = "flac"
+    var sampleRate = 48000
+    var bitDepth = 16
 
     struct SubsonicSection: Equatable {
         var url = ""
@@ -25,6 +28,12 @@ final class ConfigModel {
         var username = ""
         var password = ""
         var baseTopic = "snapdog"
+    }
+
+    struct KnxSection: Equatable {
+        var enabled = false
+        var role = "client"
+        var url = ""
     }
 
     struct ZoneEntry: Identifiable {
@@ -57,8 +66,11 @@ struct ConfigView: View {
 
     var body: some View {
         TabView {
-            Tab("Music", systemImage: "music.note.house") {
-                Form { musicForm }.formStyle(.grouped)
+            Tab("Sources", systemImage: "music.note.house") {
+                Form { sourcesForm }.formStyle(.grouped)
+            }
+            Tab("Audio", systemImage: "waveform") {
+                Form { audioForm }.formStyle(.grouped)
             }
             Tab("Zones", systemImage: "rectangle.split.3x1") {
                 Form { zonesForm }.formStyle(.grouped)
@@ -66,8 +78,8 @@ struct ConfigView: View {
             Tab("Clients", systemImage: "speaker.wave.2") {
                 Form { clientsForm }.formStyle(.grouped)
             }
-            Tab("Advanced", systemImage: "gearshape") {
-                Form { advancedForm }.formStyle(.grouped)
+            Tab("Integration", systemImage: "antenna.radiowaves.left.and.right") {
+                Form { integrationForm }.formStyle(.grouped)
             }
         }
         .tabViewStyle(.automatic)
@@ -75,21 +87,29 @@ struct ConfigView: View {
         .onAppear { load() }
         .onChange(of: config.subsonic) { _, _ in debounceSave() }
         .onChange(of: config.mqtt) { _, _ in debounceSave() }
+        .onChange(of: config.knx) { _, _ in debounceSave() }
         .onChange(of: config.airplayPassword) { _, _ in debounceSave() }
         .onChange(of: config.codec) { _, _ in debounceSave() }
+        .onChange(of: config.sampleRate) { _, _ in debounceSave() }
+        .onChange(of: config.bitDepth) { _, _ in debounceSave() }
         .onChange(of: config.zones.count) { _, _ in debounceSave() }
         .onChange(of: config.clients.count) { _, _ in debounceSave() }
         .onChange(of: config.radios.count) { _, _ in debounceSave() }
     }
 
-    // MARK: - Music Tab
+    // MARK: - Sources Tab
 
     @ViewBuilder
-    private var musicForm: some View {
+    private var sourcesForm: some View {
         SwiftUI.Section("Subsonic / Navidrome") {
             TextField("Server URL", text: $config.subsonic.url, prompt: Text("http://navidrome:4533"))
             TextField("Username", text: $config.subsonic.username)
             SecureField("Password", text: $config.subsonic.password)
+        }
+
+        SwiftUI.Section("AirPlay") {
+            SecureField("Password", text: $config.airplayPassword, prompt: Text("No password"))
+                .help("Optional password for AirPlay connections")
         }
 
         SwiftUI.Section {
@@ -119,6 +139,36 @@ struct ConfigView: View {
                 Spacer()
             }
             .buttonStyle(.borderless)
+        }
+    }
+
+    // MARK: - Audio Tab
+
+    @ViewBuilder
+    private var audioForm: some View {
+        SwiftUI.Section("Output Format") {
+            Picker("Sample Rate", selection: $config.sampleRate) {
+                Text("44.1 kHz").tag(44100)
+                Text("48 kHz").tag(48000)
+                Text("88.2 kHz").tag(88200)
+                Text("96 kHz").tag(96000)
+            }
+            .pickerStyle(.menu)
+            Picker("Bit Depth", selection: $config.bitDepth) {
+                Text("16-bit").tag(16)
+                Text("24-bit").tag(24)
+                Text("32-bit").tag(32)
+            }
+            .pickerStyle(.menu)
+        }
+        SwiftUI.Section("Streaming") {
+            Picker("Codec", selection: $config.codec) {
+                Text("FLAC (lossless)").tag("flac")
+                Text("PCM (uncompressed)").tag("pcm")
+                Text("F32+LZ4 (low latency)").tag("f32lz4")
+                Text("F32+LZ4 encrypted").tag("f32lz4e")
+            }
+            .pickerStyle(.menu)
         }
     }
 
@@ -194,26 +244,11 @@ struct ConfigView: View {
         }
     }
 
-    // MARK: - Advanced Tab
+    // MARK: - Integration Tab
 
     @ViewBuilder
-    private var advancedForm: some View {
-        SwiftUI.Section("Audio") {
-            Picker("Streaming Codec", selection: $config.codec) {
-                Text("FLAC (lossless)").tag("flac")
-                Text("PCM (uncompressed)").tag("pcm")
-                Text("F32+LZ4 (low latency)").tag("f32lz4")
-                Text("F32+LZ4 encrypted").tag("f32lz4e")
-            }
-            .pickerStyle(.menu)
-        }
-
-        SwiftUI.Section("AirPlay") {
-            SecureField("Password", text: $config.airplayPassword, prompt: Text("No password"))
-                .help("Optional password for AirPlay connections")
-        }
-
-        SwiftUI.Section("MQTT") {
+    private var integrationForm: some View {
+        SwiftUI.Section {
             Toggle("Enable MQTT", isOn: $config.mqtt.enabled)
             Group {
                 TextField("Broker", text: $config.mqtt.broker, prompt: Text("host:port"))
@@ -223,6 +258,23 @@ struct ConfigView: View {
                 TextField("Base Topic", text: $config.mqtt.baseTopic)
             }
             .disabled(!config.mqtt.enabled)
+        } header: {
+            Text("MQTT")
+        }
+
+        SwiftUI.Section {
+            Toggle("Enable KNX", isOn: $config.knx.enabled)
+            Group {
+                Picker("Role", selection: $config.knx.role) {
+                    Text("Client (Gateway)").tag("client")
+                    Text("Device (ETS)").tag("device")
+                }
+                .pickerStyle(.menu)
+                TextField("Gateway URL", text: $config.knx.url, prompt: Text("udp://192.168.1.50:3671"))
+            }
+            .disabled(!config.knx.enabled)
+        } header: {
+            Text("KNX")
         }
     }
 
