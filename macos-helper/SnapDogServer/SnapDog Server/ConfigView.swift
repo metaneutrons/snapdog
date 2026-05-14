@@ -9,7 +9,6 @@ final class ConfigModel {
     var clients: [ClientEntry] = []
     var radios: [RadioEntry] = []
     var mqtt = MqttSection()
-    var knx = KnxSection()
     var airplayPassword = ""
     var codec = "flac"
     var encryptionPsk = ""
@@ -29,12 +28,6 @@ final class ConfigModel {
         var username = ""
         var password = ""
         var baseTopic = "snapdog"
-    }
-
-    struct KnxSection: Equatable {
-        var enabled = false
-        var role = "client"
-        var url = ""
     }
 
     struct ZoneEntry: Identifiable {
@@ -89,7 +82,6 @@ struct ConfigView: View {
         .onAppear { load() }
         .onChange(of: config.subsonic) { _, _ in debounceSave() }
         .onChange(of: config.mqtt) { _, _ in debounceSave() }
-        .onChange(of: config.knx) { _, _ in debounceSave() }
         .onChange(of: config.airplayPassword) { _, _ in debounceSave() }
         .onChange(of: config.codec) { _, _ in debounceSave() }
         .onChange(of: config.sampleRate) { _, _ in debounceSave() }
@@ -258,21 +250,6 @@ struct ConfigView: View {
             .disabled(!config.mqtt.enabled)
         } header: {
             Text("MQTT")
-        }
-
-        SwiftUI.Section {
-            Toggle("Enable KNX", isOn: $config.knx.enabled)
-            Group {
-                Picker("Role", selection: $config.knx.role) {
-                    Text("Client (Gateway)").tag("client")
-                    Text("Device (ETS)").tag("device")
-                }
-                .pickerStyle(.menu)
-                TextField("Gateway URL", text: $config.knx.url, prompt: Text("udp://192.168.1.50:3671"))
-            }
-            .disabled(!config.knx.enabled)
-        } header: {
-            Text("KNX")
         }
     }
 
