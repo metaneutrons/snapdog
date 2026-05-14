@@ -27,8 +27,8 @@ struct SnapDogServerApp: App {
             }
 
             Section {
-                Button("Edit Configuration...") {
-                    serverManager.openConfigInEditor()
+                SettingsLink {
+                    Text("Configuration...")
                 }
                 Button("View Logs...") {
                     openWindow(id: "logs")
