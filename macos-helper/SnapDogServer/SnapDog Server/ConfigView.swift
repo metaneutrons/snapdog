@@ -67,19 +67,19 @@ struct ConfigView: View {
     var body: some View {
         TabView {
             Tab("Sources", systemImage: "music.note.house") {
-                Form { sourcesForm }.formStyle(.grouped)
+                Form { sourcesForm }
             }
             Tab("Audio", systemImage: "waveform") {
-                Form { audioForm }.formStyle(.grouped)
+                Form { audioForm }
             }
             Tab("Zones", systemImage: "rectangle.split.3x1") {
-                Form { zonesForm }.formStyle(.grouped)
+                Form { zonesForm }
             }
             Tab("Clients", systemImage: "speaker.wave.2") {
-                Form { clientsForm }.formStyle(.grouped)
+                Form { clientsForm }
             }
             Tab("Integration", systemImage: "antenna.radiowaves.left.and.right") {
-                Form { integrationForm }.formStyle(.grouped)
+                Form { integrationForm }
             }
         }
         .tabViewStyle(.automatic)
