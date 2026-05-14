@@ -9,6 +9,11 @@ struct SnapDogServerApp: App {
         MenuBarExtra("SnapDog", image: "MenuBarIcon") {
             Section {
                 Text(serverManager.isRunning ? "● Running" : "○ Stopped")
+                if let error = serverManager.lastError {
+                    Text(error)
+                        .foregroundStyle(.red)
+                        .font(.caption)
+                }
             }
 
             Section {

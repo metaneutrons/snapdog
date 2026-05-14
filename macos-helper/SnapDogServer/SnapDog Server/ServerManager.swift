@@ -7,9 +7,10 @@ import os
 final class ServerManager {
     private(set) var isRunning = false
     private(set) var logs: [String] = []
+    var lastError: String?
 
     private var process: Process?
-    private let logger = Logger(subsystem: "eu.schmieder.snapdog.helper", category: "server")
+    private let logger = Logger(subsystem: "com.metaneutrons.snapdog.helper", category: "server")
 
     var configPath: URL {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -25,6 +26,7 @@ final class ServerManager {
 
     func start() {
         guard !isRunning else { return }
+        lastError = nil
         guard let binary = binaryPath else {
             appendLog("[ERROR] snapdog binary not found in app bundle")
             return
@@ -46,11 +48,17 @@ final class ServerManager {
             }
         }
 
-        proc.terminationHandler = { [weak self] _ in
+        proc.terminationHandler = { [weak self] proc in
             Task { @MainActor [weak self] in
                 self?.isRunning = false
                 self?.process = nil
-                self?.appendLog("[SERVER] Process terminated")
+                let code = proc.terminationStatus
+                if code == 0 {
+                    self?.appendLog("[SERVER] Stopped")
+                } else {
+                    self?.appendLog("[SERVER] Crashed (exit code \(code))")
+                    self?.lastError = "Server exited with code \(code). Check logs for details."
+                }
             }
         }
 
