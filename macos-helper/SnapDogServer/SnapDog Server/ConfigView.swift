@@ -114,18 +114,15 @@ struct ConfigView: View {
         }
 
         SwiftUI.Section {
-            List {
-                ForEach($config.radios) { $radio in
-                    HStack {
-                        TextField("Name", text: $radio.name)
-                        TextField("Stream URL", text: $radio.url, prompt: Text("https://..."))
-                            .foregroundStyle(.secondary)
-                    }
+            ForEach($config.radios) { $radio in
+                HStack {
+                    TextField("Name", text: $radio.name)
+                    TextField("Stream URL", text: $radio.url, prompt: Text("https://..."))
+                        .foregroundStyle(.secondary)
                 }
-                .onDelete { config.radios.remove(atOffsets: $0) }
-                .onMove { config.radios.move(fromOffsets: $0, toOffset: $1) }
             }
-            .frame(minHeight: 80)
+            .onDelete { config.radios.remove(atOffsets: $0) }
+            .onMove { config.radios.move(fromOffsets: $0, toOffset: $1) }
         } header: {
             Text("Radio Stations")
         } footer: {
@@ -181,19 +178,16 @@ struct ConfigView: View {
     @ViewBuilder
     private var zonesForm: some View {
         SwiftUI.Section {
-            List {
-                ForEach($config.zones) { $zone in
-                    HStack {
-                        TextField("", text: $zone.icon)
-                            .frame(width: 36)
-                            .multilineTextAlignment(.center)
-                        TextField("Zone Name", text: $zone.name)
-                    }
+            ForEach($config.zones) { $zone in
+                HStack {
+                    TextField("", text: $zone.icon)
+                        .frame(width: 36)
+                        .multilineTextAlignment(.center)
+                    TextField("Zone Name", text: $zone.name)
                 }
-                .onDelete { config.zones.remove(atOffsets: $0) }
-                .onMove { config.zones.move(fromOffsets: $0, toOffset: $1) }
             }
-            .frame(minHeight: 120)
+            .onDelete { config.zones.remove(atOffsets: $0) }
+            .onMove { config.zones.move(fromOffsets: $0, toOffset: $1) }
         } footer: {
             HStack {
                 Button("", systemImage: "plus") {
@@ -211,28 +205,25 @@ struct ConfigView: View {
 
     private var clientsForm: some View {
         SwiftUI.Section {
-            List {
-                ForEach($config.clients) { $client in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            TextField("", text: $client.icon)
-                                .frame(width: 36)
-                                .multilineTextAlignment(.center)
-                            TextField("Name", text: $client.name)
-                        }
-                        HStack {
-                            TextField("MAC", text: $client.mac, prompt: Text("aa:bb:cc:dd:ee:ff"))
-                            TextField("Zone", text: $client.zone, prompt: Text("Zone name"))
-                        }
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
+            ForEach($config.clients) { $client in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        TextField("", text: $client.icon)
+                            .frame(width: 36)
+                            .multilineTextAlignment(.center)
+                        TextField("Name", text: $client.name)
                     }
-                    .padding(.vertical, 2)
+                    HStack {
+                        TextField("MAC", text: $client.mac, prompt: Text("aa:bb:cc:dd:ee:ff"))
+                        TextField("Zone", text: $client.zone, prompt: Text("Zone name"))
+                    }
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
                 }
-                .onDelete { config.clients.remove(atOffsets: $0) }
-                .onMove { config.clients.move(fromOffsets: $0, toOffset: $1) }
+                .padding(.vertical, 2)
             }
-            .frame(minHeight: 120)
+            .onDelete { config.clients.remove(atOffsets: $0) }
+            .onMove { config.clients.move(fromOffsets: $0, toOffset: $1) }
         } footer: {
             HStack {
                 Button("", systemImage: "plus") {
