@@ -9,9 +9,6 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "SnapDogHelper",
-            resources: [
-                .copy("Resources/bin"),
-            ],
             swiftSettings: [
                 .enableExperimentalFeature("StrictConcurrency"),
             ]

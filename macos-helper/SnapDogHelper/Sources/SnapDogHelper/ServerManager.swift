@@ -19,8 +19,8 @@ final class ServerManager {
     }
 
     private var binaryPath: URL? {
-        Bundle.main.url(forResource: "snapdog", withExtension: nil, subdirectory: "bin")
-            ?? Bundle.main.resourceURL?.appendingPathComponent("bin/snapdog")
+        Bundle.main.bundleURL
+            .appendingPathComponent("Contents/Helpers/snapdog")
     }
 
     func start() {
