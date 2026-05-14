@@ -7,56 +7,21 @@ enum TOMLConfigParser {
         let table = try TOMLTable(string: content)
         let model = ConfigModel()
 
-        // System
-        if let sys = table["system"] as? TOMLTable {
-            model.system.logLevel = (sys["log_level"] as? String) ?? "info"
-            model.system.logFile = (sys["log_file"] as? String) ?? ""
-            model.system.stateDir = (sys["state_dir"] as? String) ?? ""
+        // Subsonic
+        if let sub = table["subsonic"] as? TOMLTable {
+            model.subsonic.url = (sub["url"] as? String) ?? ""
+            model.subsonic.username = (sub["username"] as? String) ?? ""
+            model.subsonic.password = (sub["password"] as? String) ?? ""
         }
 
-        // HTTP
-        if let http = table["http"] as? TOMLTable {
-            model.http.port = (http["port"] as? Int) ?? 5555
-            model.http.baseUrl = (http["base_url"] as? String) ?? "http://localhost:5555"
-        }
-
-        // Audio
-        if let audio = table["audio"] as? TOMLTable {
-            model.audio.sampleRate = (audio["sample_rate"] as? Int) ?? 48000
-            model.audio.bitDepth = (audio["bit_depth"] as? Int) ?? 16
-            model.audio.channels = (audio["channels"] as? Int) ?? 2
-            model.audio.sourceConflict = (audio["source_conflict"] as? String) ?? "last_wins"
-            model.audio.zoneSwitch = (audio["zone_switch_fade_ms"] as? Int) ?? 300
-            model.audio.sourceSwitch = (audio["source_switch_fade_ms"] as? Int) ?? 300
-        }
-
-        // Snapcast
+        // Codec
         if let snap = table["snapcast"] as? TOMLTable {
-            model.snapcast.streamingPort = (snap["streaming_port"] as? Int) ?? 1704
-            model.snapcast.codec = (snap["codec"] as? String) ?? "flac"
-            model.snapcast.encryptionPsk = (snap["encryption_psk"] as? String) ?? ""
-            model.snapcast.groupVolumeMode = (snap["group_volume_mode"] as? String) ?? "relative"
-            model.snapcast.unknownClients = (snap["unknown_clients"] as? String) ?? "accept"
-            model.snapcast.defaultZone = (snap["default_zone"] as? String) ?? ""
+            model.codec = (snap["codec"] as? String) ?? "flac"
         }
 
         // AirPlay
         if let ap = table["airplay"] as? TOMLTable {
-            model.airplay.password = (ap["password"] as? String) ?? ""
-        }
-
-        // Subsonic
-        if let sub = table["subsonic"] as? TOMLTable {
-            model.subsonic.enabled = true
-            model.subsonic.url = (sub["url"] as? String) ?? ""
-            model.subsonic.username = (sub["username"] as? String) ?? ""
-            model.subsonic.password = (sub["password"] as? String) ?? ""
-            model.subsonic.format = (sub["format"] as? String) ?? "raw"
-            if let cache = sub["cache"] as? TOMLTable {
-                model.subsonic.cacheEnabled = (cache["enabled"] as? Bool) ?? true
-                model.subsonic.cacheMaxSizeMb = (cache["max_size_mb"] as? Int) ?? 2048
-                model.subsonic.cacheLookahead = (cache["lookahead"] as? Int) ?? 2
-            }
+            model.airplayPassword = (ap["password"] as? String) ?? ""
         }
 
         // MQTT
@@ -69,7 +34,7 @@ enum TOMLConfigParser {
             model.mqtt.baseTopic = (mqtt["base_topic"] as? String) ?? "snapdog"
         }
 
-        // Zones (array of tables)
+        // Zones
         if let zones = table["zone"] as? [TOMLTable] {
             model.zones = zones.map { t in
                 ConfigModel.ZoneEntry(
@@ -96,8 +61,7 @@ enum TOMLConfigParser {
             model.radios = radios.map { t in
                 ConfigModel.RadioEntry(
                     name: (t["name"] as? String) ?? "",
-                    url: (t["url"] as? String) ?? "",
-                    cover: (t["cover"] as? String) ?? ""
+                    url: (t["url"] as? String) ?? ""
                 )
             }
         }
@@ -106,61 +70,61 @@ enum TOMLConfigParser {
     }
 
     static func save(_ model: ConfigModel, to url: URL) throws {
-        let table = TOMLTable()
-
-        // System
-        let sys = TOMLTable()
-        sys["log_level"] = model.system.logLevel
-        if !model.system.logFile.isEmpty { sys["log_file"] = model.system.logFile }
-        if !model.system.stateDir.isEmpty { sys["state_dir"] = model.system.stateDir }
-        table["system"] = sys
-
-        // HTTP
-        let http = TOMLTable()
-        http["port"] = model.http.port
-        http["base_url"] = model.http.baseUrl
-        table["http"] = http
-
-        // Audio
-        let audio = TOMLTable()
-        audio["sample_rate"] = model.audio.sampleRate
-        audio["bit_depth"] = model.audio.bitDepth
-        audio["channels"] = model.audio.channels
-        audio["source_conflict"] = model.audio.sourceConflict
-        audio["zone_switch_fade_ms"] = model.audio.zoneSwitch
-        audio["source_switch_fade_ms"] = model.audio.sourceSwitch
-        table["audio"] = audio
-
-        // Snapcast
-        let snap = TOMLTable()
-        snap["streaming_port"] = model.snapcast.streamingPort
-        snap["codec"] = model.snapcast.codec
-        if !model.snapcast.encryptionPsk.isEmpty { snap["encryption_psk"] = model.snapcast.encryptionPsk }
-        snap["group_volume_mode"] = model.snapcast.groupVolumeMode
-        snap["unknown_clients"] = model.snapcast.unknownClients
-        if !model.snapcast.defaultZone.isEmpty { snap["default_zone"] = model.snapcast.defaultZone }
-        table["snapcast"] = snap
-
-        // AirPlay
-        if !model.airplay.password.isEmpty {
-            let ap = TOMLTable()
-            ap["password"] = model.airplay.password
-            table["airplay"] = ap
+        // Load existing file to preserve fields the UI doesn't manage
+        let existing: TOMLTable
+        if let content = try? String(contentsOf: url, encoding: .utf8),
+           let table = try? TOMLTable(string: content) {
+            existing = table
+        } else {
+            existing = TOMLTable()
         }
 
+        // HTTP (preserve or set defaults)
+        if existing["http"] == nil {
+            let http = TOMLTable()
+            http["port"] = 5555
+            http["base_url"] = "http://localhost:5555"
+            existing["http"] = http
+        }
+
+        // Audio (preserve or set defaults)
+        if existing["audio"] == nil {
+            let audio = TOMLTable()
+            audio["sample_rate"] = 48000
+            audio["bit_depth"] = 16
+            audio["source_conflict"] = "last_wins"
+            audio["zone_switch_fade_ms"] = 300
+            audio["source_switch_fade_ms"] = 300
+            existing["audio"] = audio
+        }
+
+        // Snapcast — update codec, preserve rest
+        let snap = (existing["snapcast"] as? TOMLTable) ?? TOMLTable()
+        snap["codec"] = model.codec
+        if snap["streaming_port"] == nil { snap["streaming_port"] = 1704 }
+        if snap["group_volume_mode"] == nil { snap["group_volume_mode"] = "relative" }
+        if snap["unknown_clients"] == nil { snap["unknown_clients"] = "accept" }
+        existing["snapcast"] = snap
+
         // Subsonic
-        if model.subsonic.enabled {
-            let sub = TOMLTable()
+        if !model.subsonic.url.isEmpty {
+            let sub = (existing["subsonic"] as? TOMLTable) ?? TOMLTable()
             sub["url"] = model.subsonic.url
             sub["username"] = model.subsonic.username
             sub["password"] = model.subsonic.password
-            sub["format"] = model.subsonic.format
-            let cache = TOMLTable()
-            cache["enabled"] = model.subsonic.cacheEnabled
-            cache["max_size_mb"] = model.subsonic.cacheMaxSizeMb
-            cache["lookahead"] = model.subsonic.cacheLookahead
-            sub["cache"] = cache
-            table["subsonic"] = sub
+            if sub["format"] == nil { sub["format"] = "raw" }
+            existing["subsonic"] = sub
+        } else {
+            existing["subsonic"] = nil
+        }
+
+        // AirPlay
+        if !model.airplayPassword.isEmpty {
+            let ap = TOMLTable()
+            ap["password"] = model.airplayPassword
+            existing["airplay"] = ap
+        } else {
+            existing["airplay"] = nil
         }
 
         // MQTT
@@ -171,22 +135,26 @@ enum TOMLConfigParser {
             if !model.mqtt.username.isEmpty { mqtt["username"] = model.mqtt.username }
             if !model.mqtt.password.isEmpty { mqtt["password"] = model.mqtt.password }
             mqtt["base_topic"] = model.mqtt.baseTopic
-            table["mqtt"] = mqtt
+            existing["mqtt"] = mqtt
+        } else {
+            existing["mqtt"] = nil
         }
 
-        // Zones — array of tables ([[zone]])
+        // Zones
+        existing["zone"] = nil
         let zonesArr = TOMLArray()
-        for zone in model.zones {
+        for zone in model.zones where !zone.name.isEmpty {
             let t = TOMLTable()
             t["name"] = zone.name
             t["icon"] = zone.icon
             zonesArr.append(t)
         }
-        if !model.zones.isEmpty { table["zone"] = zonesArr }
+        if !model.zones.isEmpty { existing["zone"] = zonesArr }
 
         // Clients
+        existing["client"] = nil
         let clientsArr = TOMLArray()
-        for client in model.clients {
+        for client in model.clients where !client.name.isEmpty {
             let t = TOMLTable()
             t["name"] = client.name
             t["mac"] = client.mac
@@ -194,19 +162,19 @@ enum TOMLConfigParser {
             t["icon"] = client.icon
             clientsArr.append(t)
         }
-        if !model.clients.isEmpty { table["client"] = clientsArr }
+        if !model.clients.isEmpty { existing["client"] = clientsArr }
 
         // Radios
+        existing["radio"] = nil
         let radiosArr = TOMLArray()
-        for radio in model.radios {
+        for radio in model.radios where !radio.name.isEmpty {
             let t = TOMLTable()
             t["name"] = radio.name
             t["url"] = radio.url
-            if !radio.cover.isEmpty { t["cover"] = radio.cover }
             radiosArr.append(t)
         }
-        if !model.radios.isEmpty { table["radio"] = radiosArr }
+        if !model.radios.isEmpty { existing["radio"] = radiosArr }
 
-        try table.convert().write(to: url, atomically: true, encoding: .utf8)
+        try existing.convert().write(to: url, atomically: true, encoding: .utf8)
     }
 }
