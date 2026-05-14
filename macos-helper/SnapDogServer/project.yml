@@ -19,6 +19,15 @@ targets:
       - path: SnapDog Server
     dependencies:
       - package: TOMLKit
+    postBuildScripts:
+      - name: Copy snapdog binary
+        script: |
+          HELPERS_DIR="${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app/Contents/Helpers"
+          mkdir -p "$HELPERS_DIR"
+          cp "${SRCROOT}/../../target/release/snapdog" "$HELPERS_DIR/" 2>/dev/null || \
+          cp "${SRCROOT}/../../target/debug/snapdog" "$HELPERS_DIR/" || \
+          echo "warning: snapdog binary not found"
+        basedOnDependencyAnalysis: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.metaneutrons.snapdog.helper
