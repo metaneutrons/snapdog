@@ -188,9 +188,12 @@ export default function Home() {
       <ConnectionStatus />
       {/* ── Sidebar / Rail (tablet only) ──────────────────── */}
       <aside className="hidden md:flex xl:hidden flex-col border-r border-border bg-card md:w-56 shrink-0" aria-label={t("zone.navigation")}>
-        <div className="px-4 py-4 border-b border-border flex items-center justify-between">
+        <div className="px-4 py-4 border-b border-border flex items-center gap-2">
+          <img src="/assets/snapdog-icon.svg" alt="" className="size-5 opacity-70" />
           <h1 className="text-base font-semibold">SnapDog</h1>
-          <ProgrammingMode /><LocalePicker /><AboutButton />
+          <div className="flex items-center gap-0.5 ml-auto">
+            <ProgrammingMode /><LocalePicker /><AboutButton />
+          </div>
         </div>
         <nav className="flex-1 overflow-y-auto p-2 space-y-0.5" aria-label={t("zone.zones")}>
           {zoneList.map((z) => (
@@ -207,15 +210,21 @@ export default function Home() {
       {/* ── Main content ───────────────────────────────────── */}
       <main className="flex flex-1 flex-col min-w-0" id="main-content">
         {/* Header (mobile + compact + wide — hidden when sidebar visible at lg–xl) */}
-        <header className="flex md:hidden items-center justify-between px-4 py-3 border-b border-border">
+        <header className="flex md:hidden items-center gap-2 px-4 py-3 border-b border-border">
+          <img src="/assets/snapdog-icon.svg" alt="" className="size-5 opacity-70" />
           <h1 className="text-base font-semibold">SnapDog</h1>
-          <ProgrammingMode /><LocalePicker /><AboutButton />
+          <div className="flex items-center gap-0.5 ml-auto">
+            <ProgrammingMode /><LocalePicker /><AboutButton />
+          </div>
         </header>
 
         {/* Wide header (xl+) */}
-        <header className="hidden xl:flex items-center justify-between px-6 py-3 border-b border-border">
+        <header className="hidden xl:flex items-center gap-2 px-6 py-3 border-b border-border">
+          <img src="/assets/snapdog-icon.svg" alt="" className="size-5 opacity-70" />
           <h1 className="text-base font-semibold">SnapDog</h1>
-          <ProgrammingMode /><LocalePicker /><AboutButton />
+          <div className="flex items-center gap-0.5 ml-auto">
+            <ProgrammingMode /><LocalePicker /><AboutButton />
+          </div>
         </header>
 
         {/* Zone tabs (mobile + compact + normal without sidebar visible) */}
