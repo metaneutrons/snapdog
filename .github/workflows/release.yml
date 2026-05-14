@@ -108,6 +108,64 @@ jobs:
             snapdog-*.zip
             snapdog-*.zip.sha256
 
+  macos-app:
+    name: macOS App (.dmg)
+    needs: [meta, build]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: snapdog-*-apple-darwin
+          path: artifacts
+      - name: Create universal binary
+        run: |
+          # Extract arm64 and x86_64 binaries
+          tar xzf artifacts/snapdog-aarch64-apple-darwin/snapdog-*-aarch64-apple-darwin.tar.gz
+          tar xzf artifacts/snapdog-x86_64-apple-darwin/snapdog-*-x86_64-apple-darwin.tar.gz
+          ARM_BIN=$(find . -path "*/aarch64-apple-darwin/snapdog" -not -name "*.tar.gz")
+          X86_BIN=$(find . -path "*/x86_64-apple-darwin/snapdog" -not -name "*.tar.gz")
+          lipo -create "$ARM_BIN" "$X86_BIN" -output snapdog-universal
+          file snapdog-universal
+      - name: Build Swift app
+        working-directory: macos-helper/SnapDogServer
+        run: |
+          xcodegen generate
+          xcodebuild -project "SnapDog Server.xcodeproj" \
+            -scheme "SnapDog Server" \
+            -configuration Release \
+            -arch arm64 -arch x86_64 \
+            -derivedDataPath build \
+            ONLY_ACTIVE_ARCH=NO \
+            build
+      - name: Assemble app bundle
+        run: |
+          APP="SnapDog Server.app"
+          BUILD_APP="macos-helper/SnapDogServer/build/Build/Products/Release/SnapDog Server.app"
+          cp -R "$BUILD_APP" "$APP"
+          # Embed universal server binary
+          mkdir -p "$APP/Contents/Helpers"
+          cp snapdog-universal "$APP/Contents/Helpers/snapdog"
+          chmod +x "$APP/Contents/Helpers/snapdog"
+      - name: Create DMG
+        run: |
+          VERSION=${{ needs.meta.outputs.version }}
+          DMG="SnapDog-Server-${VERSION}.dmg"
+          mkdir -p dmg-staging
+          cp -R "SnapDog Server.app" dmg-staging/
+          ln -s /Applications dmg-staging/Applications
+          hdiutil create -volname "SnapDog Server" \
+            -srcfolder dmg-staging \
+            -ov -format UDZO \
+            "$DMG"
+          shasum -a 256 "$DMG" > "${DMG}.sha256"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: snapdog-macos-app
+          path: |
+            SnapDog-Server-*.dmg
+            SnapDog-Server-*.dmg.sha256
+
   build-deb:
     name: Debian ${{ matrix.pkg }} (${{ matrix.arch }})
     needs: meta
@@ -167,7 +225,7 @@ jobs:
   upload-release-artifacts:
     name: Upload Release Artifacts
     runs-on: ubuntu-latest
-    needs: [meta, build, build-deb, knxprod]
+    needs: [meta, build, macos-app, build-deb, knxprod]
     permissions:
       contents: write
     steps:
@@ -177,7 +235,7 @@ jobs:
       - name: Collect assets
         run: |
           mkdir release-assets
-          find artifacts -type f \( -name "*.tar.gz" -o -name "*.tar.gz.sha256" -o -name "*.zip" -o -name "*.zip.sha256" -o -name "*.deb" -o -name "*.knxprod" \) -exec cp {} release-assets/ \;
+          find artifacts -type f \( -name "*.tar.gz" -o -name "*.tar.gz.sha256" -o -name "*.zip" -o -name "*.zip.sha256" -o -name "*.dmg" -o -name "*.dmg.sha256" -o -name "*.deb" -o -name "*.knxprod" \) -exec cp {} release-assets/ \;
           cd release-assets && sha256sum * > SHA256SUMS
       - name: Upload to GitHub Release
         env:
