@@ -156,7 +156,7 @@ export function ClientList({ zone }: { zone: ZoneState }) {
         )}
       </div>
       {visibleClients.length > 0 && (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-1 border-t border-border pt-1">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-1">
           {visibleClients.map((c) => (
             <div key={c.index}>
               <ClientCard client={c} />
