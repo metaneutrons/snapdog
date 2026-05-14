@@ -111,7 +111,6 @@ struct ConfigView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     TextField("Station Name", text: $radio.name, prompt: Text("Station Name"))
                     TextField("Stream URL", text: $radio.url, prompt: Text("https://..."))
-                        .font(.callout)
                     TextField("Cover Image URL", text: $radio.cover, prompt: Text("Optional"))
                 }
                 .padding(.vertical, 2)
