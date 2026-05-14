@@ -102,7 +102,7 @@ struct ConfigView: View {
 
     @ViewBuilder
     private var sourcesForm: some View {
-        SwiftUI.Section("Subsonic / Navidrome") {
+        SwiftUI.Section("Subsonic") {
             TextField("Server URL", text: $config.subsonic.url, prompt: Text("http://navidrome:4533"))
             TextField("Username", text: $config.subsonic.username)
             SecureField("Password", text: $config.subsonic.password)
