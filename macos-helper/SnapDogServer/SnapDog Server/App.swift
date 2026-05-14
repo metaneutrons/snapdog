@@ -6,7 +6,7 @@ struct SnapDogServerApp: App {
     @Environment(\.openWindow) private var openWindow
 
     var body: some Scene {
-        MenuBarExtra("SnapDog", systemImage: serverManager.isRunning ? "hifispeaker.fill" : "hifispeaker") {
+        MenuBarExtra("SnapDog", image: "MenuBarIcon") {
             Section {
                 Text(serverManager.isRunning ? "● Running" : "○ Stopped")
             }
