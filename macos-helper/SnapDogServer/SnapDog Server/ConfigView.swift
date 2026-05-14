@@ -128,43 +128,51 @@ struct ConfigView: View {
     }
 
     var body: some View {
-        NavigationSplitView {
-            List(Section.allCases, selection: $selectedSection) { section in
-                Label(section.rawValue, systemImage: section.icon)
+        TabView(selection: $selectedSection) {
+            Tab("System", systemImage: "gearshape", value: Section.system) {
+                Form { systemForm }.formStyle(.grouped)
             }
-            .listStyle(.sidebar)
-            .frame(minWidth: 170)
-        } detail: {
-            Form {
-                switch selectedSection {
-                case .system: systemForm
-                case .http: httpForm
-                case .audio: audioForm
-                case .snapcast: snapcastForm
-                case .airplay: airplayForm
-                case .subsonic: subsonicForm
-                case .mqtt: mqttForm
-                case .zones: zonesForm
-                case .clients: clientsForm
-                case .radios: radiosForm
-                }
+            Tab("HTTP", systemImage: "network", value: Section.http) {
+                Form { httpForm }.formStyle(.grouped)
             }
-            .formStyle(.grouped)
-            .frame(minWidth: 420)
-            .onChange(of: config.system) { _, _ in debounceSave() }
-            .onChange(of: config.http) { _, _ in debounceSave() }
-            .onChange(of: config.audio) { _, _ in debounceSave() }
-            .onChange(of: config.snapcast) { _, _ in debounceSave() }
-            .onChange(of: config.airplay) { _, _ in debounceSave() }
-            .onChange(of: config.subsonic) { _, _ in debounceSave() }
-            .onChange(of: config.mqtt) { _, _ in debounceSave() }
-            .onChange(of: config.zones.count) { _, _ in debounceSave() }
-            .onChange(of: config.clients.count) { _, _ in debounceSave() }
-            .onChange(of: config.radios.count) { _, _ in debounceSave() }
+            Tab("Audio", systemImage: "waveform", value: Section.audio) {
+                Form { audioForm }.formStyle(.grouped)
+            }
+            Tab("Snapcast", systemImage: "hifispeaker.2", value: Section.snapcast) {
+                Form { snapcastForm }.formStyle(.grouped)
+            }
+            Tab("AirPlay", systemImage: "airplayaudio", value: Section.airplay) {
+                Form { airplayForm }.formStyle(.grouped)
+            }
+            Tab("Subsonic", systemImage: "music.note.house", value: Section.subsonic) {
+                Form { subsonicForm }.formStyle(.grouped)
+            }
+            Tab("MQTT", systemImage: "antenna.radiowaves.left.and.right", value: Section.mqtt) {
+                Form { mqttForm }.formStyle(.grouped)
+            }
+            Tab("Zones", systemImage: "rectangle.split.3x1", value: Section.zones) {
+                Form { zonesForm }.formStyle(.grouped)
+            }
+            Tab("Clients", systemImage: "speaker.wave.2", value: Section.clients) {
+                Form { clientsForm }.formStyle(.grouped)
+            }
+            Tab("Radio", systemImage: "radio", value: Section.radios) {
+                Form { radiosForm }.formStyle(.grouped)
+            }
         }
-        .frame(minWidth: 640, minHeight: 480)
+        .tabViewStyle(.sidebarAdaptable)
+        .frame(minWidth: 580, minHeight: 420)
         .onAppear { load() }
-        .navigationTitle("Configuration")
+        .onChange(of: config.system) { _, _ in debounceSave() }
+        .onChange(of: config.http) { _, _ in debounceSave() }
+        .onChange(of: config.audio) { _, _ in debounceSave() }
+        .onChange(of: config.snapcast) { _, _ in debounceSave() }
+        .onChange(of: config.airplay) { _, _ in debounceSave() }
+        .onChange(of: config.subsonic) { _, _ in debounceSave() }
+        .onChange(of: config.mqtt) { _, _ in debounceSave() }
+        .onChange(of: config.zones.count) { _, _ in debounceSave() }
+        .onChange(of: config.clients.count) { _, _ in debounceSave() }
+        .onChange(of: config.radios.count) { _, _ in debounceSave() }
     }
 
     // MARK: - Auto-save (debounced, Apple pattern)
