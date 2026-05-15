@@ -77,16 +77,14 @@ fn run_service() -> Result<(), Box<dyn std::error::Error>> {
 
     // Run the server, abort on service stop
     rt.block_on(async {
-        let server = tokio::spawn(crate::run_app());
-
-        // Wait for stop signal
-        tokio::task::spawn_blocking(move || {
+        let shutdown = tokio::task::spawn_blocking(move || {
             let _ = shutdown_rx.recv();
-        })
-        .await
-        .ok();
+        });
 
-        server.abort();
+        tokio::select! {
+            _ = crate::run_app() => {}
+            _ = shutdown => {}
+        }
     });
 
     // Report stopped
