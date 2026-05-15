@@ -202,14 +202,15 @@ fn default_state_dir() -> String {
     }
     #[cfg(target_os = "linux")]
     {
-        std::env::var("XDG_STATE_HOME")
-            .map(|p| format!("{p}/snapdog"))
-            .unwrap_or_else(|_| {
+        std::env::var("XDG_STATE_HOME").map_or_else(
+            |_| {
                 std::env::var("HOME").map_or_else(
                     |_| "/tmp/snapdog".into(),
                     |h| format!("{h}/.local/state/snapdog"),
                 )
-            })
+            },
+            |p| format!("{p}/snapdog"),
+        )
     }
     #[cfg(target_os = "windows")]
     {
