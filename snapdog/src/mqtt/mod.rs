@@ -44,7 +44,12 @@ impl MqttBridge {
         }
 
         let status_topic = format!("{}/status", config.base_topic.trim_end_matches('/'));
-        opts.set_last_will(LastWill::new(&status_topic, "offline", QoS::AtLeastOnce, true));
+        opts.set_last_will(LastWill::new(
+            &status_topic,
+            "offline",
+            QoS::AtLeastOnce,
+            true,
+        ));
 
         let (client, eventloop) = AsyncClient::new(opts, MQTT_EVENT_CAPACITY);
         tracing::info!("MQTT connected");
