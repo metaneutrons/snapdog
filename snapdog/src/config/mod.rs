@@ -35,6 +35,63 @@ pub fn load_raw(raw: FileConfig) -> Result<AppConfig> {
         "At least one [[client]] must be configured"
     );
 
+    // ── Uniqueness validation ────────────────────────────────
+    let mut zone_names_set = std::collections::HashSet::new();
+    for zone in &raw.zone {
+        if !zone_names_set.insert(&zone.name) {
+            anyhow::bail!("Duplicate zone name: '{}'", zone.name);
+        }
+    }
+
+    let mut client_names_set = std::collections::HashSet::new();
+    let mut client_macs_set = std::collections::HashSet::new();
+    for client in &raw.client {
+        if !client_names_set.insert(&client.name) {
+            anyhow::bail!("Duplicate client name: '{}'", client.name);
+        }
+        let mac = client.mac.to_lowercase();
+        if !client_macs_set.insert(mac.clone()) {
+            anyhow::bail!("Duplicate client MAC address: '{}'", client.mac);
+        }
+        // Validate MAC format
+        mac.parse::<mac_address::MacAddress>()
+            .with_context(|| format!("Invalid MAC address format: '{}'", client.mac))?;
+    }
+
+    // ── Audio validation ─────────────────────────────────────
+    anyhow::ensure!(
+        matches!(
+            raw.audio.sample_rate,
+            44100 | 48000 | 88200 | 96000 | 176400 | 192000
+        ),
+        "Unsupported sample rate: {}. Use 44100, 48000, 88200, 96000, 176400, or 192000",
+        raw.audio.sample_rate
+    );
+    anyhow::ensure!(
+        matches!(raw.audio.bit_depth, 16 | 24 | 32),
+        "Unsupported bit depth: {}. Use 16, 24, or 32",
+        raw.audio.bit_depth
+    );
+    anyhow::ensure!(
+        raw.audio.channels > 0 && raw.audio.channels <= 8,
+        "Unsupported number of channels: {}. Use 1 to 8",
+        raw.audio.channels
+    );
+
+    // ── KNX address validation ───────────────────────────────
+    if let Some(ref knx) = raw.knx {
+        if let Some(ref addr) = knx.individual_address {
+            validate_knx_ia(addr).context("Invalid KNX individual address")?;
+        }
+    }
+    for zone in &raw.zone {
+        validate_zone_knx(&zone.knx).with_context(|| format!("Zone '{}' KNX error", zone.name))?;
+    }
+    for client in &raw.client {
+        validate_client_knx(&client.knx)
+            .with_context(|| format!("Client '{}' KNX error", client.name))?;
+    }
+
     let zones: Vec<ZoneConfig> = raw
         .zone
         .into_iter()
@@ -130,7 +187,7 @@ pub fn load_raw(raw: FileConfig) -> Result<AppConfig> {
         }
     }
 
-    Ok(AppConfig {
+    let mut config = AppConfig {
         system: raw.system,
         audio: raw.audio,
         http: raw.http,
@@ -143,7 +200,141 @@ pub fn load_raw(raw: FileConfig) -> Result<AppConfig> {
         zones,
         clients,
         radios,
-    })
+    };
+
+    apply_env_overrides(&mut config);
+
+    Ok(config)
+}
+
+/// Apply environment variable overrides to the resolved configuration.
+fn apply_env_overrides(config: &mut AppConfig) {
+    if let Ok(val) = std::env::var("SNAPDOG_HTTP_PORT") {
+        if let Ok(port) = val.parse() {
+            config.http.port = port;
+        }
+    }
+    if let Ok(val) = std::env::var("SNAPDOG_HTTP_API_KEYS") {
+        config.http.api_keys = val
+            .split(',')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(SecretString::from)
+            .collect();
+    }
+    if let Some(ref mut subsonic) = config.subsonic {
+        if let Ok(val) = std::env::var("SNAPDOG_SUBSONIC_PASSWORD") {
+            subsonic.password = SecretString::from(val);
+        }
+    }
+    if let Some(ref mut mqtt) = config.mqtt {
+        if let Ok(val) = std::env::var("SNAPDOG_MQTT_PASSWORD") {
+            mqtt.password = SecretString::from(val);
+        }
+    }
+    if let Ok(val) = std::env::var("SNAPDOG_SNAPCAST_ENCRYPTION_PSK") {
+        config.snapcast.encryption_psk = Some(SecretString::from(val));
+    }
+}
+
+// ── KNX address validation helpers ──────────────────────────
+
+fn validate_knx_ga(ga: &str) -> Result<()> {
+    let parts: Vec<&str> = ga.split('/').collect();
+    match parts.len() {
+        2 => {
+            let main: u8 = parts[0].parse().context("Invalid main group")?;
+            let sub: u16 = parts[1].parse().context("Invalid sub group")?;
+            anyhow::ensure!(main <= 31, "Main group must be 0-31");
+            anyhow::ensure!(sub <= 2047, "Sub group (2-level) must be 0-2047");
+        }
+        3 => {
+            let main: u8 = parts[0].parse().context("Invalid main group")?;
+            let middle: u8 = parts[1].parse().context("Invalid middle group")?;
+            let _sub: u8 = parts[2].parse().context("Invalid sub group")?;
+            anyhow::ensure!(main <= 31, "Main group must be 0-31");
+            anyhow::ensure!(middle <= 7, "Middle group must be 0-7");
+        }
+        _ => anyhow::bail!("Expected main/sub or main/middle/sub format"),
+    }
+    Ok(())
+}
+
+fn validate_knx_ia(ia: &str) -> Result<()> {
+    let parts: Vec<&str> = ia.split('.').collect();
+    anyhow::ensure!(parts.len() == 3, "Expected area.line.device format");
+    let area: u8 = parts[0].parse().context("Invalid area")?;
+    let line: u8 = parts[1].parse().context("Invalid line")?;
+    let _device: u8 = parts[2].parse().context("Invalid device")?;
+    anyhow::ensure!(area <= 15, "Area must be 0-15");
+    anyhow::ensure!(line <= 15, "Line must be 0-15");
+    Ok(())
+}
+
+fn validate_zone_knx(knx: &RawZoneKnxConfig) -> Result<()> {
+    let gas = [
+        &knx.play,
+        &knx.pause,
+        &knx.stop,
+        &knx.track_next,
+        &knx.track_previous,
+        &knx.control_status,
+        &knx.volume,
+        &knx.volume_status,
+        &knx.volume_dim,
+        &knx.mute,
+        &knx.mute_status,
+        &knx.mute_toggle,
+        &knx.track_title_status,
+        &knx.track_artist_status,
+        &knx.track_album_status,
+        &knx.track_progress_status,
+        &knx.track_playing_status,
+        &knx.track_repeat,
+        &knx.track_repeat_status,
+        &knx.track_repeat_toggle,
+        &knx.playlist,
+        &knx.playlist_status,
+        &knx.playlist_next,
+        &knx.playlist_previous,
+        &knx.shuffle,
+        &knx.shuffle_status,
+        &knx.shuffle_toggle,
+        &knx.repeat,
+        &knx.repeat_status,
+        &knx.repeat_toggle,
+        &knx.presence,
+        &knx.presence_enable,
+        &knx.presence_enable_status,
+        &knx.presence_timeout,
+        &knx.presence_timeout_status,
+        &knx.presence_timer_status,
+        &knx.presence_source_override,
+    ];
+    for ga in gas.into_iter().flatten() {
+        validate_knx_ga(ga).with_context(|| format!("Invalid Group Address: '{ga}'"))?;
+    }
+    Ok(())
+}
+
+fn validate_client_knx(knx: &RawClientKnxConfig) -> Result<()> {
+    let gas = [
+        &knx.volume,
+        &knx.volume_status,
+        &knx.volume_dim,
+        &knx.mute,
+        &knx.mute_status,
+        &knx.mute_toggle,
+        &knx.latency,
+        &knx.latency_status,
+        &knx.zone,
+        &knx.zone_status,
+        &knx.connected_status,
+    ];
+    for ga in gas.into_iter().flatten() {
+        validate_knx_ga(ga).with_context(|| format!("Invalid Group Address: '{ga}'"))?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -514,5 +705,109 @@ mod tests {
                 .to_string()
                 .contains("invalid presence source")
         );
+    }
+
+    #[test]
+    fn rejects_duplicate_zone_names() {
+        let raw: FileConfig = toml::from_str(
+            r#"
+            [[zone]]
+            name = "A"
+            [[zone]]
+            name = "A"
+            [[client]]
+            name = "X"
+            mac = "00:00:00:00:00:00"
+            zone = "A"
+        "#,
+        )
+        .unwrap();
+        assert!(load_raw(raw)
+            .unwrap_err()
+            .to_string()
+            .contains("Duplicate zone name"));
+    }
+
+    #[test]
+    fn rejects_duplicate_client_macs() {
+        let raw: FileConfig = toml::from_str(
+            r#"
+            [[zone]]
+            name = "A"
+            [[client]]
+            name = "X"
+            mac = "00:00:00:00:00:01"
+            zone = "A"
+            [[client]]
+            name = "Y"
+            mac = "00:00:00:00:00:01"
+            zone = "A"
+        "#,
+        )
+        .unwrap();
+        assert!(load_raw(raw)
+            .unwrap_err()
+            .to_string()
+            .contains("Duplicate client MAC address"));
+    }
+
+    #[test]
+    fn rejects_invalid_mac_format() {
+        let raw: FileConfig = toml::from_str(
+            r#"
+            [[zone]]
+            name = "A"
+            [[client]]
+            name = "X"
+            mac = "not-a-mac"
+            zone = "A"
+        "#,
+        )
+        .unwrap();
+        assert!(load_raw(raw)
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid MAC address format"));
+    }
+
+    #[test]
+    fn rejects_invalid_knx_ga() {
+        let raw: FileConfig = toml::from_str(
+            r#"
+            [[zone]]
+            name = "A"
+            knx = { play = "32/0/0" }
+
+            [[client]]
+            name = "X"
+            mac = "00:00:00:00:00:00"
+            zone = "A"
+        "#,
+        )
+        .unwrap();
+        let err = format!("{:?}", load_raw(raw).unwrap_err());
+        assert!(
+            err.contains("Main group must be 0-31"),
+            "Expected 'Main group must be 0-31' in error, got: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn accepts_valid_knx_ga_2level() {
+        let raw: FileConfig = toml::from_str(
+            r#"
+            [[zone]]
+            name = "A"
+            [zone.knx]
+            play = "1/2047"
+            [[client]]
+            name = "X"
+            mac = "00:00:00:00:00:00"
+            zone = "A"
+        "#,
+        )
+        .unwrap();
+        assert!(load_raw(raw).is_ok());
     }
 }
