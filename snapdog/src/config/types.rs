@@ -581,15 +581,36 @@ pub struct SubsonicCacheConfig {
 pub const CACHE_LOOKAHEAD: usize = 2;
 
 fn default_cache_path() -> String {
-    std::env::var("XDG_CACHE_HOME").map_or_else(
-        |_| {
-            std::env::var("HOME").map_or_else(
-                |_| "/tmp/snapdog/tracks".into(),
-                |h| format!("{h}/.cache/snapdog/tracks"),
-            )
-        },
-        |p| format!("{p}/snapdog/tracks"),
-    )
+    #[cfg(target_os = "macos")]
+    {
+        std::env::var("HOME").map_or_else(
+            |_| "/tmp/snapdog/tracks".into(),
+            |h| format!("{h}/Library/Caches/SnapDog/tracks"),
+        )
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::env::var("XDG_CACHE_HOME").map_or_else(
+            |_| {
+                std::env::var("HOME").map_or_else(
+                    |_| "/tmp/snapdog/tracks".into(),
+                    |h| format!("{h}/.cache/snapdog/tracks"),
+                )
+            },
+            |p| format!("{p}/snapdog/tracks"),
+        )
+    }
+    #[cfg(target_os = "windows")]
+    {
+        std::env::var("LOCALAPPDATA").map_or_else(
+            |_| "C:\\ProgramData\\snapdog\\cache\\tracks".into(),
+            |p| format!("{p}\\SnapDog\\cache\\tracks"),
+        )
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    {
+        "/tmp/snapdog/tracks".into()
+    }
 }
 
 const fn default_cache_max_size_mb() -> u64 {
