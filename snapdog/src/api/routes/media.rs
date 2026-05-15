@@ -86,7 +86,7 @@ async fn get_playlists(State(state): State<SharedState>) -> impl IntoResponse {
             name: "Radio".into(),
             song_count: state.config.radios.len() as u32,
             duration: 0,
-            cover_art: Some(format!("/api/v1/media/playlists/{idx}/cover")),
+            cover_art: Some("/assets/radio-cover.svg".into()),
         });
         idx += 1;
     }
@@ -164,30 +164,7 @@ async fn get_playlist_cover(
     Path(index): Path<usize>,
 ) -> impl IntoResponse {
     match resolve_playlist(&state, index).await? {
-        ResolvedPlaylist::Radio => {
-            // Return cover of first radio station as playlist cover
-            let radio = state
-                .config
-                .radios
-                .first()
-                .ok_or(ApiError::NotFound("resource"))?;
-            let (bytes, mime) = crate::state::cover::fetch_cover_with_favicon_fallback(
-                radio.cover.as_deref(),
-                &radio.url,
-            )
-            .await
-            .ok_or(ApiError::NotFound("resource"))?;
-            Ok((
-                [
-                    (axum::http::header::CONTENT_TYPE, mime),
-                    (
-                        axum::http::header::CACHE_CONTROL,
-                        CACHE_CONTROL_1DAY.to_string(),
-                    ),
-                ],
-                bytes,
-            ))
-        }
+        ResolvedPlaylist::Radio => Err(ApiError::NotFound("resource")),
         ResolvedPlaylist::Subsonic(_) => {
             let id = resolve_subsonic_id(&state, index).await?;
             let sub = subsonic(&state)?;
