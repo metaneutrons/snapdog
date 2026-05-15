@@ -10,22 +10,20 @@ import { useAppStore, type ZoneState } from "@/stores/useAppStore";
 import type { ClientInfo } from "@/lib/types";
 import { VolumeSlider } from "@/components/VolumeSlider";
 import { EqOverlay } from "@/components/EqOverlay";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 function ClientCard({ client }: { client: ClientInfo }) {
   const t = useTranslations("client");
   const zones = useAppStore((s) => s.zones);
   const otherZones = Array.from(zones.values()).filter((z) => z.index !== client.zone_index);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [showEq, setShowEq] = useState(false);
   const [eqEnabled, setEqEnabled] = useEqEnabled(client.is_snapdog ? { clientId: client.index } : {});
-
-  // Close menu on Escape
-  useEffect(() => {
-    if (!menuOpen) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setMenuOpen(false); };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [menuOpen]);
 
   return (
     <div
@@ -57,35 +55,31 @@ function ClientCard({ client }: { client: ClientInfo }) {
           {client.icon && <span className="text-lg shrink-0">{client.icon}</span>}
           <span className="text-sm font-medium truncate">{client.name}</span>
           {otherZones.length > 0 && (
-            <div className="ml-auto relative" data-menu>
-              <button
-                onClick={() => setMenuOpen(!menuOpen)}
-                className="p-1 -m-1 text-muted-foreground hover:text-foreground transition-colors"
-                aria-label={t("moveTo")}
-              >
-                <span className="text-sm tracking-wider">⋯</span>
-              </button>
-              {menuOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} role="presentation" />
-                  <div className="absolute right-0 top-full mt-1 z-50 min-w-[10rem] rounded-lg bg-popover border border-border shadow-lg py-1" role="menu" ref={(el) => el?.focus()} tabIndex={-1}>
-                    <div className="px-3 py-1.5 text-xs text-muted-foreground">{t("moveToLabel")}</div>
-                    {otherZones.map((z) => (
-                      <button
-                        key={z.index}
-                        onClick={() => {
-                          api.clients.setZone(client.index, z.index).catch(logApiError);
-                          setMenuOpen(false);
-                        }}
-                        className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent transition-colors"
-                        role="menuitem"
-                      >
-                        {z.icon} {z.name}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
+            <div className="ml-auto" data-menu>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className="p-1 -m-1 text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label={t("moveTo")}
+                  >
+                    <span className="text-sm tracking-wider">⋯</span>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuLabel>{t("moveToLabel")}</DropdownMenuLabel>
+                  {otherZones.map((z) => (
+                    <DropdownMenuItem
+                      key={z.index}
+                      onClick={() => {
+                        api.clients.setZone(client.index, z.index).catch(logApiError);
+                      }}
+                    >
+                      <span className="mr-2">{z.icon}</span>
+                      <span>{z.name}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           )}
         </div>

@@ -131,6 +131,7 @@ export default function Home() {
           updateZonePresence(n.zone, n.presence, n.enabled, n.timer_active);
           break;
         case "zone_eq_changed":
+          useAppStore.getState().updateZoneEq(n.zone, n.enabled, n.bands, n.preset);
           break;
       }
     },

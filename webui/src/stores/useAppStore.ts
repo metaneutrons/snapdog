@@ -63,6 +63,7 @@ interface AppState {
   ) => void;
   updateZoneProgress: (id: number, position_ms: number, duration_ms: number, buffered_ms: number | null) => void;
   updateZonePresence: (id: number, presence: boolean, enabled: boolean, timerActive: boolean) => void;
+  updateZoneEq: (id: number, enabled: boolean, bands: Array<{ filter_type: string; frequency: number; gain: number; q: number }>, preset?: string) => void;
 
   // Client updates
   setClients: (clients: ClientInfo[]) => void;
@@ -170,6 +171,18 @@ export const useAppStore = create<AppState>((set, get) => ({
     const z = zones.get(id);
     if (z) {
       zones.set(id, { ...z, presence, presenceEnabled: enabled, presenceTimerActive: timerActive });
+    }
+    set({ zones });
+  },
+
+  updateZoneEq: (id, enabled, bands, preset) => {
+    // Note: The actual EQ values are currently only used by EqOverlay which fetches them on open.
+    // However, we might want to store 'enabled' status here to show indicators in the UI.
+    const zones = new Map(get().zones);
+    const z = zones.get(id);
+    if (z) {
+      // If we ever add eq_enabled to ZoneState, we'd update it here.
+      // For now, this serves as a placeholder for when we refactor EQ state management.
     }
     set({ zones });
   },
