@@ -123,7 +123,7 @@ base_topic = "snapdog"
 
 # ── KNX ────────────────────────────────────────────────────────────────────
 # Remove this section entirely to disable KNX.
-[knx]
+# [knx]
 # Role: "client" (connect to gateway) or "device" (ETS-programmable)
 # role = "client"
 # KNX/IP gateway URL:

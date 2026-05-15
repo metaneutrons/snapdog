@@ -79,8 +79,8 @@ export function ZoneDetail({ zone }: { zone: ZoneState }) {
       <div className="w-full max-w-[calc(100%-2rem)] mx-auto sm:max-w-[600px] space-y-3 px-4 py-4 sm:px-5 sm:py-4">
         <div className="hidden sm:block"><ZoneHeader zone={zone} /></div>
         {/* Compact+: horizontal layout for cover + controls */}
-        <div className="sm:flex sm:gap-5 sm:items-start">
-          <div className="sm:w-48 lg:w-56 sm:shrink-0">
+        <div className="sm:flex sm:gap-5 sm:items-center">
+          <div className="sm:w-56 lg:w-64 sm:shrink-0">
             <NowPlaying zone={zone} />
           </div>
           <div className="space-y-3 sm:flex-1 sm:min-w-0 sm:max-w-sm sm:min-h-56 sm:justify-between">
