@@ -173,7 +173,17 @@ export function PlaylistBrowser({ zone }: PlaylistBrowserProps) {
                 <HugeiconsIcon icon={ArrowLeft01Icon} size={18} />
               </Button>
               <div className="size-12 rounded-lg overflow-hidden bg-primary/10 shadow-sm shrink-0">
-                 <img src={`/api/v1/media/playlists/${selectedId}/cover`} alt="" className="size-full object-cover" />
+                 <img
+                    src={`/api/v1/media/playlists/${selectedId}/cover`}
+                    alt=""
+                    className="size-full object-cover"
+                    onError={(e) => {
+                      const img = e.target as HTMLImageElement;
+                      if (!img.src.includes('radio-cover.svg')) {
+                        img.src = '/assets/radio-cover.svg';
+                      }
+                    }}
+                  />
               </div>
               <div className="min-w-0 flex-1">
                 <h3 className="font-bold truncate text-sm leading-tight">

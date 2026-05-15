@@ -78,7 +78,6 @@ async fn cached_playlists(state: &SharedState) -> Vec<PlaylistEntry> {
 async fn get_playlists(State(state): State<SharedState>) -> impl IntoResponse {
     let mut result: Vec<PlaylistInfo> = Vec::new();
     let mut idx: usize = 0;
-    let base_url = state.config.http.base_url.trim_end_matches('/');
 
     // Playlist 0: Radio stations (from config)
     if !state.config.radios.is_empty() {
@@ -87,7 +86,7 @@ async fn get_playlists(State(state): State<SharedState>) -> impl IntoResponse {
             name: "Radio".into(),
             song_count: state.config.radios.len() as u32,
             duration: 0,
-            cover_art: Some("/assets/radio-cover.svg".into()),
+            cover_art: Some(format!("/api/v1/media/playlists/{idx}/cover")),
         });
         idx += 1;
     }
@@ -97,7 +96,7 @@ async fn get_playlists(State(state): State<SharedState>) -> impl IntoResponse {
         let cover_art = p
             .cover_art
             .as_ref()
-            .map(|_| format!("{base_url}/api/v1/media/playlists/{idx}/cover"));
+            .map(|_| format!("/api/v1/media/playlists/{idx}/cover"));
         result.push(PlaylistInfo {
             id: idx,
             name: p.name,
@@ -165,7 +164,30 @@ async fn get_playlist_cover(
     Path(index): Path<usize>,
 ) -> impl IntoResponse {
     match resolve_playlist(&state, index).await? {
-        ResolvedPlaylist::Radio => Err(ApiError::NotFound("resource")),
+        ResolvedPlaylist::Radio => {
+            // Return cover of first radio station as playlist cover
+            let radio = state
+                .config
+                .radios
+                .first()
+                .ok_or(ApiError::NotFound("resource"))?;
+            let (bytes, mime) = crate::state::cover::fetch_cover_with_favicon_fallback(
+                radio.cover.as_deref(),
+                &radio.url,
+            )
+            .await
+            .ok_or(ApiError::NotFound("resource"))?;
+            Ok((
+                [
+                    (axum::http::header::CONTENT_TYPE, mime),
+                    (
+                        axum::http::header::CACHE_CONTROL,
+                        CACHE_CONTROL_1DAY.to_string(),
+                    ),
+                ],
+                bytes,
+            ))
+        }
         ResolvedPlaylist::Subsonic(_) => {
             let id = resolve_subsonic_id(&state, index).await?;
             let sub = subsonic(&state)?;
@@ -194,30 +216,26 @@ async fn get_playlist_tracks(
     Path(index): Path<usize>,
 ) -> impl IntoResponse {
     match resolve_playlist(&state, index).await? {
-        ResolvedPlaylist::Radio => {
-            let base_url = state.config.http.base_url.trim_end_matches('/');
-            Ok(Json(
-                state
-                    .config
-                    .radios
-                    .iter()
-                    .enumerate()
-                    .map(|(i, r)| {
-                        let cover =
-                            format!("{base_url}/api/v1/media/playlists/{index}/tracks/{i}/cover");
-                        serde_json::json!({
-                            "id": format!("radio_{i}"),
-                            "title": r.name,
-                            "artist": "Radio",
-                            "album": "",
-                            "duration": 0,
-                            "track": i + 1,
-                            "cover_art": cover,
-                        })
+        ResolvedPlaylist::Radio => Ok(Json(
+            state
+                .config
+                .radios
+                .iter()
+                .enumerate()
+                .map(|(i, r)| {
+                    let cover = format!("/api/v1/media/playlists/{index}/tracks/{i}/cover");
+                    serde_json::json!({
+                        "id": format!("radio_{i}"),
+                        "title": r.name,
+                        "artist": "Radio",
+                        "album": "",
+                        "duration": 0,
+                        "track": i + 1,
+                        "cover_art": cover,
                     })
-                    .collect::<Vec<_>>(),
-            ))
-        }
+                })
+                .collect::<Vec<_>>(),
+        )),
         ResolvedPlaylist::Subsonic(_) => {
             let id = resolve_subsonic_id(&state, index).await?;
             let sub = subsonic(&state)?;
@@ -230,9 +248,7 @@ async fn get_playlist_tracks(
                         .enumerate()
                         .map(|(i, t)| {
                             let cover = t.cover_art.as_ref().map(|_| {
-                                format!(
-                                    "{base_url}/api/v1/media/playlists/{index}/tracks/{i}/cover"
-                                )
+                                format!("/api/v1/media/playlists/{index}/tracks/{i}/cover")
                             });
                             serde_json::json!({
                                 "id": t.id,
