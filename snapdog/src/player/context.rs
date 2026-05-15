@@ -16,7 +16,7 @@ use crate::state;
 use crate::state::cover::SharedCoverCache;
 
 /// Broadcast sender for WebSocket notifications.
-pub type NotifySender = tokio::sync::broadcast::Sender<crate::api::ws::Notification>;
+pub type NotifySender = crate::api::ws::NotifySender;
 /// Channel sender for zone player commands.
 pub type ZoneCommandSender = mpsc::Sender<super::ZoneCommand>;
 /// Channel sender for Snapcast JSON-RPC commands.
@@ -133,52 +133,71 @@ pub async fn update_and_notify(
         let old_position = zone.track.as_ref().map(|t| t.position_ms);
         let old_cover_url = zone.cover_url.clone();
         f(zone);
-        let mut notifs = vec![crate::api::ws::Notification::ZoneStateChanged {
-            zone: zone_index,
-            playback: zone.playback.to_string(),
-            volume: zone.volume,
-            muted: zone.muted,
-            source: zone.source.to_string(),
-            shuffle: zone.shuffle,
-            repeat: zone.repeat,
-            track_repeat: zone.track_repeat,
-        }];
+        let playback = zone.playback.to_string();
+        let volume = zone.volume;
+        let muted = zone.muted;
+        let source = zone.source.to_string();
+        let shuffle = zone.shuffle;
+        let repeat = zone.repeat;
+        let track_repeat = zone.track_repeat;
+
         // Send track changed if title, artist, or cover changed
         let new_track_title = zone.track.as_ref().map(|t| t.title.clone());
         let new_track_artist = zone.track.as_ref().map(|t| t.artist.clone());
-        if old_track_title != new_track_title
+
+        let track_changed_notif = if old_track_title != new_track_title
             || old_track_artist != new_track_artist
             || old_cover_url != zone.cover_url
         {
-            if let Some(ref t) = zone.track {
-                notifs.push(crate::api::ws::Notification::ZoneTrackChanged {
-                    zone: zone_index,
-                    title: t.title.clone(),
-                    artist: t.artist.clone(),
-                    album: t.album.clone(),
-                    duration_ms: t.duration_ms,
-                    position_ms: t.position_ms,
-                    seekable: t.seekable,
-                    cover_url: zone.cover_url.clone(),
-                });
-            }
-        }
+            zone.track.as_ref().map(|t| crate::api::ws::Notification::ZoneTrackChanged {
+                zone: zone_index,
+                title: t.title.clone(),
+                artist: t.artist.clone(),
+                album: t.album.clone(),
+                duration_ms: t.duration_ms,
+                position_ms: t.position_ms,
+                seekable: t.seekable,
+                cover_url: zone.cover_url.clone(),
+            })
+        } else {
+            None
+        };
+
         // Send progress if position changed
         let new_position = zone.track.as_ref().map(|t| t.position_ms);
-        if old_position != new_position {
-            if let Some(ref t) = zone.track {
-                notifs.push(crate::api::ws::Notification::ZoneProgress {
-                    zone: zone_index,
-                    position_ms: t.position_ms,
-                    duration_ms: t.duration_ms,
-                    buffered_ms: zone.buffered_ms,
-                });
-            }
+        let progress_notif = if old_position != new_position {
+            zone.track.as_ref().map(|t| crate::api::ws::Notification::ZoneProgress {
+                zone: zone_index,
+                position_ms: t.position_ms,
+                duration_ms: t.duration_ms,
+                buffered_ms: zone.buffered_ms,
+            })
+        } else {
+            None
+        };
+
+        s.dirty = true;
+
+        let mut notifs = vec![crate::api::ws::Notification::ZoneStateChanged {
+            zone: zone_index,
+            playback,
+            volume,
+            muted,
+            source,
+            shuffle,
+            repeat,
+            track_repeat,
+        }];
+        if let Some(n) = track_changed_notif {
+            notifs.push(n);
+        }
+        if let Some(n) = progress_notif {
+            notifs.push(n);
         }
         notifs
     };
     for n in notifications {
-        let _ = notify.send(n);
+        crate::api::ws::broadcast_notification(notify, &n);
     }
 }
 

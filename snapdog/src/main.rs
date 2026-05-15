@@ -255,6 +255,7 @@ pub async fn run_app() -> Result<()> {
     tracing::info!(path = %state_dir.display(), "State directory");
 
     let store = state::init(&config, Some(&state_dir.join(STATE_FILE)))?;
+    state::spawn_auto_save(store.clone());
     let covers = state::cover::new_cache();
     let (notify_tx, _) = api::ws::notification_channel();
 
@@ -481,22 +482,24 @@ pub async fn run_app() -> Result<()> {
                 if let Some(ref mut bridge) = mqtt_bridge {
                     tokio::select! {
                         _ = bridge.poll_once(&mqtt_zone_cmds, &mqtt_store, &mqtt_snap_tx) => {}
-                        Ok(notif) = mqtt_notifications.recv() => {
-                            let s = mqtt_notify_store.read().await;
-                            match notif {
-                                api::ws::Notification::ZoneStateChanged { zone, .. }
-                                | api::ws::Notification::ZoneTrackChanged { zone, .. }
-                                | api::ws::Notification::ZoneProgress { zone, .. } => {
-                                    if let Some(z) = s.zones.get(&zone) {
-                                        let _ = bridge.publish_zone_state(zone, z).await;
+                        Ok(json) = mqtt_notifications.recv() => {
+                            if let Ok(notif) = serde_json::from_str::<api::ws::Notification>(&json) {
+                                let s = mqtt_notify_store.read().await;
+                                match notif {
+                                    api::ws::Notification::ZoneStateChanged { zone, .. }
+                                    | api::ws::Notification::ZoneTrackChanged { zone, .. }
+                                    | api::ws::Notification::ZoneProgress { zone, .. } => {
+                                        if let Some(z) = s.zones.get(&zone) {
+                                            let _ = bridge.publish_zone_state(zone, z).await;
+                                        }
                                     }
-                                }
-                                api::ws::Notification::ClientStateChanged { client, .. } => {
-                                    if let Some(c) = s.clients.get(&client) {
-                                        let _ = bridge.publish_client_state(client, c).await;
+                                    api::ws::Notification::ClientStateChanged { client, .. } => {
+                                        if let Some(c) = s.clients.get(&client) {
+                                            let _ = bridge.publish_client_state(client, c).await;
+                                        }
                                     }
+                                    _ => {}
                                 }
-                                _ => {}
                             }
                         }
                     }

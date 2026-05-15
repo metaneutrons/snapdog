@@ -49,6 +49,9 @@ pub struct Store {
     /// Path for JSON persistence. `None` disables auto-save.
     #[serde(skip)]
     persist_path: Option<PathBuf>,
+    /// Whether the state has changed since the last persistence.
+    #[serde(skip)]
+    pub dirty: bool,
 }
 
 /// Runtime state of a single audio zone.
@@ -310,6 +313,7 @@ impl Store {
             zones,
             clients,
             persist_path: None,
+            dirty: false,
         }
     }
 
@@ -319,7 +323,7 @@ impl Store {
     }
 
     /// Persist current state to JSON file via atomic write (write to `.tmp`, then rename).
-    pub fn persist(&self) -> Result<()> {
+    pub fn persist(&mut self) -> Result<()> {
         let Some(path) = &self.persist_path else {
             return Ok(());
         };
@@ -329,6 +333,7 @@ impl Store {
             .with_context(|| format!("Failed to write {}", tmp.display()))?;
         std::fs::rename(&tmp, path)
             .with_context(|| format!("Failed to rename to {}", path.display()))?;
+        self.dirty = false;
         tracing::debug!(path = %path.display(), "State persisted");
         Ok(())
     }
@@ -369,13 +374,34 @@ impl Store {
     }
 }
 
+/// Periodic auto-save loop for the state store.
+/// Persists state every 5 seconds if it has been marked as dirty.
+pub fn spawn_auto_save(store: SharedState) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            interval.tick().await;
+            let dirty = store.read().await.dirty;
+            if dirty {
+                let mut s = store.write().await;
+                if s.dirty {
+                    if let Err(e) = s.persist() {
+                        tracing::error!(error = %e, "Auto-save failed");
+                    }
+                }
+            }
+        }
+    });
+}
+
 /// Update a client's state via closure and broadcast a [`Notification::ClientStateChanged`] event.
 ///
 /// No-op if `client_index` does not exist in the store.
 pub async fn update_client_and_notify(
     store: &SharedState,
     client_index: usize,
-    notify: &tokio::sync::broadcast::Sender<crate::api::ws::Notification>,
+    notify: &crate::api::ws::NotifySender,
     f: impl FnOnce(&mut ClientState),
 ) {
     let notification = {
@@ -384,16 +410,22 @@ pub async fn update_client_and_notify(
             return;
         };
         f(client);
+        let volume = client.base_volume;
+        let muted = client.muted;
+        let connected = client.connected;
+        let zone = client.zone_index;
+        let is_snapdog = client.is_snapdog;
+        s.dirty = true;
         crate::api::ws::Notification::ClientStateChanged {
             client: client_index,
-            volume: client.base_volume,
-            muted: client.muted,
-            connected: client.connected,
-            zone: client.zone_index,
-            is_snapdog: client.is_snapdog,
+            volume,
+            muted,
+            connected,
+            zone,
+            is_snapdog,
         }
     };
-    let _ = notify.send(notification);
+    crate::api::ws::broadcast_notification(notify, &notification);
 }
 
 #[cfg(test)]
