@@ -2,43 +2,38 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { PlayIcon, MusicNote03Icon, Search01Icon } from "@hugeicons/core-free-icons";
+import { PlayIcon, MusicNote03Icon, Search01Icon, ArrowLeft01Icon } from "@hugeicons/core-free-icons";
 import { useTranslations } from "next-intl";
+import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/lib/api";
 import { logApiError } from "@/lib/log-api-error";
 import { formatTime } from "@/lib/format-time";
 import type { PlaylistInfo, TrackInfo } from "@/lib/types";
 import type { ZoneState } from "@/stores/useAppStore";
 import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
 interface PlaylistBrowserProps {
   zone: ZoneState;
 }
 
+const INITIAL_VISIBLE_COUNT = 6;
+
 export function PlaylistBrowser({ zone }: PlaylistBrowserProps) {
   const t = useTranslations("playlist");
   const [playlists, setPlaylists] = useState<PlaylistInfo[]>([]);
   const [search, setSearch] = useState("");
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [tracks, setTracks] = useState<TrackInfo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [open, setOpen] = useState(false);
+  const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
     api.media.playlists()
       .then(setPlaylists)
       .catch(logApiError)
       .finally(() => setLoading(false));
-  }, [open]);
+  }, []);
 
   const filteredPlaylists = useMemo(() => {
     if (!search) return playlists;
@@ -46,12 +41,8 @@ export function PlaylistBrowser({ zone }: PlaylistBrowserProps) {
     return playlists.filter((pl) => pl.name.toLowerCase().includes(q));
   }, [playlists, search]);
 
-  const togglePlaylist = async (id: number) => {
-    if (expandedId === id) {
-      setExpandedId(null);
-      return;
-    }
-    setExpandedId(id);
+  const selectPlaylist = async (id: number) => {
+    setSelectedId(id);
     try {
       setTracks(await api.media.tracks(id));
     } catch {
@@ -61,135 +52,171 @@ export function PlaylistBrowser({ zone }: PlaylistBrowserProps) {
 
   const playTrack = (playlistId: number, trackIndex: number) => {
     api.zones.playPlaylist(zone.index, playlistId, trackIndex).catch(logApiError);
-    setOpen(false);
   };
 
   const formatDuration = (sec: number) => formatTime(sec * 1000);
 
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" className="w-full justify-start gap-2 h-12 rounded-xl text-muted-foreground hover:text-foreground border-dashed">
-          <HugeiconsIcon icon={MusicNote03Icon} size={18} />
-          <span>{t("browse")}</span>
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-3xl h-[80vh] flex flex-col p-0 gap-0">
-        <DialogHeader className="p-4 border-b border-border">
-          <DialogTitle>{t("title")}</DialogTitle>
-          <div className="relative mt-2">
-            <HugeiconsIcon icon={Search01Icon} size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder={t("search")}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 bg-muted/50 border-none"
-            />
-          </div>
-        </DialogHeader>
+  const visiblePlaylists = useMemo(() => {
+    if (search || showAll) return filteredPlaylists;
+    return filteredPlaylists.slice(0, INITIAL_VISIBLE_COUNT);
+  }, [filteredPlaylists, search, showAll]);
 
-        <div className="flex-1 overflow-y-auto p-4">
-          {loading ? (
-            <div className="flex items-center justify-center h-32 text-muted-foreground animate-pulse">
-              {t("loading")}
+  const hasMore = !search && !showAll && filteredPlaylists.length > INITIAL_VISIBLE_COUNT;
+
+  if (loading && playlists.length === 0) {
+    return <div className="h-32 flex items-center justify-center text-muted-foreground animate-pulse">{t("loading")}</div>;
+  }
+
+  return (
+    <div className="w-full space-y-4 pt-2">
+      <AnimatePresence mode="wait">
+        {selectedId === null ? (
+          <motion.div
+            key="grid"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="space-y-4"
+          >
+            {/* Header: Title + Search */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground/70">{t("title")}</h3>
+              <div className="relative w-full sm:w-48">
+                <HugeiconsIcon icon={Search01Icon} size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder={t("search")}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="h-8 pl-8 text-xs bg-muted/30 border-none rounded-lg focus-visible:ring-1 focus-visible:ring-primary/30"
+                />
+              </div>
             </div>
-          ) : filteredPlaylists.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 text-muted-foreground gap-2">
-              <HugeiconsIcon icon={MusicNote03Icon} size={48} className="opacity-20" />
-              <p>{search ? t("noResults") : t("empty")}</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-4">
-              {filteredPlaylists.map((pl) => (
-                <div key={pl.id} className="group relative">
+
+            {/* Carousel-like Grid */}
+            <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+              {visiblePlaylists.map((pl) => (
+                <div key={pl.id} className="group relative space-y-1.5">
                   <button
-                    onClick={() => togglePlaylist(pl.id)}
-                    className="w-full space-y-2 text-left"
+                    onClick={() => selectPlaylist(pl.id)}
+                    className="w-full aspect-square rounded-xl bg-primary/5 flex items-center justify-center overflow-hidden border border-border/50 group-hover:border-primary/40 transition-all shadow-sm relative"
                   >
-                    <div className="aspect-square rounded-xl bg-primary/5 flex items-center justify-center overflow-hidden border border-border/50 group-hover:border-primary/30 transition-colors shadow-sm">
-                      {pl.cover_art ? (
-                        <img
-                          src={`/api/v1/media/playlists/${pl.id}/cover`}
-                          alt=""
-                          loading="lazy"
-                          className="size-full object-cover transition-transform group-hover:scale-105"
-                        />
-                      ) : (
-                        <HugeiconsIcon icon={MusicNote03Icon} size={32} className="text-primary/40" />
-                      )}
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                        <Button
-                          size="icon"
-                          variant="secondary"
-                          className="rounded-full size-10"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            playTrack(pl.id, 0);
-                          }}
-                        >
-                          <HugeiconsIcon icon={PlayIcon} size={20} fill="currentColor" />
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="min-w-0 px-1">
-                      <div className="text-sm font-semibold truncate group-hover:text-primary transition-colors">{pl.name}</div>
-                      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                        {t("tracks", { count: pl.song_count })}
-                      </div>
+                    {pl.cover_art ? (
+                      <img
+                        src={`/api/v1/media/playlists/${pl.id}/cover`}
+                        alt=""
+                        loading="lazy"
+                        className="size-full object-cover transition-transform duration-500 group-hover:scale-110"
+                      />
+                    ) : (
+                      <HugeiconsIcon icon={MusicNote03Icon} size={28} className="text-primary/30" />
+                    )}
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                       <div className="p-2 rounded-full bg-primary text-primary-foreground shadow-lg transform scale-90 group-hover:scale-100 transition-transform">
+                         <HugeiconsIcon icon={PlayIcon} size={18} fill="currentColor" />
+                       </div>
                     </div>
                   </button>
-
-                  {expandedId === pl.id && (
-                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-background/60 backdrop-blur-sm" onClick={() => setExpandedId(null)}>
-                      <div
-                        className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-md max-h-[70vh] flex flex-col overflow-hidden"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <div className="p-4 border-b border-border flex items-center gap-3">
-                           <div className="size-12 rounded-lg overflow-hidden bg-primary/10">
-                             <img src={`/api/v1/media/playlists/${pl.id}/cover`} alt="" className="size-full object-cover" />
-                           </div>
-                           <div className="min-w-0 flex-1">
-                             <h3 className="font-bold truncate">{pl.name}</h3>
-                             <p className="text-xs text-muted-foreground uppercase tracking-wider">{t("tracks", { count: pl.song_count })}</p>
-                           </div>
-                           <Button variant="ghost" size="icon" onClick={() => setExpandedId(null)}>✕</Button>
-                        </div>
-                        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                          {tracks.map((t, i) => (
-                            <button
-                              key={t.id}
-                              onClick={() => playTrack(pl.id, i)}
-                              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-muted transition-colors group"
-                            >
-                              <div className="size-10 rounded bg-primary/10 flex items-center justify-center shrink-0 overflow-hidden relative">
-                                <img
-                                  src={`/api/v1/media/playlists/${pl.id}/tracks/${i}/cover`}
-                                  alt=""
-                                  loading="lazy"
-                                  className="size-full object-cover"
-                                />
-                                <div className="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 flex items-center justify-center">
-                                  <HugeiconsIcon icon={PlayIcon} size={16} fill="currentColor" className="text-white" />
-                                </div>
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="text-sm font-medium truncate">{t.title}</div>
-                                <div className="text-xs text-muted-foreground truncate">{t.artist}</div>
-                              </div>
-                              <span className="text-[10px] tabular-nums text-muted-foreground">{formatDuration(t.duration)}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
+                  <div className="px-0.5">
+                    <div className="text-[11px] font-bold truncate group-hover:text-primary transition-colors leading-tight">{pl.name}</div>
+                    <div className="text-[9px] text-muted-foreground uppercase tracking-tighter">
+                      {t("tracks", { count: pl.song_count })}
                     </div>
-                  )}
+                  </div>
                 </div>
               ))}
             </div>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
+
+            {hasMore && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAll(true)}
+                className="w-full text-[10px] uppercase tracking-widest text-muted-foreground hover:text-primary h-8"
+              >
+                {t("showMore")} ({playlists.length - INITIAL_VISIBLE_COUNT}+)
+              </Button>
+            )}
+            {showAll && !search && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAll(false)}
+                className="w-full text-[10px] uppercase tracking-widest text-muted-foreground hover:text-primary h-8"
+              >
+                {t("showLess")}
+              </Button>
+            )}
+
+            {filteredPlaylists.length === 0 && (
+              <div className="py-12 text-center text-muted-foreground/50 text-sm">
+                {search ? t("noResults") : t("empty")}
+              </div>
+            )}
+          </motion.div>
+        ) : (
+          <motion.div
+            key="tracks"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="space-y-4"
+          >
+            {/* Detail Header */}
+            <div className="flex items-center gap-3 border-b border-border/50 pb-4 px-1">
+              <Button variant="ghost" size="icon" onClick={() => setSelectedId(null)} className="rounded-full size-8 shrink-0">
+                <HugeiconsIcon icon={ArrowLeft01Icon} size={18} />
+              </Button>
+              <div className="size-12 rounded-lg overflow-hidden bg-primary/10 shadow-sm shrink-0">
+                 <img src={`/api/v1/media/playlists/${selectedId}/cover`} alt="" className="size-full object-cover" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-bold truncate text-sm leading-tight">
+                  {playlists.find(p => p.id === selectedId)?.name}
+                </h3>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                   {t("tracks", { count: tracks.length })}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => playTrack(selectedId, 0)}
+                className="rounded-full h-8 px-4 gap-1.5"
+              >
+                <HugeiconsIcon icon={PlayIcon} size={14} fill="currentColor" />
+                <span className="text-xs">{t("playAll")}</span>
+              </Button>
+            </div>
+
+            {/* Track List */}
+            <div className="space-y-0.5 max-h-[400px] overflow-y-auto pr-1 scrollbar-thin">
+              {tracks.map((t, i) => (
+                <button
+                  key={t.id}
+                  onClick={() => playTrack(selectedId, i)}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left hover:bg-muted transition-all group"
+                >
+                  <div className="size-9 rounded-lg bg-primary/5 flex items-center justify-center shrink-0 overflow-hidden relative border border-border/50">
+                    <img
+                      src={`/api/v1/media/playlists/${selectedId}/tracks/${i}/cover`}
+                      alt=""
+                      loading="lazy"
+                      className="size-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                      <HugeiconsIcon icon={PlayIcon} size={14} fill="currentColor" className="text-white" />
+                    </div>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[13px] font-semibold truncate group-hover:text-primary transition-colors">{t.title}</div>
+                    <div className="text-[11px] text-muted-foreground truncate">{t.artist}</div>
+                  </div>
+                  <span className="text-[10px] tabular-nums text-muted-foreground opacity-60 font-medium">{formatDuration(t.duration)}</span>
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
