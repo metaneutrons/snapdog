@@ -118,9 +118,23 @@ jobs:
         with:
           pattern: snapdog-*-apple-darwin
           path: artifacts
+      - name: Import signing certificate
+        env:
+          CERT_P12: ${{ secrets.APPLE_CERT_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN="build.keychain"
+          KEYCHAIN_PASSWORD="actions"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security default-keychain -s "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -t 3600 "$KEYCHAIN"
+          echo "$CERT_P12" | base64 --decode > cert.p12
+          security import cert.p12 -k "$KEYCHAIN" -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          rm cert.p12
       - name: Create universal binary
         run: |
-          # Extract arm64 and x86_64 binaries
           tar xzf artifacts/snapdog-aarch64-apple-darwin/snapdog-*-aarch64-apple-darwin.tar.gz
           tar xzf artifacts/snapdog-x86_64-apple-darwin/snapdog-*-x86_64-apple-darwin.tar.gz
           ARM_BIN=$(find . -path "*/aarch64-apple-darwin/snapdog" -not -name "*.tar.gz")
@@ -137,16 +151,24 @@ jobs:
             -arch arm64 -arch x86_64 \
             -derivedDataPath build \
             ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGN_IDENTITY="Developer ID Application: Fabian Schmieder (${{ secrets.APPLE_TEAM_ID }})" \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
             build
-      - name: Assemble app bundle
+      - name: Assemble and sign app bundle
+        env:
+          IDENTITY: "Developer ID Application: Fabian Schmieder (${{ secrets.APPLE_TEAM_ID }})"
         run: |
           APP="SnapDog Server.app"
           BUILD_APP="macos-helper/SnapDogServer/build/Build/Products/Release/SnapDog Server.app"
           cp -R "$BUILD_APP" "$APP"
-          # Embed universal server binary
           mkdir -p "$APP/Contents/Helpers"
           cp snapdog-universal "$APP/Contents/Helpers/snapdog"
           chmod +x "$APP/Contents/Helpers/snapdog"
+          # Sign embedded binary first, then the app bundle
+          codesign --force --options runtime --sign "$IDENTITY" "$APP/Contents/Helpers/snapdog"
+          codesign --force --deep --options runtime --sign "$IDENTITY" "$APP"
+          codesign --verify --deep --strict "$APP"
       - name: Create DMG
         run: |
           VERSION=${{ needs.meta.outputs.version }}
@@ -158,7 +180,26 @@ jobs:
             -srcfolder dmg-staging \
             -ov -format UDZO \
             "$DMG"
+      - name: Notarize DMG
+        env:
+          KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+          KEY_P8: ${{ secrets.APPLE_NOTARY_KEY_P8_BASE64 }}
+        run: |
+          VERSION=${{ needs.meta.outputs.version }}
+          DMG="SnapDog-Server-${VERSION}.dmg"
+          echo "$KEY_P8" | base64 --decode > AuthKey.p8
+          xcrun notarytool submit "$DMG" \
+            --key AuthKey.p8 \
+            --key-id "$KEY_ID" \
+            --issuer "$ISSUER_ID" \
+            --wait --timeout 600
+          xcrun stapler staple "$DMG"
+          rm AuthKey.p8
           shasum -a 256 "$DMG" > "${DMG}.sha256"
+      - name: Cleanup keychain
+        if: always()
+        run: security delete-keychain build.keychain || true
       - uses: actions/upload-artifact@v7
         with:
           name: snapdog-macos-app
