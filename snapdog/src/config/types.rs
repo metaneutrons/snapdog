@@ -7,6 +7,53 @@ use serde::{Deserialize, Serialize};
 
 // ── Typed enums for config fields ─────────────────────────────
 
+/// A string wrapper that masks its content in `Debug` output to prevent secret leakage.
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct SecretString(String);
+
+impl SecretString {
+    /// Create a new secret string.
+    pub fn new(s: impl Into<String>) -> Self {
+        Self(s.into())
+    }
+
+    /// Access the underlying string.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Convert into the underlying string.
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl std::fmt::Debug for SecretString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("********")
+    }
+}
+
+impl std::ops::Deref for SecretString {
+    type Target = str;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<String> for SecretString {
+    fn from(s: String) -> Self {
+        Self(s)
+    }
+}
+
+impl From<&str> for SecretString {
+    fn from(s: &str) -> Self {
+        Self(s.to_string())
+    }
+}
+
 /// KNX operating mode.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -419,7 +466,7 @@ pub struct HttpConfig {
     pub base_url: String,
     /// Optional API keys. If set, all API endpoints require `Authorization: Bearer <key>`.
     #[serde(default)]
-    pub api_keys: Vec<String>,
+    pub api_keys: Vec<SecretString>,
 }
 
 impl Default for HttpConfig {
@@ -480,7 +527,7 @@ pub struct SnapcastConfig {
     pub codec: AudioCodec,
     /// Pre-shared key for f32lz4e encryption (default: built-in key).
     #[serde(default)]
-    pub encryption_psk: Option<String>,
+    pub encryption_psk: Option<SecretString>,
     /// Default group volume mode for all zones.
     #[serde(default)]
     pub group_volume_mode: GroupVolumeMode,
@@ -555,7 +602,7 @@ pub struct SubsonicConfig {
     /// Authentication username.
     pub username: String,
     /// Authentication password.
-    pub password: String,
+    pub password: SecretString,
     /// Audio output format — SSOT with Snapcast stream configuration.
     /// Stream format: raw (original file), flac, mp3, opus.
     #[serde(default)]
@@ -641,7 +688,7 @@ pub struct MqttConfig {
     pub username: String,
     /// MQTT password.
     #[serde(default)]
-    pub password: String,
+    pub password: SecretString,
     /// Base topic prefix (e.g., "snapdog/").
     #[serde(default = "default_mqtt_base_topic")]
     pub base_topic: String,
