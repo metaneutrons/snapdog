@@ -87,7 +87,7 @@ async fn get_playlists(State(state): State<SharedState>) -> impl IntoResponse {
             name: "Radio".into(),
             song_count: state.config.radios.len() as u32,
             duration: 0,
-            cover_art: Some(format!("{base_url}/assets/radio-cover.svg")),
+            cover_art: Some("/assets/radio-cover.svg".into()),
         });
         idx += 1;
     }
@@ -164,24 +164,29 @@ async fn get_playlist_cover(
     State(state): State<SharedState>,
     Path(index): Path<usize>,
 ) -> impl IntoResponse {
-    let id = resolve_subsonic_id(&state, index).await?;
-    let sub = subsonic(&state)?;
-    let playlists = cached_playlists(&state).await;
-    let cover_id = playlists
-        .iter()
-        .find(|p| p.id == id)
-        .and_then(|p| p.cover_art.clone())
-        .ok_or(ApiError::NotFound("resource"))?;
-    sub.get_cover_art(&cover_id).await.map_or_else(
-        |_| Err(ApiError::NotFound("resource")),
-        |bytes| {
-            let mime = crate::state::cover::detect_mime(&bytes);
-            Ok((
-                [(axum::http::header::CONTENT_TYPE, mime.to_string())],
-                bytes,
-            ))
-        },
-    )
+    match resolve_playlist(&state, index).await? {
+        ResolvedPlaylist::Radio => Err(ApiError::NotFound("resource")),
+        ResolvedPlaylist::Subsonic(_) => {
+            let id = resolve_subsonic_id(&state, index).await?;
+            let sub = subsonic(&state)?;
+            let playlists = cached_playlists(&state).await;
+            let cover_id = playlists
+                .iter()
+                .find(|p| p.id == id)
+                .and_then(|p| p.cover_art.clone())
+                .ok_or(ApiError::NotFound("resource"))?;
+            sub.get_cover_art(&cover_id).await.map_or_else(
+                |_| Err(ApiError::NotFound("resource")),
+                |bytes| {
+                    let mime = crate::state::cover::detect_mime(&bytes);
+                    Ok((
+                        [(axum::http::header::CONTENT_TYPE, mime.to_string())],
+                        bytes,
+                    ))
+                },
+            )
+        }
+    }
 }
 
 async fn get_playlist_tracks(

@@ -80,7 +80,7 @@ export function PlaylistBrowser({ zone }: PlaylistBrowserProps) {
           >
             {/* Header: Title + Search */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground/70">{t("title")}</h3>
+              <h3 className="text-sm font-bold tracking-wider text-muted-foreground/70">{t("title")}</h3>
               <div className="relative w-full sm:w-48">
                 <HugeiconsIcon icon={Search01Icon} size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -102,10 +102,16 @@ export function PlaylistBrowser({ zone }: PlaylistBrowserProps) {
                   >
                     {pl.cover_art ? (
                       <img
-                        src={`/api/v1/media/playlists/${pl.id}/cover`}
+                        src={pl.cover_art}
                         alt=""
                         loading="lazy"
                         className="size-full object-cover transition-transform duration-500 group-hover:scale-110"
+                        onError={(e) => {
+                          const img = e.target as HTMLImageElement;
+                          if (!img.src.includes('radio-cover.svg')) {
+                            img.src = '/assets/radio-cover.svg';
+                          }
+                        }}
                       />
                     ) : (
                       <HugeiconsIcon icon={MusicNote03Icon} size={28} className="text-primary/30" />
@@ -117,8 +123,8 @@ export function PlaylistBrowser({ zone }: PlaylistBrowserProps) {
                     </div>
                   </button>
                   <div className="px-0.5">
-                    <div className="text-xs font-bold truncate group-hover:text-primary transition-colors leading-tight">{pl.name}</div>
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-tight">
+                    <div className="text-sm font-bold truncate group-hover:text-primary transition-colors leading-tight">{pl.name}</div>
+                    <div className="text-xs text-muted-foreground uppercase tracking-tight">
                       {t("tracks", { count: pl.song_count })}
                     </div>
                   </div>
@@ -197,10 +203,16 @@ export function PlaylistBrowser({ zone }: PlaylistBrowserProps) {
                 >
                   <div className="size-9 rounded-lg bg-primary/5 flex items-center justify-center shrink-0 overflow-hidden relative border border-border/50">
                     <img
-                      src={`/api/v1/media/playlists/${selectedId}/tracks/${i}/cover`}
+                      src={t.cover_art || '/assets/radio-cover.svg'}
                       alt=""
                       loading="lazy"
                       className="size-full object-cover"
+                      onError={(e) => {
+                        const img = e.target as HTMLImageElement;
+                        if (!img.src.includes('radio-cover.svg')) {
+                          img.src = '/assets/radio-cover.svg';
+                        }
+                      }}
                     />
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                       <HugeiconsIcon icon={PlayIcon} size={14} fill="currentColor" className="text-white" />

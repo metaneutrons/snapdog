@@ -90,8 +90,10 @@ export interface TrackInfo {
   artist: string;
   album: string;
   duration: number;
-  track: number;
+  track?: number;
+  cover_art?: string | null;
 }
+
 
 // ── System ────────────────────────────────────────────────────
 
