@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
-use rumqttc::{AsyncClient, Event, MqttOptions, Packet, QoS};
+use rumqttc::{AsyncClient, Event, LastWill, MqttOptions, Packet, QoS};
 
 use crate::config::MqttConfig;
 use crate::player::{ClientAction, SnapcastCmd, ZoneCommand, ZoneCommandSender};
@@ -42,6 +42,9 @@ impl MqttBridge {
         if !config.username.is_empty() {
             opts.set_credentials(&config.username, &config.password);
         }
+
+        let status_topic = format!("{}/status", config.base_topic.trim_end_matches('/'));
+        opts.set_last_will(LastWill::new(&status_topic, "offline", QoS::AtLeastOnce, true));
 
         let (client, eventloop) = AsyncClient::new(opts, MQTT_EVENT_CAPACITY);
         tracing::info!("MQTT connected");
