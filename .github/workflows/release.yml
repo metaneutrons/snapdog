@@ -213,26 +213,30 @@ jobs:
           VERSION=${{ needs.meta.outputs.version }}
           TAG=${{ needs.meta.outputs.tag }}
           DMG="SnapDog-Server-${VERSION}.dmg"
-          SIGN_TOOL=$(find ~/Library/Developer/Xcode/DerivedData -name "sign_update" -path "*Sparkle*" | head -1)
-          SIGNATURE=$(echo "$SPARKLE_KEY" | "$SIGN_TOOL" "$DMG" --ed-key-file /dev/stdin 2>/dev/null | grep "edSignature" | cut -d'"' -f2)
+
+          # Find sign_update from the Sparkle SPM package resolved during xcodebuild
+          SIGN_TOOL=$(find macos-helper/SnapDogServer/build/SourcePackages -name "sign_update" -path "*Sparkle*" 2>/dev/null | head -1)
+          if [ -z "$SIGN_TOOL" ]; then
+            SIGN_TOOL=$(find ~/Library/Developer/Xcode/DerivedData -name "sign_update" -path "*Sparkle*" 2>/dev/null | head -1)
+          fi
+          if [ -z "$SIGN_TOOL" ]; then
+            echo "::error::sign_update tool not found"
+            exit 1
+          fi
+
+          # Write key to temp file for signing
+          echo "$SPARKLE_KEY" > /tmp/sparkle_key
+          SIGNATURE=$("$SIGN_TOOL" "$DMG" --ed-key-file /tmp/sparkle_key | grep "edSignature" | cut -d'"' -f2)
+          rm /tmp/sparkle_key
+
+          if [ -z "$SIGNATURE" ]; then
+            echo "::error::Failed to generate EdDSA signature"
+            exit 1
+          fi
+
           LENGTH=$(stat -f%z "$DMG")
-          cat > appcast.xml << EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
-            <channel>
-              <title>SnapDog Server</title>
-              <item>
-                <title>Version ${VERSION}</title>
-                <sparkle:version>${VERSION}</sparkle:version>
-                <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-                <enclosure url="https://github.com/metaneutrons/snapdog/releases/download/${TAG}/${DMG}"
-                  sparkle:edSignature="${SIGNATURE}"
-                  length="${LENGTH}"
-                  type="application/octet-stream"/>
-              </item>
-            </channel>
-          </rss>
-          EOF
+
+          printf '<?xml version="1.0" encoding="utf-8"?>\n<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">\n  <channel>\n    <title>SnapDog Server</title>\n    <item>\n      <title>Version %s</title>\n      <sparkle:version>%s</sparkle:version>\n      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>\n      <enclosure url="https://github.com/metaneutrons/snapdog/releases/download/%s/%s"\n        sparkle:edSignature="%s"\n        length="%s"\n        type="application/octet-stream"/>\n    </item>\n  </channel>\n</rss>\n' "$VERSION" "$VERSION" "$TAG" "$DMG" "$SIGNATURE" "$LENGTH" > appcast.xml
       - uses: actions/upload-artifact@v7
         with:
           name: snapdog-macos-app
