@@ -375,6 +375,7 @@ pub async fn play_audio(
     speaker_eq: SharedEq,
     mixer: Arc<Mixer>,
     fade: Arc<FadeState>,
+    shutdown: Arc<AtomicBool>,
 ) {
     // Drain audio_rx in background
     tokio::spawn(async move {
@@ -383,8 +384,15 @@ pub async fn play_audio(
     });
 
     loop {
+        if shutdown.load(Ordering::Relaxed) {
+            break;
+        }
+
         // Wait for the Stream to have a valid format
         let format = loop {
+            if shutdown.load(Ordering::Relaxed) {
+                return;
+            }
             {
                 let s = stream.lock().unwrap_or_else(|e| e.into_inner());
                 let f = s.format();
@@ -409,6 +417,7 @@ pub async fn play_audio(
         let speaker_eq_clone = speaker_eq.clone();
         let mixer_clone = Arc::clone(&mixer);
         let fade_clone = Arc::clone(&fade);
+        let shutdown_clone = Arc::clone(&shutdown);
 
         let handle = std::thread::spawn(move || {
             run_cpal(
@@ -419,6 +428,7 @@ pub async fn play_audio(
                 speaker_eq_clone,
                 mixer_clone,
                 fade_clone,
+                shutdown_clone,
             )
         });
 
@@ -449,6 +459,7 @@ fn run_cpal(
     speaker_eq: SharedEq,
     mixer: Arc<Mixer>,
     fade: Arc<FadeState>,
+    shutdown: Arc<AtomicBool>,
 ) -> anyhow::Result<FormatChanged> {
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
@@ -661,6 +672,9 @@ fn run_cpal(
         std::thread::sleep(std::time::Duration::from_millis(100));
         if format_changed.load(Ordering::Relaxed) {
             return Ok(FormatChanged);
+        }
+        if shutdown.load(Ordering::Relaxed) {
+            return anyhow::Ok(FormatChanged);
         }
     }
 }

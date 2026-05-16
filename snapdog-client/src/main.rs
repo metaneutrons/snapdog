@@ -70,6 +70,8 @@ fn main() -> anyhow::Result<()> {
     };
     let rt = tokio::runtime::Runtime::new()?;
 
+    let shutdown = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+
     rt.block_on(async {
         let (mut client, mut events, audio_rx) = SnapClient::new(config);
 
@@ -101,6 +103,7 @@ fn main() -> anyhow::Result<()> {
         let player_speaker_eq = speaker_eq.clone();
         let player_mixer = mixer.clone();
         let player_fade = fade.clone();
+        let player_shutdown = shutdown.clone();
         if null_player {
             tracing::info!("Null player — audio output disabled");
             tokio::spawn(async move {
@@ -117,6 +120,7 @@ fn main() -> anyhow::Result<()> {
                     player_speaker_eq,
                     player_mixer,
                     player_fade,
+                    player_shutdown,
                 )
                 .await;
             });
@@ -247,6 +251,7 @@ fn main() -> anyhow::Result<()> {
 
         // Shutdown handler: graceful on SIGINT/SIGTERM, forced on second signal or timeout
         let cmd_shutdown = client.command_sender();
+        let sig_shutdown = shutdown.clone();
         tokio::spawn(async move {
             let sigint = tokio::signal::ctrl_c();
             #[cfg(unix)]
@@ -269,40 +274,63 @@ fn main() -> anyhow::Result<()> {
                 tracing::info!("Received Ctrl-C, shutting down gracefully...");
             }
 
+            // Set shutdown flag to stop audio polling
+            sig_shutdown.store(true, std::sync::atomic::Ordering::Relaxed);
+
             // Signal the client loop to stop
             let _ = cmd_shutdown.send(ClientCommand::Stop).await;
 
-            // Spawn task to handle second signal for immediate forced exit
-            tokio::spawn(async move {
-                let sigint = tokio::signal::ctrl_c();
-                #[cfg(unix)]
-                let mut sigterm =
-                    tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-                        .unwrap();
+            // Spawn a dedicated thread for the forced-exit safety net.
+            // This survives the tokio runtime shutdown and handles second signals.
+            std::thread::spawn(|| {
+                // Second signal handler: immediate exit
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap();
 
-                #[cfg(unix)]
-                tokio::select! {
-                    _ = sigint => {}
-                    _ = sigterm.recv() => {}
-                };
-                #[cfg(not(unix))]
-                let _ = sigint.await;
+                rt.block_on(async {
+                    let sigint = tokio::signal::ctrl_c();
+                    #[cfg(unix)]
+                    let mut sigterm =
+                        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                            .unwrap();
 
-                tracing::warn!("Forced exit requested");
-                std::process::exit(1);
+                    #[cfg(unix)]
+                    tokio::select! {
+                        _ = sigint => {
+                            tracing::warn!("Second signal received, forcing exit");
+                            std::process::exit(1);
+                        }
+                        _ = sigterm.recv() => {
+                            tracing::warn!("Second signal received, forcing exit");
+                            std::process::exit(1);
+                        }
+                        _ = tokio::time::sleep(std::time::Duration::from_secs(3)) => {
+                            tracing::warn!("Graceful shutdown timed out, forcing exit");
+                            std::process::exit(0);
+                        }
+                    };
+                    #[cfg(not(unix))]
+                    tokio::select! {
+                        _ = sigint => {
+                            tracing::warn!("Second signal received, forcing exit");
+                            std::process::exit(1);
+                        }
+                        _ = tokio::time::sleep(std::time::Duration::from_secs(3)) => {
+                            tracing::warn!("Graceful shutdown timed out, forcing exit");
+                            std::process::exit(0);
+                        }
+                    };
+                });
             });
-
-            // Hard timeout for graceful shutdown (e.g. if network/audio is hung)
-            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-            tracing::warn!("Graceful shutdown timed out, forcing exit");
-            std::process::exit(0);
         });
 
         client.run().await
     })?;
 
     tracing::info!("snapdog-client terminated");
-    Ok(())
+    std::process::exit(0);
 }
 
 fn list_devices(player: &str) {
