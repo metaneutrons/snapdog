@@ -23,11 +23,11 @@ export function ZoneRailItem({ zone, selected, onSelect }: ZoneRailItemProps) {
       onClick={onSelect}
       {...dragHandlers}
       aria-current={selected ? "true" : undefined}
-      className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left transition-colors ${
+      className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left transition-all ${
         dragOver
           ? "bg-primary/20 ring-2 ring-primary"
           : selected
-            ? "bg-primary/10 text-primary"
+            ? "bg-primary/10 text-primary shadow-[0_0_12px_rgba(225,136,46,0.15)]"
             : "hover:bg-muted text-foreground"
       }`}
     >

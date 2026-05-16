@@ -80,7 +80,7 @@ export function TransportControls({ zone }: TransportControlsProps) {
           onPointerLeave={clearTimer}
           onContextMenu={(e) => e.preventDefault()}
           onClick={onClickPlayPause}
-          className="size-12 rounded-full"
+          className={`size-12 rounded-full ${isPlaying ? "shadow-[0_0_16px_rgba(225,136,46,0.4)]" : ""}`}
           aria-label={isPlaying ? t("pause") : t("play")}
         >
           <HugeiconsIcon icon={isPlaying ? PauseIcon : PlayIcon} size={24} />
