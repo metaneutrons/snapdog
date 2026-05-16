@@ -93,7 +93,8 @@
   "connection": {
     "lost": "Connection Lost",
     "serverRestarting": "Server Restarting",
-    "reconnecting": "Reconnecting…"
+    "reconnecting": "Reconnecting…",
+    "retryingIn": "Retrying in {seconds}s…"
   },
   "knx": {
     "progModeOn": "Enable programming mode",

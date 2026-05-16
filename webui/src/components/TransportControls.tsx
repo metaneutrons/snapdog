@@ -7,7 +7,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { motion, useReducedMotion } from "framer-motion";
 import { useTranslations } from "next-intl";
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useState } from "react";
 import type { ZoneState } from "@/stores/useAppStore";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
@@ -15,6 +15,8 @@ import { logApiError } from "@/lib/log-api-error";
 
 /** Duration in ms to trigger stop via long-press. */
 const LONG_PRESS_MS = 600;
+/** Duration in ms before showing the long-press hint. */
+const LONG_PRESS_HINT_MS = 400;
 
 interface TransportControlsProps {
   zone: ZoneState;
@@ -32,12 +34,16 @@ export function TransportControls({ zone }: TransportControlsProps) {
   const hasNavigation = source === "radio" || source === "subsonic_playlist" || isAirPlay;
 
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
+  const [pressing, setPressing] = useState(false);
 
   const onPointerDown = useCallback(() => {
     didLongPress.current = false;
+    hintTimer.current = setTimeout(() => setPressing(true), LONG_PRESS_HINT_MS);
     longPressTimer.current = setTimeout(() => {
       didLongPress.current = true;
+      setPressing(false);
       api.zones.stop(index).catch(logApiError);
     }, LONG_PRESS_MS);
   }, [index]);
@@ -47,6 +53,11 @@ export function TransportControls({ zone }: TransportControlsProps) {
       clearTimeout(longPressTimer.current);
       longPressTimer.current = null;
     }
+    if (hintTimer.current) {
+      clearTimeout(hintTimer.current);
+      hintTimer.current = null;
+    }
+    setPressing(false);
   }, []);
 
   const onClickPlayPause = useCallback(() => {
@@ -80,7 +91,7 @@ export function TransportControls({ zone }: TransportControlsProps) {
           onPointerLeave={clearTimer}
           onContextMenu={(e) => e.preventDefault()}
           onClick={onClickPlayPause}
-          className={`size-12 rounded-full ${isPlaying ? "shadow-[0_0_16px_rgba(225,136,46,0.4)]" : ""}`}
+          className={`size-12 rounded-full transition-transform ${pressing ? "scale-90" : ""} ${isPlaying ? "shadow-[0_0_16px_rgba(225,136,46,0.4)]" : ""}`}
           aria-label={isPlaying ? t("pause") : t("play")}
         >
           <HugeiconsIcon icon={isPlaying ? PauseIcon : PlayIcon} size={24} />

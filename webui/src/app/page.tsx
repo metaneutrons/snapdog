@@ -4,12 +4,14 @@ import { useEffect, useCallback, Component, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { useAppStore, type ZoneState } from "@/stores/useAppStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useClientDrop } from "@/hooks/useClientDrop";
 import type { WsNotification } from "@/lib/types";
 import { ApiKeyPrompt } from "@/components/ApiKeyPrompt";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConnectionStatus } from "@/components/ConnectionStatus";
 import { LocalePicker } from "@/components/LocalePicker";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { AboutButton } from "@/components/AboutButton";
 import { ProgrammingMode } from "@/components/ProgrammingMode";
 import { ZoneRailItem } from "@/components/ZoneRailItem";
@@ -138,7 +140,8 @@ export default function Home() {
     [updateZone, updateZoneTrack, updateZoneProgress, updateZonePresence, updateClient],
   );
 
-  const { isConnected: wsConnected, serverGoingAway } = useWebSocket(handleNotification);
+  const { isConnected: wsConnected, serverGoingAway, retryIn } = useWebSocket(handleNotification);
+  useKeyboardShortcuts();
 
   useEffect(() => { setConnected(wsConnected, serverGoingAway); }, [wsConnected, serverGoingAway, setConnected]);
   useEffect(() => { loadAll(); }, [loadAll]);
@@ -186,14 +189,14 @@ export default function Home() {
       <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:top-2 focus:left-2 focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-md">
         {t("app.skipToContent")}
       </a>
-      <ConnectionStatus />
+      <ConnectionStatus retryIn={retryIn} />
       {/* ── Sidebar / Rail (tablet only) ──────────────────── */}
       <aside className="hidden md:flex xl:hidden flex-col border-r border-border bg-card md:w-56 shrink-0" aria-label={t("zone.navigation")}>
         <div className="px-4 py-4 border-b border-border flex items-center gap-2">
           <img src="/assets/snapdog-icon.svg" alt="" className="size-5 opacity-70" />
           <h1 className="text-base font-semibold">SnapDog</h1>
           <div className="flex items-center gap-0.5 ml-auto">
-            <ProgrammingMode /><LocalePicker /><AboutButton />
+            <ProgrammingMode /><ThemeToggle /><LocalePicker /><AboutButton />
           </div>
         </div>
         <nav className="flex-1 overflow-y-auto p-2 space-y-0.5" aria-label={t("zone.zones")}>
@@ -215,7 +218,7 @@ export default function Home() {
           <img src="/assets/snapdog-icon.svg" alt="" className="size-5 opacity-70" />
           <h1 className="text-base font-semibold">SnapDog</h1>
           <div className="flex items-center gap-0.5 ml-auto">
-            <ProgrammingMode /><LocalePicker /><AboutButton />
+            <ProgrammingMode /><ThemeToggle /><LocalePicker /><AboutButton />
           </div>
         </header>
 
@@ -224,7 +227,7 @@ export default function Home() {
           <img src="/assets/snapdog-icon.svg" alt="" className="size-5 opacity-70" />
           <h1 className="text-base font-semibold">SnapDog</h1>
           <div className="flex items-center gap-0.5 ml-auto">
-            <ProgrammingMode /><LocalePicker /><AboutButton />
+            <ProgrammingMode /><ThemeToggle /><LocalePicker /><AboutButton />
           </div>
         </header>
 

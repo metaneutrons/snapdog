@@ -105,7 +105,8 @@
   },
   "connection": {
     "lost": "Verbinding verbroken",
-    "reconnecting": "Opnieuw verbinden…"
+    "reconnecting": "Opnieuw verbinden…",
+    "retryingIn": "Opnieuw proberen over {seconds}s…"
   },
   "source": {
     "radio": "Radio",

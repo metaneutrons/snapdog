@@ -75,6 +75,11 @@ export function VolumeSlider({
   return (
     <div
       className={`flex items-center gap-${compact ? "1.5" : "3"} w-full ${compact ? "" : "sm:max-w-xs"}`}
+      onWheel={(e) => {
+        e.preventDefault();
+        const delta = e.deltaY < 0 ? 5 : -5;
+        onVolumeChange(Math.max(0, Math.min(100, volume + delta)));
+      }}
     >
       <Button
         variant="ghost"

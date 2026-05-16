@@ -105,7 +105,8 @@
   },
   "connection": {
     "lost": "Conexión perdida",
-    "reconnecting": "Reconectando…"
+    "reconnecting": "Reconectando…",
+    "retryingIn": "Reintentando en {seconds}s…"
   },
   "source": {
     "radio": "Radio",

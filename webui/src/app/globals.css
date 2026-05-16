@@ -2,7 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (@media (prefers-color-scheme: dark));
+@custom-variant dark (&:is(.dark *), @media (prefers-color-scheme: dark));
 
 @theme inline {
   --breakpoint-sm: 576px;
@@ -89,7 +89,7 @@
 
 /* ── Dark theme (warm stone) ───────────────────────────────── */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not(.light) {
     --background: oklch(0.147 0.004 49);    /* stone-950 */
     --foreground: oklch(0.97 0.001 75);     /* stone-100 */
     --card: oklch(0.216 0.006 56);          /* stone-900 */
@@ -122,6 +122,36 @@
     --sidebar-border: oklch(1 0 0 / 10%);
     --sidebar-ring: oklch(0.769 0.188 70.08);
   }
+}
+
+/* Class-based dark mode override */
+:root.dark {
+  --background: oklch(0.147 0.004 49);
+  --foreground: oklch(0.97 0.001 75);
+  --card: oklch(0.216 0.006 56);
+  --card-foreground: oklch(0.97 0.001 75);
+  --popover: oklch(0.216 0.006 56);
+  --popover-foreground: oklch(0.97 0.001 75);
+  --primary: oklch(0.769 0.188 70.08);
+  --primary-foreground: oklch(0.147 0.004 49);
+  --secondary: oklch(0.268 0.006 58);
+  --secondary-foreground: oklch(0.97 0.001 75);
+  --muted: oklch(0.268 0.006 58);
+  --muted-foreground: oklch(0.709 0.01 56);
+  --accent: oklch(0.268 0.006 58);
+  --accent-foreground: oklch(0.97 0.001 75);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.216 0.006 56);
+  --sidebar-foreground: oklch(0.97 0.001 75);
+  --sidebar-primary: oklch(0.769 0.188 70.08);
+  --sidebar-primary-foreground: oklch(0.147 0.004 49);
+  --sidebar-accent: oklch(0.268 0.006 58);
+  --sidebar-accent-foreground: oklch(0.97 0.001 75);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.769 0.188 70.08);
 }
 
 @layer base {

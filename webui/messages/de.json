@@ -93,7 +93,8 @@
   "connection": {
     "lost": "Verbindung verloren",
     "serverRestarting": "Server wird neu gestartet",
-    "reconnecting": "Verbindung wird wiederhergestellt…"
+    "reconnecting": "Verbindung wird wiederhergestellt…",
+    "retryingIn": "Erneuter Versuch in {seconds}s…"
   },
   "knx": {
     "progModeOn": "Programmiermodus aktivieren",

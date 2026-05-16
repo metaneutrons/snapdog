@@ -1,10 +1,21 @@
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useAppStore } from "@/stores/useAppStore";
 
-export function ConnectionStatus() {
+export function ConnectionStatus({ retryIn }: { retryIn: number }) {
   const t = useTranslations("connection");
   const isConnected = useAppStore((s) => s.isConnected);
   const serverGoingAway = useAppStore((s) => s.serverGoingAway);
+  const [countdown, setCountdown] = useState(retryIn);
+
+  useEffect(() => {
+    setCountdown(retryIn);
+    if (retryIn <= 0) return;
+    const interval = setInterval(() => {
+      setCountdown((c) => Math.max(0, c - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [retryIn]);
 
   if (isConnected) return null;
 
@@ -13,7 +24,9 @@ export function ConnectionStatus() {
       <div className="bg-card border border-border rounded-xl p-6 shadow-lg text-center space-y-3">
         <div className="size-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
         <p className="text-sm font-medium">{serverGoingAway ? t("serverRestarting") : t("lost")}</p>
-        <p className="text-xs text-muted-foreground">{t("reconnecting")}</p>
+        <p className="text-xs text-muted-foreground">
+          {countdown > 0 ? t("retryingIn", { seconds: countdown }) : t("reconnecting")}
+        </p>
       </div>
     </div>
   );

@@ -212,12 +212,23 @@ export function PlaylistBrowser({ zone }: PlaylistBrowserProps) {
             </div>
 
             {/* Track List */}
-            <div className="space-y-0.5 max-h-[400px] overflow-y-auto pr-1 scrollbar-thin">
-              {tracks.map((t, i) => (
+            <div className="space-y-0.5 max-h-[400px] overflow-y-auto pr-1 scrollbar-thin" ref={(el) => {
+              // Auto-scroll to current track
+              if (el && zone.track?.playlist_index === selectedId) {
+                const idx = zone.track.playlist_track_index;
+                if (idx != null) {
+                  const child = el.children[idx] as HTMLElement | undefined;
+                  child?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+                }
+              }
+            }}>
+              {tracks.map((t, i) => {
+                const isCurrent = zone.track?.playlist_index === selectedId && zone.track?.playlist_track_index === i;
+                return (
                 <button
                   key={t.id}
                   onClick={() => playTrack(selectedId, i)}
-                  className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left hover:bg-muted transition-all group"
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all group ${isCurrent ? "bg-primary/10 ring-1 ring-primary/30" : "hover:bg-muted"}`}
                 >
                   <div className="size-9 rounded-lg bg-primary/5 flex items-center justify-center shrink-0 overflow-hidden relative border border-border/50">
                     <img
@@ -242,7 +253,7 @@ export function PlaylistBrowser({ zone }: PlaylistBrowserProps) {
                   </div>
                   <span className="text-[10px] tabular-nums text-muted-foreground opacity-60 font-medium">{formatDuration(t.duration)}</span>
                 </button>
-              ))}
+              ); })}
             </div>
           </motion.div>
         )}
