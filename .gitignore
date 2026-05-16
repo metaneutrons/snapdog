@@ -20,3 +20,4 @@ snapcast-state.json
 eq.json
 *.log
 .env.test
+.wrangler/
