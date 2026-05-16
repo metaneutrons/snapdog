@@ -261,6 +261,7 @@ fn main() -> anyhow::Result<()> {
                 _ = sigterm.recv() => {
                     tracing::info!("Received SIGTERM, shutting down gracefully...");
                 }
+                else => return,
             };
             #[cfg(not(unix))]
             {

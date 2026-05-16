@@ -75,6 +75,8 @@ async fn cached_playlists(state: &SharedState) -> Vec<PlaylistEntry> {
     entries
 }
 
+const MEDIA_PATH: &str = "/api/v1/media/playlists";
+
 async fn get_playlists(State(state): State<SharedState>) -> impl IntoResponse {
     let mut result: Vec<PlaylistInfo> = Vec::new();
     let mut idx: usize = 0;
@@ -96,7 +98,7 @@ async fn get_playlists(State(state): State<SharedState>) -> impl IntoResponse {
         let cover_art = p
             .cover_art
             .as_ref()
-            .map(|_| format!("/api/v1/media/playlists/{idx}/cover"));
+            .map(|_| format!("{MEDIA_PATH}/{idx}/cover"));
         result.push(PlaylistInfo {
             id: idx,
             name: p.name,
@@ -206,7 +208,7 @@ async fn get_playlist_tracks(
                 .iter()
                 .enumerate()
                 .map(|(i, r)| {
-                    let cover = format!("/api/v1/media/playlists/{index}/tracks/{i}/cover");
+                    let cover = format!("{MEDIA_PATH}/{index}/tracks/{i}/cover");
                     serde_json::json!({
                         "id": format!("radio_{i}"),
                         "title": r.name,
@@ -230,7 +232,7 @@ async fn get_playlist_tracks(
                         .enumerate()
                         .map(|(i, t)| {
                             let cover = t.cover_art.as_ref().map(|_| {
-                                format!("/api/v1/media/playlists/{index}/tracks/{i}/cover")
+                                format!("{MEDIA_PATH}/{index}/tracks/{i}/cover")
                             });
                             serde_json::json!({
                                 "id": t.id,
@@ -308,18 +310,41 @@ async fn get_track_cover_art(
 ) -> Result<([(axum::http::header::HeaderName, String); 2], Vec<u8>), ApiError> {
     match resolve_playlist(&state, index).await? {
         ResolvedPlaylist::Radio => {
-            // Fetch cover with favicon fallback
             let radio = state
                 .config
                 .radios
                 .get(track_index)
                 .ok_or(ApiError::NotFound("resource"))?;
+
+            // Try cache first (keyed by station URL)
+            if let Some(entry) = state.covers.read().await.get_static(&radio.url) {
+                return Ok((
+                    [
+                        (axum::http::header::CONTENT_TYPE, entry.mime.clone()),
+                        (
+                            axum::http::header::CACHE_CONTROL,
+                            CACHE_CONTROL_1DAY.to_string(),
+                        ),
+                    ],
+                    entry.bytes.clone(),
+                ));
+            }
+
+            // Fetch cover with favicon fallback
             let (bytes, mime) = crate::state::cover::fetch_cover_with_favicon_fallback(
                 radio.cover.as_deref(),
                 &radio.url,
             )
             .await
             .ok_or(ApiError::NotFound("resource"))?;
+
+            // Store in cache
+            state
+                .covers
+                .write()
+                .await
+                .set_static(&radio.url, bytes.clone(), mime.clone());
+
             Ok((
                 [
                     (axum::http::header::CONTENT_TYPE, mime),

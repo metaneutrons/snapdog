@@ -119,8 +119,8 @@ export function PlaylistBrowser({ zone }: PlaylistBrowserProps) {
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                        <Button
                          size="icon"
-                         variant="default"
-                         className="rounded-full bg-primary text-primary-foreground shadow-lg transform scale-90 group-hover:scale-100 transition-transform"
+                         variant="ghost"
+                         className="rounded-full bg-primary text-primary-foreground shadow-lg transform scale-90 group-hover:scale-100 transition-transform hover:bg-primary/90"
                          onClick={(e) => {
                            e.stopPropagation();
                            playTrack(pl.id, 0);

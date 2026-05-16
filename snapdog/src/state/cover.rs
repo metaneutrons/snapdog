@@ -17,10 +17,11 @@ pub fn new_cache() -> SharedCoverCache {
     Arc::new(RwLock::new(CoverCache::default()))
 }
 
-/// In-memory store mapping zone indices to their current cover art.
+/// In-memory store mapping zone indices or static keys to their cover art.
 #[derive(Default)]
 pub struct CoverCache {
     entries: HashMap<usize, CoverEntry>,
+    static_entries: HashMap<String, CoverEntry>,
 }
 
 /// A single cached cover image with its MIME type and content hash.
@@ -43,8 +44,13 @@ impl CoverEntry {
 impl CoverCache {
     /// Store cover art for a zone.
     pub fn set(&mut self, zone_index: usize, bytes: Vec<u8>, mime: String) {
-        self.entries
-            .insert(zone_index, CoverEntry::new(bytes, mime));
+        self.entries.insert(zone_index, CoverEntry::new(bytes, mime));
+    }
+
+    /// Store cover art with a static key.
+    pub fn set_static(&mut self, key: &str, bytes: Vec<u8>, mime: String) {
+        self.static_entries
+            .insert(key.to_string(), CoverEntry::new(bytes, mime));
     }
 
     /// Store cover art with auto-detected MIME from magic bytes.
@@ -57,6 +63,11 @@ impl CoverCache {
     /// Get cover art for a zone.
     pub fn get(&self, zone_index: usize) -> Option<&CoverEntry> {
         self.entries.get(&zone_index)
+    }
+
+    /// Get cover art by a static key.
+    pub fn get_static(&self, key: &str) -> Option<&CoverEntry> {
+        self.static_entries.get(key)
     }
 
     /// Clear cover art for a zone.
@@ -160,6 +171,11 @@ pub async fn fetch_cover_with_favicon_fallback(
     if let Some(url) = cover_url {
         if let Some((bytes, _)) = fetch_cover(url).await {
             let mime = detect_mime(&bytes);
+            if mime.contains("icon") {
+                if let Some(converted) = ico_to_png(&bytes) {
+                    return Some(converted);
+                }
+            }
             if mime.starts_with("image/") {
                 tracing::debug!(url, %mime, "Found cover via config URL");
                 return Some((bytes, mime.to_string()));
