@@ -93,10 +93,10 @@ jobs:
           cp LICENSE README.md "$archive/" 2>/dev/null || true
           if [[ "${{ matrix.target }}" == *"windows"* ]]; then
             7z a "${archive}.zip" "$archive"
-            shasum -a 256 "${archive}.zip" > "${archive}.zip.sha256"
+            sha256sum "${archive}.zip" > "${archive}.zip.sha256"
           else
             tar czf "${archive}.tar.gz" "$archive"
-            shasum -a 256 "${archive}.tar.gz" > "${archive}.tar.gz.sha256"
+            sha256sum "${archive}.tar.gz" > "${archive}.tar.gz.sha256"
           fi
       - name: Upload artifact
         uses: actions/upload-artifact@v7
@@ -294,7 +294,7 @@ jobs:
       - name: Generate knxprod
         run: |
           mkdir -p knx webui/out
-          cargo run -p xtask -- knx/snapdog.xml
+          SKIP_WEBUI_BUILD=1 cargo run -p xtask -- knx/snapdog.xml
       - uses: actions/upload-artifact@v7
         with:
           name: snapdog-knxprod

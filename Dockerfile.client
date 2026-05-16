@@ -5,6 +5,7 @@ RUN apt-get update && apt-get install -y libasound2-dev pkg-config && rm -rf /va
 
 WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
+COPY assets/ assets/
 COPY snapdog/ snapdog/
 COPY snapdog-client/ snapdog-client/
 COPY snapdog-common/ snapdog-common/

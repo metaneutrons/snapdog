@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y cmake pkg-config libasound2-dev && rm -
 
 WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
+COPY assets/ assets/
 COPY snapdog/ snapdog/
 COPY snapdog-client/ snapdog-client/
 COPY snapdog-common/ snapdog-common/
