@@ -2,7 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *), @media (prefers-color-scheme: dark));
+@custom-variant dark (&:is(.dark *), &:is(:not(.light) *):where(@media (prefers-color-scheme: dark)));
 
 @theme inline {
   --breakpoint-sm: 576px;

@@ -38,14 +38,14 @@ export function ThemeToggle() {
 
 function applyTheme(theme: Theme) {
   const root = document.documentElement;
+  root.classList.remove("dark", "light");
   if (theme === "dark") {
     root.classList.add("dark");
     root.style.colorScheme = "dark";
   } else if (theme === "light") {
-    root.classList.remove("dark");
+    root.classList.add("light");
     root.style.colorScheme = "light";
   } else {
-    root.classList.remove("dark");
     root.style.colorScheme = "";
   }
 }
