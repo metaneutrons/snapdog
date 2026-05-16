@@ -98,7 +98,7 @@ fn subsonic_config() -> Option<config::SubsonicConfig> {
     Some(config::SubsonicConfig {
         url,
         username,
-        password,
+        password: password.into(),
         format: snapdog::config::SubsonicFormat::Flac,
         tls_skip_verify: false,
         cache: Default::default(),
@@ -151,7 +151,7 @@ fn mqtt_config() -> Option<config::MqttConfig> {
         broker,
         client_id: "snapdog-test".to_string(),
         username,
-        password,
+        password: password.into(),
         base_topic: "snapdog/test".to_string(),
     })
 }
