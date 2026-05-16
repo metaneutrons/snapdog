@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.3](https://github.com/metaneutrons/snapdog/compare/v0.9.2...v0.9.3) (2026-05-16)
+
+
+### Bug Fixes
+
+* **release:** remove xcodegen from CI — xcodeproj is committed ([22baa6d](https://github.com/metaneutrons/snapdog/commit/22baa6df834e4e43c72110d2ca1bbc37d3872687))
+
 ## [0.9.2](https://github.com/metaneutrons/snapdog/compare/v0.9.1...v0.9.2) (2026-05-16)
 
 
