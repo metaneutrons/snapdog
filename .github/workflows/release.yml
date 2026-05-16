@@ -324,19 +324,18 @@ jobs:
     needs: [meta, upload-release-artifacts]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
       - uses: actions/download-artifact@v8
         with:
           name: snapdog-macos-app
           path: artifacts
-      - name: Commit appcast.xml
+      - name: Upload appcast.xml to R2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
-          cp artifacts/appcast.xml appcast.xml
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add appcast.xml
-          git diff --cached --quiet || git commit -m "chore: update appcast.xml for v${{ needs.meta.outputs.version }}"
-          git push
+          npm install -g wrangler
+          wrangler r2 object put snapdog-updates/appcast.xml \
+            --file artifacts/appcast.xml \
+            --content-type "application/xml"
 
   update-homebrew:
     name: Update Homebrew Tap
