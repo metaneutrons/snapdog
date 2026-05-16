@@ -55,5 +55,5 @@ targets:
         CFBundleDisplayName: SnapDog Server
         CFBundleIdentifier: eu.schmieder.snapdog.server
         NSHumanReadableCopyright: "Copyright © 2026 Fabian Schmieder. All rights reserved."
-        SUFeedURL: "https://updates.snapdog.cc/appcast.xml"
+        SUFeedURL: "https://updates.snapdog.cc/helper/appcast.xml"
         SUPublicEDKey: "UIAhw75KiR/srNxODDCPJSZyNtdRY3PEH1eVvyE8LKQ="

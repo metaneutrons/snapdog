@@ -333,7 +333,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           npm install -g wrangler
-          wrangler r2 object put snapdog-updates/appcast.xml \
+          wrangler r2 object put snapdog-updates/helper/appcast.xml \
             --file artifacts/appcast.xml \
             --content-type "application/xml"
 
