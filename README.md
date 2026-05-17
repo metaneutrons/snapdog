@@ -94,6 +94,9 @@ snapdog --knx-device --knx-address 1.1.100 --knx-prog-mode
 
 # After ETS programming — normal operation
 snapdog --knx-device --knx-address 1.1.100
+
+# Dual-stack IPv4+IPv6
+snapdog --knx-device --knx-address 1.1.100 --bind ::
 ```
 
 The `.knxprod` file for ETS import is available from [Releases](https://github.com/metaneutrons/snapdog/releases/latest).
@@ -157,6 +160,7 @@ Single file: [`snapdog.example.toml`](snapdog.example.toml)
 ```toml
 [http]
 port = 5555
+bind = "0.0.0.0"                       # :: for dual-stack IPv4+IPv6
 base_url = "http://192.168.1.10:5555"  # For absolute URLs in API responses
 
 [audio]
