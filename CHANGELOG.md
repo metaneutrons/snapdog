@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.10.0](https://github.com/metaneutrons/snapdog/compare/v0.9.3...v0.10.0) (2026-05-17)
+
+
+### Features
+
+* add --bind CLI flag and [http].bind config for listen address ([d2ec70f](https://github.com/metaneutrons/snapdog/commit/d2ec70f5989868ffc7f96912b9a223edf906dc9e))
+* **macos-helper:** read port from config for Open WebUI, validate binary exists ([7df0b27](https://github.com/metaneutrons/snapdog/commit/7df0b27e3a620776671e1160d38a3ea9f6b2ac68))
+* **webui:** empty state with KNX programming mode toggle ([a0d3ea2](https://github.com/metaneutrons/snapdog/commit/a0d3ea2d919228ec004adfd0ac4f48c625b9fa05))
+* **webui:** package updates, eslint config, UX fixes ([00ec689](https://github.com/metaneutrons/snapdog/commit/00ec68916d10da5f1df365c0a187acb936598131))
+
+
+### Bug Fixes
+
+* allow KNX device mode without zones/clients, default bind to :: ([de3f144](https://github.com/metaneutrons/snapdog/commit/de3f144af09f02b5494780240ca675386539a07f))
+* human-friendly API listen log (clickable localhost URL) ([8ea09a6](https://github.com/metaneutrons/snapdog/commit/8ea09a60316c925928ebf8e4222d411c47c1dea6))
+* pass base_url to MqttBridge::connect in integration tests ([a5bab6a](https://github.com/metaneutrons/snapdog/commit/a5bab6aa791d9d65f3a7adaddf618b2b1e518211))
+* **player:** respect pause state on prev/next — Apple Music UX ([f4d9d16](https://github.com/metaneutrons/snapdog/commit/f4d9d16f0cba4041736d82e5daea322b53ff8e11))
+* **player:** set playback=Playing on prev/next track change ([02bb256](https://github.com/metaneutrons/snapdog/commit/02bb2561a275b72a39daeab03ad8bb7cdf36cc0b))
+* serve placeholder cover art as pre-rendered 1024px PNG ([d945ff8](https://github.com/metaneutrons/snapdog/commit/d945ff81d7bc026509b314a515a235087c104a9d))
+* serve radio playlist cover as 1024px PNG instead of SVG ([fc3cfc9](https://github.com/metaneutrons/snapdog/commit/fc3cfc92a43351faa95a726ff9d6ce77a47a3086))
+
 ## [0.9.3](https://github.com/metaneutrons/snapdog/compare/v0.9.2...v0.9.3) (2026-05-16)
 
 
