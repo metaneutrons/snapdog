@@ -14,8 +14,8 @@ use crate::api::error::ApiError;
 use crate::player::ZoneCommand;
 use crate::state;
 
-/// Embedded SnapDog icon SVG used as placeholder when no cover art is available.
-const PLACEHOLDER_COVER: &str = include_str!("../../../../assets/snapdog-icon.svg");
+/// Embedded SnapDog icon PNG (1024×1024) used as placeholder when no cover art is available.
+const PLACEHOLDER_COVER: &[u8] = include_bytes!("../../../../assets/snapdog-icon-placeholder.png");
 
 /// Volume value: absolute (e.g. `75`) or relative (e.g. `"+5"`, `"-3"`).
 #[derive(Debug, Deserialize)]
@@ -405,11 +405,11 @@ async fn get_zone_cover(
         || {
             (
                 [
-                    ("content-type", "image/svg+xml".to_string()),
+                    ("content-type", "image/png".to_string()),
                     ("cache-control", "public, max-age=604800".to_string()),
                     ("etag", "\"snapdog-placeholder\"".to_string()),
                 ],
-                PLACEHOLDER_COVER.as_bytes().to_vec(),
+                PLACEHOLDER_COVER.to_vec(),
             )
         },
         |entry| {
