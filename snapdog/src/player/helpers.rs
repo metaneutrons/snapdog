@@ -260,15 +260,27 @@ pub async fn start_radio_decode(
 }
 
 pub async fn handle_next(ds: &mut DecodeState<'_>, ctx: &PlaybackCtx<'_>) {
+    let was_playing = ctx
+        .store
+        .read()
+        .await
+        .zones
+        .get(&ctx.zone_index)
+        .is_some_and(|z| z.playback == crate::state::PlaybackState::Playing);
+
     match ds.source.clone() {
         ActiveSource::Radio { index } => {
             let next = (index + 1) % ctx.config.radios.len();
             stop_decode(ds.current_decode, ds.decode_rx).await;
             if let Some(radio) = ctx.config.radios.get(next) {
-                start_radio_decode(radio, ds, ctx).await;
+                if was_playing {
+                    start_radio_decode(radio, ds, ctx).await;
+                }
                 *ds.source = ActiveSource::Radio { index: next };
                 update_and_notify(ctx.store, ctx.zone_index, ctx.notify, |z| {
-                    z.playback = crate::state::PlaybackState::Playing;
+                    if was_playing {
+                        z.playback = crate::state::PlaybackState::Playing;
+                    }
                     z.playlist_index = Some(0);
                     z.playlist_track_index = Some(next);
                     z.track = Some(radio_track_info(&radio.name));
@@ -314,14 +326,15 @@ pub async fn handle_previous(ds: &mut DecodeState<'_>, ctx: &PlaybackCtx<'_>) {
     // CD-player behavior: if position > 3s, restart current track.
     // Otherwise, go to previous track.
     const RESTART_THRESHOLD_MS: i64 = 3000;
-    let position_ms = ctx
-        .store
-        .read()
-        .await
-        .zones
-        .get(&ctx.zone_index)
-        .and_then(|z| z.track.as_ref().map(|t| t.position_ms))
-        .unwrap_or(0);
+    let (position_ms, was_playing) = {
+        let s = ctx.store.read().await;
+        let z = s.zones.get(&ctx.zone_index);
+        (
+            z.and_then(|z| z.track.as_ref().map(|t| t.position_ms))
+                .unwrap_or(0),
+            z.is_some_and(|z| z.playback == crate::state::PlaybackState::Playing),
+        )
+    };
 
     match ds.source.clone() {
         ActiveSource::Radio { index } => {
@@ -332,10 +345,14 @@ pub async fn handle_previous(ds: &mut DecodeState<'_>, ctx: &PlaybackCtx<'_>) {
             };
             stop_decode(ds.current_decode, ds.decode_rx).await;
             if let Some(radio) = ctx.config.radios.get(prev) {
-                start_radio_decode(radio, ds, ctx).await;
+                if was_playing {
+                    start_radio_decode(radio, ds, ctx).await;
+                }
                 *ds.source = ActiveSource::Radio { index: prev };
                 update_and_notify(ctx.store, ctx.zone_index, ctx.notify, |z| {
-                    z.playback = crate::state::PlaybackState::Playing;
+                    if was_playing {
+                        z.playback = crate::state::PlaybackState::Playing;
+                    }
                     z.playlist_index = Some(0);
                     z.playlist_track_index = Some(prev);
                     z.track = Some(radio_track_info(&radio.name));
@@ -420,23 +437,37 @@ async fn advance_playlist_track(
     track_count: usize,
     ctx: &PlaybackCtx<'_>,
 ) {
+    let was_playing = ctx
+        .store
+        .read()
+        .await
+        .zones
+        .get(&ctx.zone_index)
+        .is_some_and(|z| z.playback == crate::state::PlaybackState::Playing);
+
     stop_decode(ds.current_decode, ds.decode_rx).await;
     if let Some(sub) = &ctx.subsonic {
         if let Ok(playlist) = sub.get_playlist(playlist_id).await {
             if let Some(track) = playlist.entry.get(track_index) {
-                start_subsonic_track_decode(sub, track, ds, ctx).await;
+                // Only start decode if we were playing; otherwise just load metadata
+                if was_playing {
+                    start_subsonic_track_decode(sub, track, ds, ctx).await;
+                }
                 *ds.source = ActiveSource::SubsonicPlaylist {
                     playlist_id: playlist_id.to_string(),
                     track_index,
                     track_count,
                 };
                 update_and_notify(ctx.store, ctx.zone_index, ctx.notify, |z| {
-                    z.playback = crate::state::PlaybackState::Playing;
+                    if was_playing {
+                        z.playback = crate::state::PlaybackState::Playing;
+                    }
                     z.playlist_track_index = Some(track_index);
                     z.track = Some(subsonic_track_info(track));
+                    z.track.as_mut().unwrap().position_ms = 0;
                 })
                 .await;
-                // Prefetch next tracks
+                // Prefetch: always cache the current + next tracks
                 if let Some(cache) = ctx.track_cache {
                     let lookahead = ctx
                         .config
