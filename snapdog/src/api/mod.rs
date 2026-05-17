@@ -129,7 +129,13 @@ pub async fn serve(
 
     let addr = format!("{bind}:{port}");
     let listener = TcpListener::bind(&addr).await?;
-    tracing::info!("REST API listening on http://{addr}");
+    let local_addr = listener.local_addr()?;
+    if local_addr.ip().is_unspecified() {
+        tracing::info!("REST API listening on port {port} (all interfaces)");
+        tracing::info!("  → http://localhost:{port}");
+    } else {
+        tracing::info!("REST API listening on http://{local_addr}");
+    }
     axum::serve(listener, app).await?;
     Ok(())
 }
