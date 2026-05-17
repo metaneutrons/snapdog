@@ -26,14 +26,25 @@ pub fn load(path: &Path) -> Result<AppConfig> {
 
 /// Resolve raw TOML config into fully populated AppConfig with conventions applied.
 pub fn load_raw(raw: FileConfig) -> Result<AppConfig> {
-    anyhow::ensure!(
-        !raw.zone.is_empty(),
-        "At least one [[zone]] must be configured"
-    );
-    anyhow::ensure!(
-        !raw.client.is_empty(),
-        "At least one [[client]] must be configured"
-    );
+    load_raw_inner(raw, false)
+}
+
+/// Like `load_raw` but skips zone/client validation (for KNX device mode).
+pub fn load_raw_no_validate(raw: FileConfig) -> Result<AppConfig> {
+    load_raw_inner(raw, true)
+}
+
+fn load_raw_inner(raw: FileConfig, skip_zone_validation: bool) -> Result<AppConfig> {
+    if !skip_zone_validation {
+        anyhow::ensure!(
+            !raw.zone.is_empty(),
+            "At least one [[zone]] must be configured"
+        );
+        anyhow::ensure!(
+            !raw.client.is_empty(),
+            "At least one [[client]] must be configured"
+        );
+    }
 
     // ── Uniqueness validation ────────────────────────────────
     let mut zone_names_set = std::collections::HashSet::new();

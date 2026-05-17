@@ -171,7 +171,7 @@ pub async fn run_app() -> Result<()> {
         config::load(config_path)?
     } else {
         // --knx-device without --config: start with defaults, ETS provides config
-        config::load_raw(config::FileConfig::default())?
+        config::load_raw_no_validate(config::FileConfig::default())?
     };
 
     // --knx-device enables device mode

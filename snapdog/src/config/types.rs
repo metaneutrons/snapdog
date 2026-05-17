@@ -1146,7 +1146,7 @@ const fn default_http_port() -> u16 {
     5555
 }
 fn default_bind_address() -> String {
-    "0.0.0.0".into()
+    "::".into()
 }
 fn default_snapcast_address() -> String {
     "127.0.0.1".into()
