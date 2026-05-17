@@ -116,5 +116,10 @@
     "airplay": "AirPlay",
     "spotify": "Spotify",
     "url": "URL"
+  },
+  "empty": {
+    "title": "Keine Zonen konfiguriert",
+    "description": "Aktiviere den KNX-Programmiermodus, damit ETS Zonen und Clients einrichten kann, oder stelle eine snapdog.toml Konfigurationsdatei bereit.",
+    "programmingMode": "KNX-Programmiermodus"
   }
 }
