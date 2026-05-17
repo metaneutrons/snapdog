@@ -45,6 +45,10 @@ struct Cli {
     #[arg(short, long)]
     port: Option<u16>,
 
+    /// Bind address (default: 0.0.0.0). Use :: for dual-stack IPv4+IPv6.
+    #[arg(short, long)]
+    bind: Option<String>,
+
     /// Audio codec: pcm, flac, f32lz4, f32lz4e
     #[arg(long)]
     codec: Option<String>,
@@ -187,6 +191,9 @@ pub async fn run_app() -> Result<()> {
     // CLI overrides
     if let Some(port) = cli.port {
         app_config.http.port = port;
+    }
+    if let Some(ref bind) = cli.bind {
+        app_config.http.bind = bind.clone();
     }
     if let Some(ref codec) = cli.codec {
         app_config.snapcast.codec = match codec.as_str() {

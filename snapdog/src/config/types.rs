@@ -460,6 +460,9 @@ pub struct HttpConfig {
     /// Port for the REST API, WebSocket, and embedded WebUI.
     #[serde(default = "default_http_port")]
     pub port: u16,
+    /// Bind address. Default: `0.0.0.0`. Use `::` for dual-stack IPv4+IPv6.
+    #[serde(default = "default_bind_address")]
+    pub bind: String,
     /// External base URL (e.g., `http://192.168.2.20:5555` or `https://music.example.com`).
     /// Used for absolute URLs in API responses. Defaults to `http://localhost:<port>`.
     #[serde(default = "default_base_url")]
@@ -473,6 +476,7 @@ impl Default for HttpConfig {
     fn default() -> Self {
         Self {
             port: default_http_port(),
+            bind: default_bind_address(),
             base_url: default_base_url(),
             api_keys: vec![],
         }
@@ -1140,6 +1144,9 @@ const fn default_channels() -> u16 {
 }
 const fn default_http_port() -> u16 {
     5555
+}
+fn default_bind_address() -> String {
+    "0.0.0.0".into()
 }
 fn default_snapcast_address() -> String {
     "127.0.0.1".into()

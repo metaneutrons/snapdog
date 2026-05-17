@@ -69,6 +69,7 @@ pub async fn serve(
     knx_device_control: Option<crate::knx::DeviceControlHandle>,
 ) -> Result<()> {
     let port = config.http.port;
+    let bind = config.http.bind.clone();
     let state = Arc::new(AppState {
         config,
         store,
@@ -126,7 +127,7 @@ pub async fn serve(
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http());
 
-    let addr = format!("0.0.0.0:{port}");
+    let addr = format!("{bind}:{port}");
     let listener = TcpListener::bind(&addr).await?;
     tracing::info!("REST API listening on http://{addr}");
     axum::serve(listener, app).await?;
