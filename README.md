@@ -68,7 +68,7 @@ services:
       - "1704:1704"      # Snapcast streaming
       - "3671:3671/udp"  # KNX/IP device
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:5555/api/v1/system/health"]
+      test: ["CMD", "curl", "-sf", "http://localhost:5555/health"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -227,7 +227,7 @@ Supported features: play, pause, stop, next/previous, volume, mute, shuffle, rep
 
 If `api_keys` is set in `[http]`, all `/api/v1/*` and `/ws` endpoints require authentication:
 - REST: `Authorization: Bearer <key>` header
-- WebSocket: `ws://host:port/ws?token=<key>` query parameter
+- WebSocket: `ws://host:port/ws?token=<key>` query parameter; query tokens are accepted only on `/ws`
 - Health endpoints and the WebUI are always accessible
 
 </details>

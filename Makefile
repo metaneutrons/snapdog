@@ -1,4 +1,4 @@
-.PHONY: setup check fmt clippy test dev build-webui build-all knxprod
+.PHONY: setup check fmt clippy test webui-check dev build-webui build-all knxprod
 
 # ── KNX Product Database ───────────────────────────────────────
 
@@ -12,7 +12,7 @@ setup:
 	@echo "✅ Git hooks configured"
 
 ## Run all checks (same as CI)
-check: fmt clippy test
+check: fmt clippy test webui-check
 
 fmt:
 	cargo fmt -- --check
@@ -22,6 +22,9 @@ clippy:
 
 test:
 	cargo test
+
+webui-check:
+	cd webui && npm ci && npm run lint && npm run typecheck && npm run build
 
 ## Build WebUI (Next.js static export)
 build-webui:

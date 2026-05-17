@@ -49,7 +49,7 @@ VOLUME /var/lib/snapdog
 EXPOSE 5555 1704 3671/udp
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -sf http://localhost:5555/api/v1/system/health || exit 1
+    CMD curl -sf http://localhost:5555/health || exit 1
 
 ENTRYPOINT ["dumb-init", "snapdog"]
 CMD ["--config", "/etc/snapdog/snapdog.toml"]
