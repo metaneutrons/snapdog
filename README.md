@@ -89,11 +89,11 @@ volumes:
 ### KNX Device Mode (no config file needed)
 
 ```bash
-# First run — ETS can discover and program the device
-snapdog --knx-device --knx-address 1.1.100 --knx-prog-mode
-
-# After ETS programming — normal operation
+# Start as KNX/IP device — ETS programs zones, clients, group addresses
 snapdog --knx-device --knx-address 1.1.100
+
+# Programming mode can be enabled via CLI flag, WebUI button, or REST API
+snapdog --knx-device --knx-address 1.1.100 --knx-prog-mode
 
 # Dual-stack IPv4+IPv6
 snapdog --knx-device --knx-address 1.1.100 --bind ::
