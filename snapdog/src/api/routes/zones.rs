@@ -158,6 +158,18 @@ async fn send_cmd(state: &SharedState, idx: usize, cmd: ZoneCommand) -> Result<(
         .map_err(|e| ApiError::Internal(e.to_string()))
 }
 
+fn require_http_url(url: &str) -> Result<(), ApiError> {
+    if url::Url::parse(url)
+        .is_ok_and(|u| matches!(u.scheme(), "http" | "https") && u.host().is_some())
+    {
+        Ok(())
+    } else {
+        Err(ApiError::BadRequest(
+            "Only absolute http and https URLs are supported".into(),
+        ))
+    }
+}
+
 // ── Zone listing ──────────────────────────────────────────────
 
 async fn get_count(State(state): State<SharedState>) -> Json<usize> {
@@ -195,7 +207,10 @@ async fn get_all(State(state): State<SharedState>) -> Json<Vec<ZoneInfo>> {
 
 async fn get_zone(State(state): State<SharedState>, Path(idx): Path<usize>) -> impl IntoResponse {
     let store = state.store.read().await;
-    let cfg = state.config.zones.get(idx - 1).ok_or(zone_not_found())?;
+    let cfg = idx
+        .checked_sub(1)
+        .and_then(|i| state.config.zones.get(i))
+        .ok_or(zone_not_found())?;
     let zs = store.zones.get(&idx);
     Ok::<_, ApiError>(Json(ZoneInfo {
         index: cfg.index,
@@ -543,6 +558,7 @@ async fn play_url(
     Path(idx): Path<usize>,
     Json(v): Json<String>,
 ) -> impl IntoResponse {
+    require_http_url(&v)?;
     send_cmd(&state, idx, ZoneCommand::PlayUrl(v)).await
 }
 

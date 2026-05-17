@@ -574,10 +574,26 @@ pub(crate) async fn handle_incoming(
                     "latency" => decode_u8(data).map(|v| ClientAction::Latency(i32::from(v))),
                     "zone" => {
                         if let Some(target_zone) = decode_u8(data) {
-                            drop(s);
-                            if let Some(c) = store.write().await.clients.get_mut(&client_idx) {
-                                c.zone_index = target_zone as usize;
+                            let target_zone = usize::from(target_zone);
+                            if target_zone == 0
+                                || !zone_commands.contains_key(&target_zone)
+                                || !s.zones.contains_key(&target_zone)
+                            {
+                                tracing::warn!(
+                                    client = client_idx,
+                                    zone = target_zone,
+                                    ga = %ga_str,
+                                    "Ignoring KNX client zone change to unknown zone"
+                                );
+                                return;
                             }
+                            drop(s);
+                            let mut store = store.write().await;
+                            if let Some(c) = store.clients.get_mut(&client_idx) {
+                                c.zone_index = target_zone;
+                                store.dirty = true;
+                            }
+                            drop(store);
                             let _ = snap_tx.send(SnapcastCmd::ReconcileZones).await;
                             tracing::debug!(client = client_idx, zone = target_zone, ga = %ga_str, "KNX → client zone change");
                         }
@@ -724,7 +740,10 @@ mod tests {
 
     fn test_state() -> state::SharedState {
         let store: state::Store = serde_json::from_value(serde_json::json!({
-            "zones": {},
+            "zones": {
+                "1": { "name": "Zone 1", "icon": "", "volume": 50, "muted": false, "playback": "stopped", "shuffle": false, "repeat": false, "track_repeat": false, "track": null, "playlist_index": null, "playlist_name": null, "playlist_track_index": null, "playlist_track_count": null, "source": "idle", "cover_url": null, "snapcast_group_id": null, "presence": false, "presence_enabled": true, "presence_source": false, "auto_off_active": false, "auto_off_delay": 0 },
+                "2": { "name": "Zone 2", "icon": "", "volume": 50, "muted": false, "playback": "stopped", "shuffle": false, "repeat": false, "track_repeat": false, "track": null, "playlist_index": null, "playlist_name": null, "playlist_track_index": null, "playlist_track_count": null, "source": "idle", "cover_url": null, "snapcast_group_id": null, "presence": false, "presence_enabled": true, "presence_source": false, "auto_off_active": false, "auto_off_delay": 0 }
+            },
             "clients": {
                 "1": {
                     "name": "Test", "icon": "", "mac": "", "zone_index": 1,
@@ -758,6 +777,7 @@ mod tests {
         m.insert("2/0/1".into(), (1, "volume"));
         m.insert("2/0/2".into(), (1, "mute"));
         m.insert("2/0/3".into(), (1, "mute_toggle"));
+        m.insert("2/0/4".into(), (1, "zone"));
         m
     }
 
@@ -767,8 +787,10 @@ mod tests {
         state: &state::SharedState,
     ) -> (mpsc::Receiver<ZoneCommand>, mpsc::Receiver<SnapcastCmd>) {
         let (tx, rx) = mpsc::channel(16);
+        let (tx2, _rx2) = mpsc::channel(16);
         let mut cmds = HashMap::new();
         cmds.insert(1, tx);
+        cmds.insert(2, tx2);
         let (snap_tx, snap_rx) = mpsc::channel(16);
         handle_incoming(
             ga(ga_str),
@@ -850,6 +872,14 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[tokio::test]
+    async fn client_zone_change_from_knx_rejects_unknown_zone() {
+        let state = test_state();
+        let (_, mut snap_rx) = run_incoming("2/0/4", &encode_u8(99), &state).await;
+        assert!(snap_rx.try_recv().is_err());
+        assert_eq!(state.read().await.clients[&1].zone_index, 1);
     }
 
     #[tokio::test]

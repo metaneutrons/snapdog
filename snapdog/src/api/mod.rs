@@ -20,7 +20,6 @@ use anyhow::Result;
 use axum::Router;
 use tokio::net::TcpListener;
 use tower_http::compression::CompressionLayer;
-use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
 use crate::config::AppConfig;
@@ -117,6 +116,17 @@ pub async fn serve(
         protected = protected
             .layer(axum::Extension(auth::ApiKeys(api_keys)))
             .layer(axum::middleware::from_fn(auth::require_api_key));
+    } else if state
+        .config
+        .http
+        .bind
+        .parse::<std::net::IpAddr>()
+        .is_ok_and(|ip| ip.is_unspecified())
+    {
+        tracing::warn!(
+            bind = %state.config.http.bind,
+            "API authentication is disabled while listening on all interfaces"
+        );
     }
 
     let app = Router::new()
@@ -124,7 +134,6 @@ pub async fn serve(
         .merge(protected)
         .fallback(webui::fallback)
         .layer(CompressionLayer::new())
-        .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http());
 
     let addr = format!("{bind}:{port}");

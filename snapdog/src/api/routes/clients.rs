@@ -85,7 +85,10 @@ async fn get_all(State(state): State<SharedState>) -> Json<Vec<ClientInfo>> {
 
 async fn get_client(State(state): State<SharedState>, Path(idx): Path<usize>) -> impl IntoResponse {
     let store = state.store.read().await;
-    let cfg = state.config.clients.get(idx - 1).ok_or(not_found())?;
+    let cfg = idx
+        .checked_sub(1)
+        .and_then(|i| state.config.clients.get(i))
+        .ok_or(not_found())?;
     let cs = store.clients.get(&idx);
     Ok::<_, ApiError>(Json(ClientInfo {
         index: cfg.index,

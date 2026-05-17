@@ -68,6 +68,11 @@ async fn apply_speaker(
     Json(body): Json<ApplySpeakerRequest>,
 ) -> impl IntoResponse {
     require_snapdog(&state, idx).await?;
+    if body.speaker.is_some() && body.custom.is_some() {
+        return Err(ApiError::BadRequest(
+            "speaker and custom are mutually exclusive".into(),
+        ));
+    }
 
     let config = if let Some(ref name) = body.speaker {
         state.speaker_db.get_profile(name).await.map_err(|e| {
@@ -77,6 +82,9 @@ async fn apply_speaker(
     } else {
         body.custom.unwrap_or_default()
     };
+    if config.bands.len() > snapdog_common::MAX_EQ_BANDS {
+        return Err(ApiError::BadRequest("Maximum 10 EQ bands".into()));
+    }
 
     state
         .eq_store

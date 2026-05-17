@@ -475,9 +475,23 @@ impl MqttBridge {
                 let index: usize = idx.parse()?;
                 let zone: usize = payload.parse()?;
                 let mut store = state.write().await;
-                if let Some(client) = store.clients.get_mut(&index) {
-                    client.zone_index = zone;
+                if zone == 0 || !store.zones.contains_key(&zone) {
+                    tracing::warn!(
+                        client = index,
+                        zone,
+                        "Ignoring MQTT client zone change to unknown zone"
+                    );
+                    return Ok(());
                 }
+                let Some(client) = store.clients.get_mut(&index) else {
+                    tracing::warn!(
+                        client = index,
+                        "Ignoring MQTT zone change for unknown client"
+                    );
+                    return Ok(());
+                };
+                client.zone_index = zone;
+                store.dirty = true;
                 drop(store);
                 let _ = snap_tx.send(SnapcastCmd::ReconcileZones).await;
             }
@@ -523,7 +537,10 @@ mod tests {
 
     fn test_state_with_client() -> state::SharedState {
         let store: state::Store = serde_json::from_value(serde_json::json!({
-            "zones": {},
+            "zones": {
+                "1": { "name": "Zone 1", "icon": "", "volume": 50, "muted": false, "playback": "stopped", "shuffle": false, "repeat": false, "track_repeat": false, "track": null, "playlist_index": null, "playlist_name": null, "playlist_track_index": null, "playlist_track_count": null, "source": "idle", "cover_url": null, "snapcast_group_id": null, "presence": false, "presence_enabled": true, "presence_source": false, "auto_off_active": false, "auto_off_delay": 0 },
+                "2": { "name": "Zone 2", "icon": "", "volume": 50, "muted": false, "playback": "stopped", "shuffle": false, "repeat": false, "track_repeat": false, "track": null, "playlist_index": null, "playlist_name": null, "playlist_track_index": null, "playlist_track_count": null, "source": "idle", "cover_url": null, "snapcast_group_id": null, "presence": false, "presence_enabled": true, "presence_source": false, "auto_off_active": false, "auto_off_delay": 0 }
+            },
             "clients": {
                 "1": {
                     "name": "Test", "icon": "", "mac": "", "zone_index": 1,
@@ -708,6 +725,22 @@ mod tests {
         drop(s);
         let cmd = snap_rx.recv().await.unwrap();
         assert!(matches!(cmd, SnapcastCmd::ReconcileZones));
+    }
+
+    #[tokio::test]
+    async fn rejects_client_zone_change_to_unknown_zone() {
+        let bridge = MqttBridge::test_bridge("snapdog");
+        let (snap_tx, mut snap_rx) = snap_channel();
+        let (cmds, _rx) = zone_channels();
+        let state = test_state_with_client();
+        bridge
+            .handle_command("snapdog/clients/1/zone/set", "99", &cmds, &state, &snap_tx)
+            .await
+            .unwrap();
+        let s = state.read().await;
+        assert_eq!(s.clients[&1].zone_index, 1);
+        drop(s);
+        assert!(snap_rx.try_recv().is_err());
     }
 
     #[tokio::test]

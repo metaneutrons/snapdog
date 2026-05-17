@@ -360,11 +360,20 @@ impl Store {
         }
 
         for (idx, saved_client) in saved.clients {
+            let valid_zone = self.zones.contains_key(&saved_client.zone_index);
             if let Some(client) = self.clients.get_mut(&idx) {
                 client.volume = saved_client.volume;
                 client.muted = saved_client.muted;
                 client.latency_ms = saved_client.latency_ms;
-                client.zone_index = saved_client.zone_index;
+                if valid_zone {
+                    client.zone_index = saved_client.zone_index;
+                } else {
+                    tracing::warn!(
+                        client = idx,
+                        zone = saved_client.zone_index,
+                        "Ignoring persisted client zone outside current config"
+                    );
+                }
                 // Don't restore connected/snapcast_id — those are transient
             }
         }
@@ -522,6 +531,22 @@ mod tests {
         let mut store2 = Store::from_config(&config);
         store2.load(&path).unwrap();
         assert!(!store2.zones.contains_key(&99));
+    }
+
+    #[test]
+    fn load_ignores_invalid_client_zone() {
+        let config = test_config();
+        let mut store = Store::from_config(&config);
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("state.json");
+        store.set_persist_path(path.clone());
+        store.clients.get_mut(&1).unwrap().zone_index = 99;
+        store.persist().unwrap();
+
+        let mut store2 = Store::from_config(&config);
+        store2.load(&path).unwrap();
+        assert_eq!(store2.clients[&1].zone_index, 1);
     }
 
     #[test]

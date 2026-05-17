@@ -574,6 +574,11 @@ async fn prefetch_one(
     track_id: &str,
     url: &str,
 ) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        url::Url::parse(url)
+            .is_ok_and(|u| matches!(u.scheme(), "http" | "https") && u.host().is_some()),
+        "Only http and https URLs can be prefetched"
+    );
     let client = reqwest::Client::new();
     let response = client.get(url).send().await?.error_for_status()?;
 

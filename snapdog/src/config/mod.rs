@@ -139,6 +139,14 @@ fn load_raw_inner(raw: FileConfig, skip_zone_validation: bool) -> Result<AppConf
         }
     }
 
+    if let Some(ref subsonic) = raw.subsonic {
+        let url = url::Url::parse(&subsonic.url).context("Invalid Subsonic URL")?;
+        anyhow::ensure!(
+            matches!(url.scheme(), "http" | "https"),
+            "Subsonic URL must use http or https"
+        );
+    }
+
     // ── Presence validation ───────────────────────────────────
     for zone in &zones {
         if let Some(ref presence) = zone.presence {
