@@ -948,7 +948,7 @@ async fn run(
                     Some(audio::PcmMessage::BufferProgress { buffered_bytes, total_bytes }) => {
                         if let Some(total) = total_bytes {
                             let now = std::time::Instant::now();
-                            if now.duration_since(last_buffer_progress).as_millis() >= 1000 {
+                            if now.duration_since(last_buffer_progress).as_millis() >= 500 {
                                 last_buffer_progress = now;
                                 let duration = store.read().await.zones.get(&zone_index)
                                     .and_then(|z| z.track.as_ref().map(|t| t.duration_ms))
