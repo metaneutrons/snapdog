@@ -200,11 +200,11 @@ fn parse_url(url: &str) -> Result<ServerSettings> {
 
     let (scheme, rest) = url
         .split_once("://")
-        .with_context(|| format!("invalid URL, expected <scheme>://<host>[:port]: {url}"))?;
+        .unwrap_or(("tcp", url));
 
     match scheme {
-        "tcp" | "ws" | "wss" => settings.scheme = scheme.to_string(),
-        _ => bail!("unsupported scheme: {scheme} (expected tcp, ws, or wss)"),
+        "tcp" => settings.scheme = scheme.to_string(),
+        _ => bail!("unsupported scheme: {scheme} (expected tcp)"),
     }
 
     // Extract optional user:password@
