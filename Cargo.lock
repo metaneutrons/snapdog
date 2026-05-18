@@ -1972,27 +1972,27 @@ dependencies = [
 
 [[package]]
 name = "knx-rs-core"
-version = "0.1.1"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d56b99bae1f7ef5e448f0dbe25ab8201156c2a65b7779d0e4c54bdce07fb008"
+checksum = "de60282e6e45db68dbf651c5e5f8395e18222ddf972a3d4bdddf7281c9e45e4a"
 dependencies = [
  "libm",
 ]
 
 [[package]]
 name = "knx-rs-device"
-version = "0.1.1"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6bf07bc13d4b18246661f6e38f6c7910f8fd7d8f369aed897a3847a5847de8d2"
+checksum = "52a1524e58689409c3b69f0aef186fe57c085aaf311af4de57ab7c5c0991fe20"
 dependencies = [
  "knx-rs-core",
 ]
 
 [[package]]
 name = "knx-rs-ip"
-version = "0.1.1"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68334cdbf2fb8d05cd7dcbe0d4fe56caf711af31898e691cd2408391afa476b4"
+checksum = "a5e44580323f3f8ffbd382e652d1301b7e60ae87f67e4fafbf7d7ec9e756ec2a"
 dependencies = [
  "knx-rs-core",
  "thiserror 2.0.18",
