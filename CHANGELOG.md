@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.11.0](https://github.com/metaneutrons/snapdog/compare/v0.10.0...v0.11.0) (2026-05-18)
+
+
+### Features
+
+* **client:** allow bare host:port without tcp:// prefix ([75b8c64](https://github.com/metaneutrons/snapdog/commit/75b8c6447d8fd75c5ff040a88c5225b733a6f2f0))
+
+
+### Performance Improvements
+
+* buffer progress throttle 500ms (2x/sec) ([2aa3c42](https://github.com/metaneutrons/snapdog/commit/2aa3c42daf38683978c57a673724b440561e6ec2))
+* throttle buffer progress WebSocket updates to 1x/second ([801c8ac](https://github.com/metaneutrons/snapdog/commit/801c8acc04d8ba3f137b660bd59ca058e017e98e))
+
 ## [0.10.0](https://github.com/metaneutrons/snapdog/compare/v0.9.3...v0.10.0) (2026-05-17)
 
 
