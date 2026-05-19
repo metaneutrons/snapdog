@@ -114,10 +114,18 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/download-artifact@v8
+      - uses: nick-fields/retry@v3
         with:
-          pattern: snapdog-*-apple-darwin
-          path: artifacts
+          timeout_minutes: 5
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: |
+            # download-artifact doesn't support retry natively, use gh CLI
+            gh run download ${{ github.run_id }} \
+              --pattern "snapdog-*-apple-darwin" \
+              --dir artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: Import signing certificate
         env:
           CERT_P12: ${{ secrets.APPLE_CERT_P12_BASE64 }}
