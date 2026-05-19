@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.2](https://github.com/metaneutrons/snapdog/compare/v0.11.1...v0.11.2) (2026-05-19)
+
+
+### Bug Fixes
+
+* **release:** skip post-build binary copy on CI (injected by workflow) ([46e35cd](https://github.com/metaneutrons/snapdog/commit/46e35cdec041d8c39072eb626244869cea66b402))
+
 ## [0.11.1](https://github.com/metaneutrons/snapdog/compare/v0.11.0...v0.11.1) (2026-05-19)
 
 
